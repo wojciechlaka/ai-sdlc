@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+.env
+.env.*
+
+# lokale SQLite-Datenbank (wird beim Start automatisch angelegt)
+apps/backend/data/*.db
+apps/backend/data/*.db-*

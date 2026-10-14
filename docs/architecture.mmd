@@ -1,0 +1,50 @@
+flowchart TD
+    subgraph Browser["Browser"]
+        FE["Frontend\nReact 19 + Vite\n:5173"]
+    end
+
+    subgraph Backend["Backend — Hono :3000"]
+        REST["REST API\nrestApi.ts"]
+        SSE["SSE Layer\nsseLayer.ts"]
+        ORC["Refinement\nOrchestrator"]
+        CACHE["Repo Cache\nrepoCache.ts"]
+        CLI["Agent CLI\nagentCli/"]
+        EV["Event Bus\nrefinementEvents"]
+        DB[("SQLite\nDrizzle ORM\nrefinement.db")]
+    end
+
+    subgraph Shared["packages/shared"]
+        ZOD["AgentOutputSchema\n(Zod)"]
+    end
+
+    subgraph External["Extern"]
+        CLAUDE["claude CLI\nSubprocess"]
+        REPO["Git Repository\n(GitHub etc.)"]
+    end
+
+    FE -->|"REST: POST /tickets/:id/refine\nPOST /tickets/:id/answer\nGET /tickets"| REST
+    FE -->|"SSE: GET /events?ticketId"| SSE
+
+    REST --> ORC
+    REST --> DB
+
+    ORC --> CACHE
+    ORC --> CLI
+    ORC --> DB
+    ORC -->|"emit: status\nprogress\nquestion"| EV
+
+    EV --> SSE
+    SSE -->|"stream JSON events\nstatus / progress / question"| FE
+
+    CACHE -->|"git clone / pull"| REPO
+    CACHE -->|"spawn: claude --print\n(codebase summary)"| CLAUDE
+
+    CLI -->|"spawn: claude --print\n--output-format stream-json"| CLAUDE
+    CLI --> ZOD
+
+    CLAUDE -->|"stream-json stdout"| CLI
+
+    style Browser fill:#dbeafe,stroke:#3b82f6
+    style Backend fill:#dcfce7,stroke:#16a34a
+    style Shared fill:#fef9c3,stroke:#ca8a04
+    style External fill:#f3e8ff,stroke:#9333ea
