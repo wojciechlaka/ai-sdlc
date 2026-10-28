@@ -284,6 +284,8 @@ das Token die DB nie erreicht. MCP ist andockbar, in Phase 3 nicht gebaut ([D11]
 
 ## 6. Phase 2 — Lokaler Refinement-Monolith (Ist-Bau-Stand)
 
+> **Hinweis:** Die Phase-2-Implementierung wurde auf eine einzelne Next.js-App mit hexagonalem Kern migriert (`apps/web`, `packages/core`, `packages/shared`), siehe [D19 in `decisions.md`](decisions.md). Die Vite-/Hono-Beschreibungen in diesem Abschnitt sowie in `architecture.mmd` und `architecture-annotated.html` geben den früheren Stand wieder.
+
 Ausgangsbild des Wandels: alles auf einer Maschine, keine geteilte Komponente.
 
 ```text
