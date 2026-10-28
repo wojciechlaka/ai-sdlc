@@ -7,6 +7,7 @@ import { TOKEN_MISSING } from './messages'
 import { parseInput } from './validation'
 import { requireTicket } from './requireTicket'
 import { createReporter } from './reporter'
+import { beginRun, type RunRequest } from './beginRun'
 import { runStage } from './runStage'
 
 /** Validates, sets `running` and hands the stage to the background. Returns immediately. */
@@ -20,7 +21,8 @@ export function startStage(deps: UseCaseDeps, key: string, raw: unknown): void {
   const { model } = parseInput(StartStageInput, raw)
 
   createReporter(deps, ticket.key).setState('running')
-  deps.runInBackground(runStage(deps, ticket, { stage, trigger: 'initial', model, previousRuns: [] }))
+  const request: RunRequest = { stage, trigger: 'initial', model, previousRuns: [] }
+  deps.runInBackground(runStage(deps, ticket, { ...request, runId: beginRun(deps, ticket, request) }))
 }
 
 /**
@@ -38,9 +40,8 @@ export function answerQuestion(deps: UseCaseDeps, key: string, raw: unknown): vo
 
   deps.audit.append({ ticketKey: ticket.key, actor: 'human', type: 'answer_given', payload: { answer } })
   createReporter(deps, ticket.key).setState('running')
-  deps.runInBackground(runStage(deps, ticket, {
-    stage, trigger: 'answer', model: plan.questionRun.input.model, previousRuns: plan.previousRuns,
-  }))
+  const request: RunRequest = { stage, trigger: 'answer', model: plan.questionRun.input.model, previousRuns: plan.previousRuns }
+  deps.runInBackground(runStage(deps, ticket, { ...request, runId: beginRun(deps, ticket, request) }))
 }
 
 /**

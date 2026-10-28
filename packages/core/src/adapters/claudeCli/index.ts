@@ -107,7 +107,7 @@ async function spawnClaude(
     ], { cwd, env: { ...process.env }, stdio: ['pipe', 'pipe', 'pipe'] })
 
     runningProcesses.set(ticketKey, proc)
-    const cleanup = () => { runningProcesses.delete(ticketKey) }
+    const cleanup = () => { if (runningProcesses.get(ticketKey) === proc) runningProcesses.delete(ticketKey) }
 
     let stderrBuf = ''
 

@@ -261,3 +261,66 @@ describe('stopRun', () => {
     expect(ctx.agent.stopped).toEqual([])
   })
 })
+
+describe('stale attempts', () => {
+  it('stop and restart while the old agent is held: only the new attempt publishes', async () => {
+    const ctx = setup()
+    const release = ctx.agent.hold()
+    startStage(ctx.deps, 'CB-2', MODEL)
+    await vi.waitFor(() => expect(ctx.agent.calls).toHaveLength(1))
+    stopRun(ctx.deps, 'CB-2')
+    startStage(ctx.deps, 'CB-2', MODEL)
+    await vi.waitFor(() => expect(ctx.agent.calls).toHaveLength(2))
+    release()
+    await ctx.settle()
+
+    expect(ctx.deps.tickets.findByKey('CB-2')?.state).toBe('in_review')
+    expect(ctx.codeHost.pulls.filter((p) => p.state === 'open')).toHaveLength(1)
+    expect(ctx.store.runs.map((r) => r.status)).toEqual(['failed', 'succeeded'])
+  })
+
+  it('stop during publish closes the opened PR and deletes the branch', async () => {
+    const ctx = setup()
+    let openGate!: () => void
+    const gate = new Promise<void>((resolve) => { openGate = resolve })
+    const original = ctx.codeHost.openPullRequest.bind(ctx.codeHost)
+    let reached = false
+    ctx.codeHost.openPullRequest = async (input) => {
+      reached = true
+      await gate
+      return original(input)
+    }
+    startStage(ctx.deps, 'CB-2', MODEL)
+    await vi.waitFor(() => expect(reached).toBe(true))
+    stopRun(ctx.deps, 'CB-2')
+    openGate()
+    await ctx.settle()
+
+    expect(ctx.deps.tickets.findByKey('CB-2')?.state).toBe('ready')
+    expect(ctx.codeHost.pulls.every((p) => p.state !== 'open')).toBe(true)
+    expect(ctx.codeHost.branches.has('CB-2/intent')).toBe(false)
+    expect(ctx.deps.artifacts.listForTicket('CB-2')).toEqual([])
+  })
+
+  it('a reset during the agent run leaves the new ticket untouched', async () => {
+    const ctx = setup()
+    const release = ctx.agent.hold()
+    startStage(ctx.deps, 'CB-2', MODEL)
+    await vi.waitFor(() => expect(ctx.agent.calls).toHaveLength(1))
+    ctx.deps.tickets.clear()
+    seedTicket(ctx, 'CB-2')
+    release()
+    await ctx.settle()
+
+    expect(ctx.deps.tickets.findByKey('CB-2')?.state).toBe('ready')
+    expect(ctx.codeHost.pulls).toEqual([])
+  })
+
+  it('fails when the agent is terminated from outside', async () => {
+    const ctx = setup()
+    ctx.agent.outcome = new AgentRunTerminatedError()
+
+    expect(await start(ctx)).toMatchObject({ state: 'failed' })
+    expect(ctx.store.audit.at(-1)).toMatchObject({ type: 'error', payload: { message: 'Agent-Lauf wurde beendet' } })
+  })
+})

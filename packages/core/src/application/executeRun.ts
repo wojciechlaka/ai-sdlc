@@ -1,54 +1,31 @@
-import type { ArtifactStage, QAPair, RunTrigger, Ticket } from '../domain/types'
+import type { Ticket } from '../domain/types'
 import { renderIntent } from '../domain/render'
 import { AgentRunTerminatedError, AgentRunTimeoutError } from '../ports'
 import type { UseCaseDeps } from './deps'
+import { finishRun, isCurrentRun, type RunRequest } from './beginRun'
 import { createReporter } from './reporter'
 import { describeError } from './describeError'
 import { failStage } from './failStage'
 import { publishArtifact } from './publishArtifact'
 
-export interface StageRunRequest {
-  stage: ArtifactStage
-  trigger: RunTrigger
-  model: string
-  /** Answered questions so far; empty for the first run. */
-  previousRuns: QAPair[]
-}
-
-export interface ExecuteRunRequest extends StageRunRequest {
+export interface ExecuteRunRequest extends RunRequest {
+  /** The attempt's run, created by `beginRun`. */
+  runId: string
   repoDir: string
   codebaseSummary: string | null
 }
 
 /**
- * Creates a run, executes the agent and applies its outcome: question → `awaiting_answer`,
+ * Executes the agent for the attempt's run and applies its outcome: question → `awaiting_answer`,
  * intent → branch + PR → `in_review`. Never throws.
- * A stop sets the ticket to `ready` while the agent may still answer; such late results are discarded.
+ * A stop, restart or reset makes the attempt stale while the agent may still answer; such late results are discarded.
  */
 export async function executeRun(deps: UseCaseDeps, ticket: Ticket, request: ExecuteRunRequest): Promise<void> {
   const reporter = createReporter(deps, ticket.key)
-  const stillRunning = () => deps.tickets.findByKey(ticket.key)?.state === 'running'
-  let runId: string | undefined
-
-  /** Ends the run as failed/timeout once; skipped after a reset removed the ticket. */
-  const finishRun = (status: 'failed' | 'timeout') => {
-    if (runId === undefined || !deps.tickets.findByKey(ticket.key)) return
-    deps.runs.fail(runId, status)
-    deps.audit.append({ ticketKey: ticket.key, actor: 'system', type: 'run_finished', payload: { runId, status } })
-    runId = undefined
-  }
+  const { runId } = request
+  const isCurrent = () => isCurrentRun(deps, ticket.key, runId)
 
   try {
-    const run = deps.runs.create({
-      ticketKey: ticket.key, stage: request.stage, trigger: request.trigger, model: request.model,
-      input: { model: request.model, previousRuns: request.previousRuns },
-    })
-    runId = run.id
-    deps.audit.append({
-      ticketKey: ticket.key, actor: 'system', type: 'run_started',
-      payload: { runId, stage: request.stage, trigger: request.trigger, model: request.model },
-    })
-
     const { output, meta } = await deps.agent.run(
       {
         ticketKey: ticket.key,
@@ -63,9 +40,15 @@ export async function executeRun(deps: UseCaseDeps, ticket: Ticket, request: Exe
       reporter.report,
     )
 
-    if (!stillRunning()) {
-      reporter.log('Agent result discarded: the run was stopped')
-      finishRun('failed')
+    if (!isCurrent()) {
+      reporter.log('Agent result discarded: the attempt is no longer current')
+      if (deps.runs.findById(runId)?.status === 'running') {
+        deps.runs.fail(runId, 'failed')
+        deps.audit.append({
+          ticketKey: ticket.key, actor: 'system', type: 'run_finished',
+          payload: { runId, status: 'failed', reason: 'verworfen', costUsd: meta.costUsd, inputTokens: meta.inputTokens, outputTokens: meta.outputTokens },
+        })
+      }
       return
     }
 
@@ -86,7 +69,6 @@ export async function executeRun(deps: UseCaseDeps, ticket: Ticket, request: Exe
         cacheReadTokens: meta.cacheReadTokens, outputTokens: meta.outputTokens,
       },
     })
-    runId = undefined
 
     if (output.type === 'question') {
       deps.audit.append({ ticketKey: ticket.key, actor: 'agent', type: 'question_asked', payload: { question: output.question } })
@@ -99,14 +81,19 @@ export async function executeRun(deps: UseCaseDeps, ticket: Ticket, request: Exe
     await publishArtifact(deps, ticket, request.stage, {
       markdown: renderIntent(ticket, output.result, request.previousRuns),
       summary: output.result.problem,
-    })
+    }, runId)
   } catch (err) {
-    if (err instanceof AgentRunTerminatedError || !stillRunning()) {
-      reporter.log('Agent run stopped')
-      finishRun('failed')
-      return
+    const current = isCurrent()
+    const status = err instanceof AgentRunTimeoutError ? 'timeout' : 'failed'
+    try {
+      finishRun(deps, ticket.key, runId, status)
+      if (!current) {
+        reporter.log('Agent run stopped')
+      } else {
+        failStage(deps, reporter, ticket.key, err instanceof AgentRunTerminatedError ? 'Agent-Lauf wurde beendet' : describeError(err))
+      }
+    } catch (inner) {
+      reporter.log(`ERROR while handling failure: ${describeError(inner)}`)
     }
-    finishRun(err instanceof AgentRunTimeoutError ? 'timeout' : 'failed')
-    failStage(deps, reporter, ticket.key, describeError(err))
   }
 }
