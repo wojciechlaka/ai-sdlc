@@ -62,12 +62,12 @@ export function createInMemoryTicketRepository(store: InMemoryStore): TicketRepo
       status: 'backlog', iteration: 0, createdAt: now, updatedAt: now,
     }
     store.tickets.push(ticket)
-    return ticket
+    return { ...ticket }
   }
 
   return {
-    list: () => [...store.tickets],
-    findById: (id) => find(id) ?? null,
+    list: () => store.tickets.map((t) => ({ ...t })),
+    findById: (id) => { const t = find(id); return t ? { ...t } : null },
     count: () => store.tickets.length,
     create,
     updateStatus(id, status) {
@@ -79,6 +79,7 @@ export function createInMemoryTicketRepository(store: InMemoryStore): TicketRepo
       requireTicket(id)
       store.tickets = store.tickets.filter((t) => t.id !== id)
       store.runs = store.runs.filter((r) => r.ticketId !== id)
+      store.audit = store.audit.filter((e) => e.ticketId !== id)
     },
     replaceAll(newTickets) {
       store.tickets = []
@@ -97,22 +98,23 @@ export function createInMemoryAgentRunRepository(store: InMemoryStore): AgentRun
     return run
   }
   const listForTicket = (ticketId: number) =>
-    store.runs.filter((r) => r.ticketId === ticketId).sort((a, b) => a.iteration - b.iteration)
+    store.runs.filter((r) => r.ticketId === ticketId).sort((a, b) => a.iteration - b.iteration).map((r) => ({ ...r }))
 
   return {
     create(input) {
       const ticket = store.tickets.find((t) => t.id === input.ticketId)
       if (!ticket) throw new Error(`Ticket ${input.ticketId} not found`)
       ticket.iteration += 1
+      ticket.updatedAt = new Date()
       const run: AgentRun = {
         id: `run-${nextId++}`, ticketId: input.ticketId, iteration: ticket.iteration, trigger: input.trigger,
         input: input.input, output: null, status: 'running', model: input.model, costUsd: null, inputTokens: null,
         cacheCreationTokens: null, cacheReadTokens: null, outputTokens: null, startedAt: new Date(), finishedAt: null,
       }
       store.runs.push(run)
-      return run
+      return { ...run }
     },
-    findById: (id) => store.runs.find((r) => r.id === id) ?? null,
+    findById: (id) => { const r = store.runs.find((x) => x.id === id); return r ? { ...r } : null },
     complete(id, result) {
       Object.assign(requireRun(id), { status: 'succeeded', ...result, finishedAt: new Date() })
     },
@@ -121,7 +123,7 @@ export function createInMemoryAgentRunRepository(store: InMemoryStore): AgentRun
     },
     listForTicket,
     latestForTicket: (ticketId) => listForTicket(ticketId).at(-1) ?? null,
-    findStuck: () => store.runs.filter((r) => r.status === 'running'),
+    findStuck: () => store.runs.filter((r) => r.status === 'running').map((r) => ({ ...r })),
   }
 }
 

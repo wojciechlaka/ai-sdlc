@@ -32,4 +32,32 @@ describe('in-memory repositories', () => {
     expect(done).toBe(true)
     expect(ctx.events.published).toEqual([{ type: 'progress', ticketId: 'T-1', message: 'x' }])
   })
+
+  it('return snapshots instead of live objects', () => {
+    const ctx = createTestContext()
+    const ticket = ctx.deps.tickets.create({ title: 'T', description: 'D' })
+    ctx.deps.tickets.updateStatus(ticket.id, 'refining')
+    expect(ticket.status).toBe('backlog')
+    expect(ctx.deps.tickets.findById(ticket.id)?.status).toBe('refining')
+    expect(ctx.deps.tickets.findById(ticket.id)).not.toBe(ctx.deps.tickets.findById(ticket.id))
+
+    const run = ctx.deps.runs.create({
+      ticketId: ticket.id, trigger: 'initial', model: 'm',
+      input: { ticketTitle: 'T', ticketDescription: 'D', acceptanceCriteria: '', repo: 'r', model: 'm' },
+    })
+    ctx.deps.runs.fail(run.id, 'failed')
+    expect(run.status).toBe('running')
+    expect(ctx.deps.runs.findById(run.id)?.status).toBe('failed')
+    expect(ctx.store.runs[0].status).toBe('failed')
+  })
+
+  it('cascade ticket deletion to audit entries', () => {
+    const ctx = createTestContext()
+    const a = ctx.deps.tickets.create({ title: 'A', description: 'D' })
+    const b = ctx.deps.tickets.create({ title: 'B', description: 'D' })
+    ctx.deps.audit.append({ ticketId: a.id, actor: 'human', type: 'x' })
+    ctx.deps.audit.append({ ticketId: b.id, actor: 'human', type: 'x' })
+    ctx.deps.tickets.delete(a.id)
+    expect(ctx.store.audit.map((e) => e.ticketId)).toEqual([b.id])
+  })
 })
