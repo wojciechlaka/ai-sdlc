@@ -227,11 +227,14 @@ describe('stopRun', () => {
 
   it('cancels the job when stopped while the clone is prepared', async () => {
     const ctx = setup()
+    const summary = vi.spyOn(ctx.repos, 'ensureSummary')
     startStage(ctx.deps, 'CB-2', MODEL)
     stopRun(ctx.deps, 'CB-2')
     await ctx.settle()
     expect(ctx.deps.tickets.findByKey('CB-2')?.state).toBe('ready')
     expect(ctx.agent.calls).toEqual([])
+    expect(ctx.store.runs[0]?.status).toBe('failed')
+    expect(summary).not.toHaveBeenCalled()
   })
 
   it('discards a result that arrives after the stop', async () => {
@@ -314,6 +317,8 @@ describe('stale attempts', () => {
 
     expect(ctx.deps.tickets.findByKey('CB-2')?.state).toBe('ready')
     expect(ctx.codeHost.pulls).toEqual([])
+    expect(ctx.store.runs).toEqual([])
+    expect(ctx.store.audit).toEqual([])
   })
 
   it('fails when the agent is terminated from outside', async () => {

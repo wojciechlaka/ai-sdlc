@@ -46,7 +46,11 @@ export async function executeRun(deps: UseCaseDeps, ticket: Ticket, request: Exe
         deps.runs.fail(runId, 'failed')
         deps.audit.append({
           ticketKey: ticket.key, actor: 'system', type: 'run_finished',
-          payload: { runId, status: 'failed', reason: 'verworfen', costUsd: meta.costUsd, inputTokens: meta.inputTokens, outputTokens: meta.outputTokens },
+          payload: {
+            runId, status: 'failed', reason: 'verworfen', model: meta.model, durationSeconds: meta.durationSeconds, costUsd: meta.costUsd,
+            inputTokens: meta.inputTokens, cacheCreationTokens: meta.cacheCreationTokens,
+            cacheReadTokens: meta.cacheReadTokens, outputTokens: meta.outputTokens,
+          },
         })
       }
       return
@@ -88,7 +92,7 @@ export async function executeRun(deps: UseCaseDeps, ticket: Ticket, request: Exe
     try {
       finishRun(deps, ticket.key, runId, status)
       if (!current) {
-        reporter.log('Agent run stopped')
+        reporter.log(err instanceof AgentRunTerminatedError ? 'Agent run stopped' : `Attempt no longer current, error ignored: ${describeError(err)}`)
       } else {
         failStage(deps, reporter, ticket.key, err instanceof AgentRunTerminatedError ? 'Agent-Lauf wurde beendet' : describeError(err))
       }

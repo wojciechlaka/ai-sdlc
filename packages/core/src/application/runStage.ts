@@ -26,6 +26,11 @@ export async function runStage(deps: UseCaseDeps, ticket: Ticket, request: RunRe
     return
   }
 
+  if (!isCurrentRun(deps, ticket.key, runId)) {
+    finishRun(deps, ticket.key, runId, 'failed')
+    return
+  }
+
   const codebaseSummary = await deps.repos.ensureSummary(repoDir, request.model, reporter.report)
   if (!codebaseSummary) reporter.progress('Codebase-Analyse nicht verfügbar — Agent startet ohne Übersicht.')
   if (!isCurrentRun(deps, ticket.key, runId)) {
