@@ -35,6 +35,14 @@ export function formatCost(usd: number): string {
   return `$${usd < 0.001 ? usd.toFixed(6) : usd < 0.01 ? usd.toFixed(4) : usd.toFixed(2)}`
 }
 
+/** Tool call with its target; Bash commands in backticks. */
+function toolCall(p: Payload): string {
+  const tool = text(p, 'tool')
+  const target = text(p, 'target')
+  if (!target) return tool
+  return tool === 'Bash' ? `${tool} \`${target}\`` : `${tool} ${target}`
+}
+
 /** One German line per log entry; unknown types fall back to the type name. */
 export function describeLogEvent(event: AuditEventDto): string {
   const p = (event.payload ?? {}) as Payload
@@ -68,7 +76,26 @@ export function describeLogEvent(event: AuditEventDto): string {
       return `Beim Start aufgeräumt: PR #${count(p, 'prNumber')} geschlossen, Branch ${text(p, 'branch')} gelöscht`
     case 'error':
       return `Fehler: ${text(p, 'message')}`
+    case 'guard_blocked':
+      return `Blockiert: ${toolCall(p)}${p.reason ? ` — ${text(p, 'reason')}` : ''}`
+    case 'tool_used':
+      return `${toolCall(p)}${typeof p.exitCode === 'number' && p.exitCode !== 0 ? ` (Exit-Code ${p.exitCode})` : ''}`
     default:
       return event.type
   }
+}
+
+/** A row of the ticket log: one entry, or consecutive `tool_used` entries shown as one collapsible row. */
+export type LogRow = { kind: 'event'; event: AuditEventDto } | { kind: 'tools'; events: AuditEventDto[] }
+
+/** Groups consecutive `tool_used` entries so the log stays readable; everything else stays a row of its own. */
+export function groupLogEntries(log: AuditEventDto[]): LogRow[] {
+  const rows: LogRow[] = []
+  for (const event of log) {
+    const last = rows.at(-1)
+    if (event.type !== 'tool_used') rows.push({ kind: 'event', event })
+    else if (last?.kind === 'tools') last.events.push(event)
+    else rows.push({ kind: 'tools', events: [event] })
+  }
+  return rows
 }
