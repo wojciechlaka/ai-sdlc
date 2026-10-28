@@ -5,9 +5,10 @@ Grundsatzentscheidungen: [decisions.md](decisions.md) · Stufen und Ausblick:
 
 ## 1. Überblick
 
-Eine lokale Next.js-App führt Tickets durch die Stufen des AI-Native SDLC Playbook. Agenten schreiben die
-Artefakte, Menschen geben per PR frei. Die Inhalte liegen im Git-Repo des Teams, die App hält nur Zustand und
-Log. Das Übersichtsbild: [architecture.png](architecture.png), erläutert in
+**Zielbild:** Eine lokale Next.js-App führt Tickets durch die Stufen des AI-Native SDLC Playbooks. Agenten
+schreiben die Artefakte, Menschen geben per PR frei. Die Inhalte liegen im Git-Repo des Teams, die App hält
+nur Zustand und Log (§3). Heute verfeinert die App Tickets und speichert das Ergebnis in der Datenbank (§4);
+der Umbau auf das Arbeitsmodell folgt (§5). Das Übersichtsbild: [architecture.png](architecture.png), erläutert in
 [architecture-annotated.png](architecture-annotated.png).
 
 ## 2. Prinzipien
@@ -18,7 +19,9 @@ Log. Das Übersichtsbild: [architecture.png](architecture.png), erläutert in
 - **Agent als Werkzeug:** Coding-Agent als CLI hinter `AgentRunner`, austauschbar (E3).
 - **Keine Secrets in der App:** Credentials bleiben beim Nutzer (E4).
 
-## 3. Arbeitsmodell
+## 3. Arbeitsmodell (Zielbild)
+
+So soll die App nach dem Umbau (§5) arbeiten:
 
 ```text
   Ticket-Eingang                     Ziel-Repo (Git)                         App (DB)
@@ -35,10 +38,15 @@ Log. Das Übersichtsbild: [architecture.png](architecture.png), erläutert in
                                      +-- App fragt Merge-Status ab -------------+
 ```
 
-- **Stufe pro Ticket:** Plan → Design (Showcase), danach Build, Test, Deploy, Maintain (Ausblick).
-- **Übergang:** Ist der PR einer Stufe gemergt, setzt die App die nächste Stufe und schreibt einen
-  Log-Eintrag. Da eine lokale App keine Webhooks empfängt, fragt sie den Merge-Status über die Git-Host-API ab.
-- **Ticket-Eingang:** Ein Ticket-System liefert nur den rohen Inhalt; es gibt keinen Inhalts-Spiegel zurück.
+- **Stufe pro Ticket:** Jedes Ticket wird eine Stufe haben: Plan → Design (Showcase), danach Build, Test,
+  Deploy, Maintain (Ausblick).
+- **Agent und App:** Der Agent liest das Ticket und schreibt die Artefakte ins Repo; die App startet ihn und
+  führt den Zustand.
+- **Übergang:** Ist der PR einer Stufe gemergt, wird die App die nächste Stufe setzen und einen Log-Eintrag
+  schreiben. Da eine lokale App keine Webhooks empfängt, wird sie den Merge-Status über die Git-Host-API
+  abfragen.
+- **Ticket-Eingang:** Ein Ticket-System soll nur den rohen Inhalt liefern; einen Inhalts-Spiegel zurück wird
+  es nicht geben.
 
 ## 4. Ist-Architektur
 
@@ -65,7 +73,7 @@ Alles auf einer Maschine, **ein** Prozess (E2).
    +=============================================================================+
 ```
 
-*Abb. 4 — Ist-Architektur ([E2](decisions.md), [E3](decisions.md)).*
+*Abb. 1 — Ist-Architektur ([E2](decisions.md), [E3](decisions.md)).*
 
 **Schichten.** `apps/web` ist der treibende Adapter: Server Components rufen Use Cases direkt auf, Server
 Actions schreiben, `app/api/events/route.ts` streamt Ereignisse. `packages/core` enthält die Fachlogik;
