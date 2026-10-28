@@ -1,186 +1,72 @@
 # Entscheidungslog
 
-Festgehaltene Architektur- und Produktentscheidungen. Neue Entscheidungen werden unten angehängt;
-überholte Entscheidungen werden nicht gelöscht, sondern als „ersetzt durch …" markiert.
+Grundsatzentscheidungen der Plattform. Ausrichtung: Anthropics
+[AI-Native SDLC Playbook](https://claude.com/resources/articles/the-ai-native-sdlc-playbook).
 
-## D1 — Roadmap-Neuschnitt: echte Implementierung statt Mock-Demo (2026-06-10)
+## E1 — Arbeitsmodell nach dem AI-Native SDLC Playbook (2026-10-28)
 
-Die Phasen 0/1 der [Feature-Roadmap](feature-roadmap.md) (Clickable Demo, Narrative Prototype)
-entfallen ersatzlos. Stattdessen wird direkt eine echte, minimale Plattform in fünf Etappen
-gebaut (E1–E5, siehe [Phase-2-Backlog](../tickets/phase-2-backlog.md)). Das Minimum Usable Product:
-ein Kanban (zunächst als JSON-API, dann Frontend), über das ein Refinement Agent für ein
-Beispiel-Repo echtes Backlog Refinement durchführt. Die Roadmap ab Phase 2 bleibt als
-Langfrist-Zielbild gültig.
+**Entscheidung.** Arbeit durchläuft die sechs Stufen des Playbooks — Plan, Design, Build, Test, Deploy,
+Maintain. Jede Stufe erzeugt ein Artefakt, das Mensch und Agent lesen und das die nächste Stufe speist:
+`intent.md` → `spec.md` → `plan.md` → Code-PR → Produktion → (Befund) neues `intent.md`.
 
-## D2 — Stack: TypeScript end-to-end (2026-06-10)
+- **Inhalte liegen in Git**, pro Ticket im Ziel-Repo (z. B. `docs/work/CB-3/intent.md`).
+- **Pro Stufe ein Branch** `<TICKET>/<stufe>` (z. B. `CB-3/intent`) und **ein PR als Gate**; der **Merge ist
+  der Übergang** in die nächste Stufe.
+- **Die Plattform hält nur Zustand und Log**: aktuelle Stufe pro Ticket und ein persistentes Log (Läufe,
+  Rückfragen, Freigaben, Übergänge, Zeitstempel). Merges erkennt sie durch Abfrage der Git-Host-API.
+- **Ticket-Systeme wie Jira sind nur Eingang** für den rohen Ticket-Inhalt. Es gibt keinen Spiegel von
+  Inhalten zurück; höchstens ein Statuswechsel. Branch-Namen mit Ticket-Schlüssel verknüpfen sich über die
+  Git-Integration von Jira von selbst.
+- **Showcase:** Stufe 1 (Plan → `intent.md`) und Stufe 2 (Design → `spec.md`). Markdown-Dateien in
+  `examples/tickets/` simulieren die Jira-Tickets.
 
-> **Teilweise ersetzt durch [D19]** — Vite/React-Frontend und separates Node-Backend sind durch eine
-> Next.js-App mit Hexagonal-Kern abgelöst; „TypeScript end-to-end“ gilt weiter.
+**Begründung.** Wenn Agenten Code in Stunden schreiben, liegt der Engpass bei Planung, Review und
+Freigabe. Diese Schritte brauchen nachvollziehbare Artefakte und klare Gates. Git liefert Versionen,
+Review und Freigabe bereits mit; jede Information hat genau eine Quelle.
 
-Ein Repo, eine Sprache: Node.js-Backend, SQLite als lokale DB, Vite/React-Frontend.
-Begründung: schnellste Iteration, geteilte Typen zwischen Backend und Frontend,
-keine Infrastruktur-Abhängigkeiten in der MUP-Phase.
+**Trade-offs.** Die Plattform braucht Schreibrechte auf das Ziel-Repo (Branch, Datei, PR). Ohne Webhooks
+(lokale App) werden Übergänge per Abfrage erkannt, also mit Verzögerung.
 
-## D3 — Kein eigener Orchestrator: Coding Agent als Headless-CLI (2026-06-10)
+## E2 — Eine Next.js-App, Fachkern nach Ports & Adapters (2026-10-28)
 
-Der Refinement Agent wird nicht selbst gebaut. Stattdessen wird ein Coding Agent als CLI
-headless aufgerufen (erste Wahl: `claude -p` mit JSON-Output). Erst wenn das an Grenzen
-stößt, wird ausgetauscht oder nachgebaut. Die CLI-Anbindung wird hinter einer schmalen
-Schnittstelle gekapselt, damit der Austausch günstig bleibt.
+**Entscheidung.** Die Plattform ist **eine Next.js-App** (App Router) und läuft als **ein Prozess**: Server
+Components lesen, Server Actions schreiben, ein Route Handler streamt Live-Ereignisse per SSE. Die Fachlogik
+liegt in `packages/core` nach **Ports & Adapters** (Domäne, Use Cases, Ports; Adapter für SQLite/Drizzle,
+Git, Claude CLI und einen Event-Bus im Prozess). `packages/shared` hält die Zod-Verträge zwischen Kern und UI.
 
-## D4 — Agent-Runs sind von Anfang an asynchron (2026-06-10)
+**Begründung.** Ein Prozess und ein Start-Befehl halten die lokale App einfach. Die Fachlogik ist schmal,
+die Ränder wachsen mit den Playbook-Stufen (Git-Host, später Jira, CI, Monitoring) — jeder Rand ist ein
+Adapter hinter einem Port, der Kern bleibt unberührt. Eine ESLint-Regel erzwingt die Abhängigkeitsrichtung.
 
-Refinement-Runs dauern voraussichtlich 1–3 Minuten. Runs werden angestoßen und der Status
-wird abgefragt (Polling, später ggf. SSE). Ein synchroner Spike würde ab E3 weggeworfen.
+**Trade-offs.** **Kein Serverless-Hosting:** Agent-Läufe sind lang laufende Kindprozesse, der Event-Bus lebt
+im Speicher, die Datenbank ist eine lokale Datei. Die Engine ist ein Singleton auf `globalThis`, weil Next.js
+Module in mehreren Bundles lädt; Fachfehler werden über ein `code`-Feld statt `instanceof` erkannt.
 
-## D5 — Refinement-Output als JSON-Spalte am AgentRun (2026-06-10)
+## E3 — Coding-Agent als CLI hinter einem Port (2026-10-28)
 
-Der strukturierte Refinement-Output (User Story, Akzeptanzkriterien, offene Fragen, Risiken,
-betroffene Dateien, Confidence) wird als schema-validierte JSON-Spalte (Zod) am `AgentRun`
-gespeichert, nicht als eigene Entität. „Das aktuelle Refinement eines Tickets" ist der Output
-des letzten erfolgreichen Runs. Eine eigene Tabelle lohnt erst, wenn Outputs editierbar oder
-versioniert vergleichbar werden müssen.
+**Entscheidung.** Es gibt keinen eigenen Agent-Orchestrator. Ein Coding-Agent wird headless als CLI
+(`claude --print`, JSON-Stream) aufgerufen — hinter dem Port `AgentRunner`.
 
-## D6 — Expliziter Ticket-Status, kein Event Sourcing (2026-06-10)
+**Begründung.** Die Agent-Schleife (Werkzeuge, Kontext, Wiederholungen) nicht nachbauen. Der Port hält den
+Austausch lokal: das Claude Agent SDK wird später ein weiterer Adapter, ohne Änderung am Kern.
 
-Tickets tragen eine explizite Statusspalte (`backlog | refining | review | ready | failed`).
-Die Historie wird über append-only `AuditEvent`s abgebildet. Den Status aus Events abzuleiten
-wäre für diese Projektgröße Overengineering.
+**Trade-offs.** Abhängigkeit von CLI-Ausgabeformaten; Validierung der Ausgabe per Zod mit einem
+automatischen Wiederholungsversuch.
 
-## D7 — ReviewDecision als eigene Entität (2026-06-10)
+## E4 — Credentials bleiben beim Nutzer (2026-10-28)
 
-Review-Entscheidungen (Approve / Request Changes inkl. Feedback) sind eine eigene Entität
-und nicht nur ein AuditEvent, weil das Feedback funktionaler Input für den nächsten
-Agent-Run ist, nicht nur Historie.
+**Entscheidung.** Claude-Login und Git-Host-Token liegen lokal beim Nutzer. Die Plattform speichert keine
+Secrets; der Agent handelt im Namen des Nutzers.
 
-## D8 — Ziel-Repo als Konfiguration, keine Project-Entität (2026-06-10)
+**Begründung.** Kein Secret-Management in der Plattform; Rechte und Kosten bleiben dort, wo sie entstehen.
 
-Das Ziel-Repo (zunächst [qvest-digital/coffee-chat](https://github.com/qvest-digital/coffee-chat))
-wird bis einschließlich E5 als Konfiguration (env/Datei) geführt, nicht als DB-Entität.
-Eine `Project`-Tabelle entsteht erst, wenn mehrere Repos/Projekte real gebraucht werden.
+**Trade-offs.** Jede Installation braucht eigenen Claude-Zugang und ein Token mit Schreibrecht auf das
+Ziel-Repo.
 
-## D9 — Kein „Edit & Approve" im MUP (2026-06-10)
+## E5 — ASCII-Skizzen in der Markdown-Doku (2026-10-28)
 
-Reviewer können den Agent-Output im MUP nicht direkt editieren. „Request Changes" mit
-strukturiertem Feedback deckt den Fall ab. Direktes Editieren (inkl. Speichern editierter
-Output-Kopien) kommt frühestens nach E4 — das hätte sonst Folgen fürs Datenmodell (siehe D5).
+**Entscheidung.** Skizzen in Markdown-Dokumenten sind ASCII in ` ```text `-Blöcken mit bündigen Rahmen.
+Gerenderte Bilder gibt es nur für die Übersichtsseite (`docs/architecture.png`,
+`docs/architecture-annotated.png`).
 
-## D10 — Phase 3: Control Plane / Execution Plane trennen (2026-06-25)
-
-Der Phase-2-Monolith (lokales Backend + SQLite + lokale CLI) wird in Phase 3 in zwei Ebenen
-aufgetrennt: einen **gehosteten Shared Control Plane** (Datenmodell, Ergebnisse, server-seitige
-State Machine + Concurrency, geteilte Registries; Postgres o. Ä.) und einen **Local Execution
-Plane** — **pro Nutzer ein Runner**, der Agent-Runs lokal gegen einen lokalen Repo-Checkout
-ausführt. Muster: self-hosted CI-Runner / Terraform-Cloud-Agents. Die Phase-2-Invariante
-„parallele Refines auf dasselbe Ticket ablehnen" wandert damit server-seitig.
-Begründung: Kollaboration (geteilte Ergebnisse/Definitionen) bei gleichzeitig lokaler Ausführung
-unter Nutzer-Credentials; hält den Steuerlayer secret-frei (siehe D11).
-
-## D11 — Credential-Modell Phase 3: voll BYO lokal, Control Plane secret-frei (2026-06-25)
-
-LLM-Sub und Tokens für externe Systeme bleiben **lokal beim Nutzer** (Eingabe über die GUI,
-Speicherung am Runner). Der Control Plane brokert keine Secrets. Folge: kein eigenes
-Enterprise-IAM nötig, externe Aktionen laufen als „acts-as-user". Der gewählte Pro-Nutzer-Runner
-(D10) erzeugt Setup-Aufwand; dieser wird über **Packaging** gelöst (ein Befehl: `npx`/Install-Skript,
-der auf ein Repo zeigt; Rest in der GUI), nicht über die Topologie — frictionless Onboarding ist
-Kern-Deliverable der Phase. Alternativen (zentraler Broker) verworfen, weil sie das zentrale
-Secret-Management zurückbringen, das vermieden werden soll.
-
-## D12 — Externe Integrationen: flexible Zugriffsadapter, MCP optional (2026-06-25)
-
-Externe Systeme werden über eine **Integrations-Registry mit austauschbaren Zugriffsadaptern**
-angebunden — **direkter API-Call**, **MCP-Server** oder **CLI-Tool**. MCP ist *eine* Option, nicht
-Pflicht (z. B. Jira braucht für wenige Tickets keinen MCP-Server). Zentral kuratiert wird, welche
-Integrationen + Scopes erlaubt sind; lokale Runner konsumieren die Registry. Jira/Confluence/GitHub
-sind damit Instanzen desselben Modells, kein hartcodierter Connector. Ersetzt die frühere Annahme
-„Phase 3 = Jira/Confluence-Connector".
-
-## D13 — SSO/OIDC und Enterprise-RBAC nach Phase 5; Phase 3 nur RBAC-lite (2026-06-25)
-
-Da in Phase 3 alles lokal/BYO läuft (D11) und keine zentrale Identität die externen Zugriffe trägt,
-wird **SSO/OIDC nicht in Phase 3 gebraucht** und nach Phase 5 verschoben (D14). Phase 3 erhält nur
-**RBAC-lite**: Rolle **Kurator/Admin** (darf Skill-/Agent-/Integrations-Registry editieren und
-freigeben) vs. **Member** (refined, reviewed), plus leichtgewichtige Identität zur Audit-Attribution.
-Volles Enterprise-RBAC, Multi-Tenant, Playbook-Studio, Evaluation- und Policy-Engine bleiben Phase 5.
-
-## D14 — Phase 4 = Modul-Expansion, Plattform-/Enterprise-Ausbau → Phase 5 (2026-06-25)
-
-Die frühere „Phase 4: Multi-Module Enterprise Platform" wird in zwei Phasen geteilt:
-**Phase 4** deckt ausschließlich die **Ausweitung auf weitere SDLC-Schritte** ab (Code Review,
-Test Generation, Release Notes, Docs, …) — jedes Modul wiederverwendet die bestehende
-Infrastruktur (Runner, Registries, Integrations-Adapter aus D10/D12) und erfordert in der Regel
-keinen Plattformumbau. **Phase 5** bündelt den **Enterprise-/Plattform-Ausbau** (Workflow Builder,
-Policy Engine, Studio-UI, Evaluation-Layer, Multi-Tenant, Environments, Data-Boundary/Retention,
-SSO/OIDC + volles Enterprise-RBAC). Begründung: Mehr SDLC-Abdeckung liefert frühen, sichtbaren
-Nutzen ohne die schwere Governance-Maschinerie; diese lohnt erst beim breiten Enterprise-Rollout.
-Verschiebt die in D13 genannten „bleiben Phase 4"-Punkte auf Phase 5.
-
-## D15 — Phase-3-Topologie: Runner serviert das GUI lokal, Datenhaltung remote (2026-06-25)
-
-> **Ersetzt durch [D17]** — es gibt keine separate „Runner"-Komponente mehr; die gesamte lokale App
-> (inkl. GUI) läuft pro Nutzer, nur die DB ist geteilt.
-
-Konkretisiert den Control/Execution-Split (D10): Das vollständige Board-GUI wird vom **lokalen Runner**
-serviert; alle Board-Daten und Registries liegen **remote** im Control Plane (Postgres), der secret-frei
-bleibt (D11). Jeder Nutzer betreibt also einen lokalen Runner (D10) inkl. GUI; geteilt ist die zentrale
-Datenhaltung, nicht das Rendering. Begründung: erfüllt „Control Plane secret-frei" am saubersten, weil
-Secrets ohnehin nur lokal am Runner liegen und so direkt am Ort der GUI eingegeben werden. Verworfen
-wurde die rein gehostete Web-App, weil das lokale Halten der Secrets dann eine zweite (localhost-)GUI
-nur für Tokens erzwungen hätte — zwei UIs statt einer.
-
-## D16 — Runner↔Control-Plane via Pull/Claim, outbound (2026-06-25)
-
-> **Ersetzt durch [D17]** — ohne separaten Runner und ohne gehosteten Anwendungs-Server gibt es kein
-> Dispatch-Protokoll; der Run läuft in-process im lokalen Backend des auslösenden Nutzers.
-
-Der Runner **pollt** den Control Plane und **claimt** Runs atomar (Muster: self-hosted CI-Runner), statt
-dass der Control Plane Arbeit an den Runner pusht. Begründung: kein eingehender Port am Nutzer-Rechner
-nötig (NAT-/Firewall-tauglich), Runs sind ohnehin asynchron (D4), und das server-seitige atomare Claim
-erzwingt die Concurrency-Invariante („kein paralleles Refine pro Ticket") auf natürliche Weise. Push
-verworfen (offene Ports/Tunnel am Endnutzer-Rechner nötig).
-
-## D17 — Phase-3-Topologie vereinfacht: nur die DB ist geteilt (2026-06-25)
-
-Ersetzt D15 und D16, präzisiert D10/D11/D13. Statt eines gehosteten Control-Plane-Anwendungsservers mit
-separatem Runner ist in Phase 3 **nur die Datenbank geteilt** (remote Postgres); **Frontend, Backend und
-Agent-Ausführung laufen lokal pro Nutzer** als der an die geteilte DB angebundene Phase-2-Monolith. Damit
-entfallen die gehostete API, das Runner↔Server-Pull/Claim-Protokoll und das Runner-Pairing; ein Refine
-läuft in-process im lokalen Backend des auslösenden Nutzers (acts-as-user), kein Dispatch.
-
-Enforcement: harte Invarianten werden als **DB-Constraints** erzwungen (z. B. partieller Unique-Index für
-„kein paralleles Refine pro Ticket", append-only Audit); **RBAC-lite und Business-Regeln sind
-clientseitig** (vertrauenswürdiges Team) — keine harte Sicherheitsgrenze; volle Durchsetzung erst Phase 5.
-
-Bewusst akzeptierte Trade-offs: die DB-Zugangsdaten liegen auf jedem Client, und die geteilte DB ist die
-Vertrauensgrenze. Für ein vertrauenswürdiges Pilotteam vertretbar; sauberes Per-User-Sperren/Least-
-Privilege und eine echte Autoritäts-Schicht sind Phase-5-Themen (D14). Die geteilte DB bleibt
-**secret-frei** (D11): LLM-/externe Tokens liegen ausschließlich lokal.
-
-## D18 — Diagramm-Notation: ASCII konsistent über alle Docs (2026-06-26)
-
-Die [Architektur-Dokumentation](architecture.md) nutzt **ASCII-Diagramme** in `text`-Blöcken — wie
-[datenmodell.md](datenmodell.md). Mermaid wurde trotz nativer GitHub-Darstellung **verworfen**, um eine
-einzige, editor-unabhängige Notation über alle Dokumente zu halten, ohne Renderer-/Toolchain-Abhängigkeit.
-Eigentum: `architecture.md` ownt Topologie, Datenfluss, Vertrauens-/Enforcement-Verortung und Sequenzen
-(ASCII); `datenmodell.md` ownt Entitäten, ER-Überblick und State-Machine (ASCII). So bleibt jede Notation
-dort, wo sie am stärksten ist, und nichts wird dupliziert.
-
-## D19 — Next.js als einziger Prozess, Fachkern nach Ports & Adapters (2026-10-28)
-
-Ersetzt in D2 „Vite/React-Frontend“ und das separate Node-Backend. Die App läuft als **eine Next.js-App**
-(App Router): Server Components lesen, Server Actions schreiben, ein Route Handler streamt SSE. Die Fachlogik
-liegt in `packages/core` nach **Ports & Adapters** (Domäne, Use Cases, Ports; Adapter für SQLite/Drizzle, Git,
-Claude CLI und den In-Process-Event-Bus); `packages/shared` hält die Zod-Verträge. Hono war nur eine
-Zustell-Schicht (~280 von ~1.700 Zeilen Backend-Code) und wurde als Adapter ausgetauscht.
-
-Begründung: ein Prozess und ein Start-Befehl passen zur lokalen Pro-Nutzer-App (D17); Next.js gehört zum
-Ziel-Stack. Hexagonal statt Clean/Onion, weil die Fachlogik schmal ist, die Zahl der Ränder aber wächst
-(Postgres und prozessübergreifende Events in Phase 3, Integrationsadapter nach D12); Ports gibt es nur an
-heute existierenden Rändern. Die Abhängigkeitsrichtung erzwingt eine ESLint-Regel.
-
-Bewusst akzeptierte Trade-offs: **kein Serverless-Hosting** — Agent-Läufe sind lang laufende Kindprozesse,
-der Event-Bus lebt im Speicher eines Prozesses, die Datenbank ist eine lokale Datei. Lang laufende Läufe
-starten fire-and-forget aus Server Actions im Node-Prozess von `next start`. Die Engine ist ein Singleton
-auf `globalThis`, weil Next.js Module in mehreren Bundles lädt; Fachfehler werden deshalb über ein
-`code`-Feld statt `instanceof` erkannt. Der Wechsel von der CLI auf das Claude Agent SDK ist als eigener
-Schritt geplant und betrifft nur den Adapter hinter dem Port `AgentRunner`.
+**Begründung.** Eine editorunabhängige Notation ohne Toolchain; Diffs bleiben lesbar.
