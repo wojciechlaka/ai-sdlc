@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import type { StartupReport } from '@refinement/core'
 import { getEngine } from '@/lib/container'
 import { runAction, type ActionResult } from '@/lib/actionResult'
 
@@ -27,7 +28,7 @@ export async function stopRunAction(key: string): Promise<ActionResult> {
   return result
 }
 
-export async function resetSystemAction(): Promise<ActionResult> {
+export async function resetSystemAction(): Promise<ActionResult<StartupReport>> {
   const result = await runAction(() => getEngine().resetSystem())
   refreshAll()
   return result

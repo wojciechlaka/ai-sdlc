@@ -25,10 +25,10 @@ describe('artifact names', () => {
     expect(artifactTitle('CB-3', 'design')).toBe('CB-3: Spec')
   })
 
-  it('links the file on the default branch', () => {
-    expect(fileUrl('https://github.com/o/r', 'docs/work/CB-3/intent.md'))
-      .toBe('https://github.com/o/r/blob/HEAD/docs/work/CB-3/intent.md')
-    expect(fileUrl('https://github.com/o/r.git/', 'a.md')).toBe('https://github.com/o/r/blob/HEAD/a.md')
+  it('links the file on the given branch', () => {
+    expect(fileUrl('https://github.com/o/r', 'showcase', 'docs/work/CB-3/intent.md'))
+      .toBe('https://github.com/o/r/blob/showcase/docs/work/CB-3/intent.md')
+    expect(fileUrl('https://github.com/o/r.git/', 'showcase', 'a.md')).toBe('https://github.com/o/r/blob/showcase/a.md')
   })
 })
 

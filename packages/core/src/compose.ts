@@ -26,6 +26,10 @@ export interface EngineConfig {
   targetRepo: string
   /** Fine-grained PAT (`GITHUB_TOKEN`); without it stages cannot be started. */
   githubToken?: string
+  /** Branch the app works on; default `SHOWCASE_BRANCH`. */
+  baseBranch?: string
+  /** Tag the repo reset moves the base branch back to; default `BASELINE_TAG`. */
+  baselineTag?: string
 }
 
 const STOP_SETTLE_MS = 500
@@ -51,6 +55,7 @@ export function resolveCorePaths(coreDir: string): Pick<EngineConfig, 'migration
 export function createRefinementEngine(config: EngineConfig): UseCases {
   // Fail at start with the clear message, with or without token.
   parseGitHubRepoUrl(config.targetRepo)
+  const { baseBranch = SHOWCASE_BRANCH, baselineTag = BASELINE_TAG } = config
   const db = createSqliteDatabase({ path: config.dbPath, migrationsFolder: config.migrationsFolder })
   return createUseCases({
     tickets: createSqliteTicketRepository(db),
@@ -59,12 +64,13 @@ export function createRefinementEngine(config: EngineConfig): UseCases {
     audit: createSqliteAuditLog(db),
     source: createMarkdownTicketSource({ dir: config.ticketsDir, rootDir: config.rootDir }),
     codeHost: config.githubToken
-      ? createGitHubCodeHost({ repoUrl: config.targetRepo, token: config.githubToken, baseBranch: SHOWCASE_BRANCH, baselineTag: BASELINE_TAG })
+      ? createGitHubCodeHost({ repoUrl: config.targetRepo, token: config.githubToken, baseBranch, baselineTag })
       : null,
     agent: createClaudeCliAgentRunner({ skillsDir: config.skillsDir }),
     repos: createGitRepoProvider(),
     events: createNodeEventPublisher(),
     repoUrl: config.targetRepo,
+    baseBranch,
     runInBackground: (task) => {
       task.catch((err) => console.error('[background] unhandled error in agent run', err))
     },

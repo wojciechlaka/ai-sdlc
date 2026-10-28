@@ -39,19 +39,19 @@ describe('getTicket', () => {
     expect(detail.stages).toEqual([
       {
         stage: 'plan', path: 'docs/work/CB-1/intent.md',
-        fileUrl: 'https://github.com/o/r/blob/HEAD/docs/work/CB-1/intent.md',
+        fileUrl: 'https://github.com/o/r/blob/showcase/docs/work/CB-1/intent.md',
         completed: false, pr: null, mergedAt: null, content: null,
       },
       {
         stage: 'design', path: 'docs/work/CB-1/spec.md',
-        fileUrl: 'https://github.com/o/r/blob/HEAD/docs/work/CB-1/spec.md',
+        fileUrl: 'https://github.com/o/r/blob/showcase/docs/work/CB-1/spec.md',
         completed: false, pr: null, mergedAt: null, content: null,
       },
     ])
     expect(ctx.codeHost.calls).toEqual([])
   })
 
-  it('reads the content of completed stages live from the default branch', async () => {
+  it('reads the content of completed stages live from the base branch', async () => {
     const ctx = createTestContext()
     seedTicket(ctx, 'CB-1', { stage: 'design' })
     const artifact = openIntentPr(ctx, 'CB-1', 1)
@@ -107,8 +107,8 @@ describe('getTicket', () => {
 })
 
 describe('getSettings', () => {
-  it('reports the target repository and whether a token is configured', () => {
-    expect(getSettings(createTestContext().deps)).toEqual({ repoUrl: 'https://github.com/o/r', tokenConfigured: true })
-    expect(getSettings(createTestContext({ token: false }).deps).tokenConfigured).toBe(false)
+  it('reports the target repository, its base branch and whether a token is configured', () => {
+    expect(getSettings(createTestContext().deps)).toEqual({ repoUrl: 'https://github.com/o/r', baseBranch: 'showcase', tokenConfigured: true })
+    expect(getSettings(createTestContext({ token: false }).deps)).toMatchObject({ baseBranch: 'showcase', tokenConfigured: false })
   })
 })

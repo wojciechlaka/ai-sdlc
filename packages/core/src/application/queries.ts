@@ -1,13 +1,11 @@
 import type { SettingsDto, StageViewDto, TicketDetailDto, TicketDto } from '@refinement/shared'
 import type { Artifact, ArtifactStage, Ticket } from '../domain/types'
-import { artifactPath, fileUrl } from '../domain/artifacts'
+import { ARTIFACT_STAGES, artifactPath, fileUrl } from '../domain/artifacts'
 import { currentArtifactStage, isStageCompleted } from '../domain/rules'
 import type { UseCaseDeps } from './deps'
 import { toAuditEventDto, toPullRequestRef, toTicketDto } from './dto'
 import { describeError } from './describeError'
 import { requireTicket } from './requireTicket'
-
-const ARTIFACT_STAGES: readonly ArtifactStage[] = ['plan', 'design']
 
 function openArtifact(deps: UseCaseDeps, ticket: Ticket): Artifact | null {
   const stage = currentArtifactStage(ticket)
@@ -18,7 +16,7 @@ export function listTickets(deps: UseCaseDeps): TicketDto[] {
   return deps.tickets.list().map((ticket) => toTicketDto(ticket, openArtifact(deps, ticket)))
 }
 
-/** Content of a merged artifact, read live from the default branch; null without token or on errors. */
+/** Content of a merged artifact, read live from the base branch; null without token or on errors. */
 async function readMergedContent(deps: UseCaseDeps, path: string): Promise<string | null> {
   if (!deps.codeHost) return null
   try {
@@ -36,7 +34,7 @@ async function stageView(deps: UseCaseDeps, ticket: Ticket, artifacts: Artifact[
   return {
     stage,
     path,
-    fileUrl: fileUrl(deps.repoUrl, path),
+    fileUrl: fileUrl(deps.repoUrl, deps.baseBranch, path),
     completed,
     pr: latest ? toPullRequestRef(latest) : null,
     mergedAt: latest?.mergedAt ?? null,
@@ -64,5 +62,5 @@ export async function getTicket(deps: UseCaseDeps, key: string): Promise<TicketD
 }
 
 export function getSettings(deps: UseCaseDeps): SettingsDto {
-  return { repoUrl: deps.repoUrl, tokenConfigured: deps.codeHost !== null }
+  return { repoUrl: deps.repoUrl, baseBranch: deps.baseBranch, tokenConfigured: deps.codeHost !== null }
 }

@@ -459,6 +459,7 @@ export function createTestContext(options: { token?: boolean } = {}): TestContex
     repos,
     events,
     repoUrl: TEST_REPO_URL,
+    baseBranch: codeHost.baseBranchName,
     runInBackground: (task) => {
       tasks.push(task)
     },

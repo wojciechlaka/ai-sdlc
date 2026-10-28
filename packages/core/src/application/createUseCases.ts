@@ -3,7 +3,7 @@ import type { UseCaseDeps } from './deps'
 import { getSettings, getTicket, listTickets } from './queries'
 import { answerQuestion, startStage, stopRun } from './stageCommands'
 import { syncReviews } from './syncReviews'
-import { resetSystem, startup } from './startup'
+import { resetSystem, startup, type StartupOptions, type StartupReport } from './startup'
 
 /**
  * Everything a driving adapter (Next.js) may call.
@@ -18,10 +18,11 @@ export interface UseCases {
   stopRun(key: string): void
   /** Checks the PRs of tickets in review — all, or the one given. */
   syncReviews(key?: string): Promise<void>
-  resetSystem(): Promise<void>
+  /** Empties the database and starts again with a repo reset; returns the warnings of the start. */
+  resetSystem(): Promise<StartupReport>
   /** Events of one ticket, or of all tickets with `null`. */
   subscribe(ticketKey: string | null, handler: (event: TicketEvent) => void): () => void
-  startup(): Promise<void>
+  startup(options?: StartupOptions): Promise<StartupReport>
 }
 
 export function createUseCases(deps: UseCaseDeps): UseCases {
@@ -35,6 +36,6 @@ export function createUseCases(deps: UseCaseDeps): UseCases {
     syncReviews: (key) => syncReviews(deps, key),
     resetSystem: () => resetSystem(deps),
     subscribe: (ticketKey, handler) => deps.events.subscribe(ticketKey, handler),
-    startup: () => startup(deps),
+    startup: (options) => startup(deps, options),
   }
 }

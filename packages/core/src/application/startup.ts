@@ -1,4 +1,4 @@
-import { artifactPath, parseAppBranch } from '../domain/artifacts'
+import { ARTIFACT_STAGES, artifactPath, branchName, parseAppBranch } from '../domain/artifacts'
 import { reconcile, stageFromRepo } from '../domain/rules'
 import type { CodeHost } from '../ports'
 import type { UseCaseDeps } from './deps'
@@ -7,31 +7,54 @@ import { createReporter } from './reporter'
 import { sleep } from './sleep'
 import { syncReviews } from './syncReviews'
 
+export interface StartupOptions {
+  /** Also resets the target repo: app branches deleted, base branch force-moved to the baseline tag (spec §12). */
+  resetRepo?: boolean
+}
+
+export interface StartupReport {
+  /** Every problem that was caught and logged, user-facing; empty when everything worked. */
+  warnings: string[]
+}
+
+type Warn = (message: string) => void
+
 /**
- * Start of the app (spec §3), before requests are served. Without token, or when GitHub fails,
- * the app continues with the database state and logs a warning.
+ * Start of the app (spec §3, §12), before requests are served. Without token, or when GitHub fails,
+ * the app continues with the database state; each problem is logged and reported as warning.
  */
-export async function startup(deps: UseCaseDeps): Promise<void> {
+export async function startup(deps: UseCaseDeps, { resetRepo = false }: StartupOptions = {}): Promise<StartupReport> {
+  const warnings: string[] = []
+  const warn: Warn = (message) => {
+    console.warn(`[startup] ${message}`)
+    warnings.push(message)
+  }
+
   endInterruptedRuns(deps)
   importTickets(deps)
 
   const host = deps.codeHost
   if (!host) {
-    console.warn('[startup] GITHUB_TOKEN fehlt — Abgleich mit GitHub übersprungen')
-    return
+    warn('GITHUB_TOKEN fehlt — Abgleich mit GitHub übersprungen')
+    return { warnings }
   }
   try {
-    await syncReviews(deps)
-    await closeOpenPullRequests(deps, host)
-    await host.baseBranch() // guard: a repo-level failure must not reset tickets to plan
-    await deriveStages(deps, host)
+    // Also the guard for deriveStages: it reads tag and base branch, so a repo-level failure
+    // (wrong repo, no access) stops here instead of resetting tickets to plan.
+    await prepareBaseBranch(deps, host)
+    // After a reset the database is empty, so there is nothing to sync; merges are undone anyway.
+    if (!resetRepo) await syncReviews(deps)
+    await closeOpenPullRequests(deps, host, warn)
+    if (resetRepo) await resetRepository(deps, host, warn)
+    await deriveStages(deps, host, warn)
   } catch (err) {
-    console.warn(`[startup] GitHub-Abgleich fehlgeschlagen, weiter mit DB-Stand: ${describeError(err)}`)
+    warn(`GitHub-Abgleich fehlgeschlagen, weiter mit DB-Stand: ${describeError(err)}`)
   }
+  return { warnings }
 }
 
-/** Stops running agents, empties the database and runs the start again. */
-export async function resetSystem(deps: UseCaseDeps): Promise<void> {
+/** Stops running agents, empties the database and runs the start again, including the repo reset. */
+export async function resetSystem(deps: UseCaseDeps): Promise<StartupReport> {
   let stopped = 0
   for (const ticket of deps.tickets.list()) {
     if (ticket.state === 'running') {
@@ -41,7 +64,37 @@ export async function resetSystem(deps: UseCaseDeps): Promise<void> {
   }
   if (stopped > 0) await sleep(deps.stopSettleMs)
   deps.tickets.clear()
-  await startup(deps)
+  return startup(deps, { resetRepo: true })
+}
+
+/** Creates the baseline tag and the base branch if they are missing. */
+async function prepareBaseBranch(deps: UseCaseDeps, host: CodeHost): Promise<void> {
+  const { createdTag, createdBranch } = await host.prepareBaseBranch()
+  if (createdTag) console.log('[startup] Ausgangs-Tag auf den Default-Branch gelegt')
+  if (createdBranch) console.log(`[startup] Branch ${deps.baseBranch} auf den Ausgangs-Tag gelegt`)
+}
+
+/**
+ * Deletes the branches `<KEY>/intent|spec` of all known tickets, also leftovers of merged PRs,
+ * and moves the base branch back to the baseline tag. A failed reset is a warning; stages are derived anyway.
+ */
+async function resetRepository(deps: UseCaseDeps, host: CodeHost, warn: Warn): Promise<void> {
+  for (const { key } of deps.tickets.list()) {
+    for (const stage of ARTIFACT_STAGES) {
+      const branch = branchName(key, stage)
+      try {
+        await host.deleteBranch(branch)
+      } catch (err) {
+        warn(`Branch ${branch} nicht gelöscht: ${describeError(err)}`)
+      }
+    }
+  }
+  try {
+    await host.resetBaseBranch()
+    console.log('[startup] Repo zurückgesetzt')
+  } catch (err) {
+    warn(`Repo nicht zurückgesetzt: ${describeError(err)}`)
+  }
 }
 
 /** Runs still `running` were cut off by the restart; their tickets start over as `ready`. */
@@ -67,7 +120,7 @@ function importTickets(deps: UseCaseDeps): void {
 }
 
 /** Closes every open PR of the app (head branch `<KEY>/intent|spec` of a known ticket) and deletes its branch. */
-async function closeOpenPullRequests(deps: UseCaseDeps, host: CodeHost): Promise<void> {
+async function closeOpenPullRequests(deps: UseCaseDeps, host: CodeHost, warn: Warn): Promise<void> {
   const keys = new Set(deps.tickets.list().map((t) => t.key))
   for (const pr of await host.listOpenPullRequests()) {
     const owner = parseAppBranch(pr.headBranch, keys)
@@ -79,13 +132,13 @@ async function closeOpenPullRequests(deps: UseCaseDeps, host: CodeHost): Promise
       if (artifact) deps.artifacts.markClosed(artifact.id)
       deps.audit.append({ ticketKey: owner.key, actor: 'system', type: 'cleanup', payload: { prNumber: pr.number, branch: pr.headBranch } })
     } catch (err) {
-      console.warn(`[startup] PR #${pr.number} (${pr.headBranch}) nicht aufgeräumt: ${describeError(err)}`)
+      warn(`PR #${pr.number} (${pr.headBranch}) nicht aufgeräumt: ${describeError(err)}`)
     }
   }
 }
 
-/** Sets each ticket to the stage its merged artifacts on the default branch imply. */
-async function deriveStages(deps: UseCaseDeps, host: CodeHost): Promise<void> {
+/** Sets each ticket to the stage its merged artifacts on the base branch imply. */
+async function deriveStages(deps: UseCaseDeps, host: CodeHost, warn: Warn): Promise<void> {
   for (const { key } of deps.tickets.list()) {
     try {
       const [intent, spec] = await Promise.all([
@@ -102,7 +155,7 @@ async function deriveStages(deps: UseCaseDeps, host: CodeHost): Promise<void> {
       }
       createReporter(deps, key).setState(next.state, next.stage)
     } catch (err) {
-      console.warn(`[startup] ${key}: Stufe nicht abgeleitet: ${describeError(err)}`)
+      warn(`${key}: Stufe nicht abgeleitet: ${describeError(err)}`)
     }
   }
 }

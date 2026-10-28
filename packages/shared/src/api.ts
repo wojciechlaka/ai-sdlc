@@ -63,6 +63,8 @@ export type TicketDetailDto = z.infer<typeof TicketDetailSchema>
 export const SettingsSchema = z.object({
   /** `TARGET_REPO` */
   repoUrl: z.string(),
+  /** Branch of the target repository the app works on; PRs target it. */
+  baseBranch: z.string(),
   /** False without `GITHUB_TOKEN`: stages cannot be started. */
   tokenConfigured: z.boolean(),
 })

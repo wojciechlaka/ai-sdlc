@@ -35,7 +35,7 @@ describe('createRefinementEngine', () => {
     await engine.startup()
 
     expect(engine.listTickets().map((t) => t.key)).toEqual(['CB-1', 'CB-2', 'CB-3'])
-    expect(engine.getSettings()).toEqual({ repoUrl: 'https://github.com/o/r', tokenConfigured: false })
+    expect(engine.getSettings()).toEqual({ repoUrl: 'https://github.com/o/r', baseBranch: 'showcase', tokenConfigured: false })
     expect(() => engine.startStage('CB-1', { model: 'm' })).toThrow('GITHUB_TOKEN')
     fs.rmSync(dir, { recursive: true, force: true })
   })

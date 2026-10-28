@@ -40,6 +40,11 @@ describe('startup — tickets', () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('GITHUB_TOKEN'))
   })
 
+  it('reports the missing token as warning', async () => {
+    const ctx = withSource(createTestContext({ token: false }), 'CB-1')
+    expect((await startup(ctx.deps)).warnings).toEqual([expect.stringContaining('GITHUB_TOKEN fehlt')])
+  })
+
   it('ends runs interrupted by a restart and returns their tickets to ready', async () => {
     const ctx = withSource(createTestContext({ token: false }), 'CB-1')
     seedTicket(ctx, 'CB-1', { state: 'running' })
@@ -69,7 +74,7 @@ describe('startup — GitHub', () => {
     expect(ctx.store.audit.at(-1)).toMatchObject({ ticketKey: 'CB-1', type: 'cleanup', payload: { prNumber: appPr.number, branch: 'CB-1/intent' } })
   })
 
-  it('derives the stage from the files on the default branch', async () => {
+  it('derives the stage from the files on the base branch', async () => {
     const ctx = withSource(createTestContext(), 'CB-1', 'CB-2', 'CB-3')
     ctx.codeHost.files.set('docs/work/CB-1/intent.md', 'x')
     ctx.codeHost.files.set('docs/work/CB-2/intent.md', 'x')
@@ -108,9 +113,36 @@ describe('startup — GitHub', () => {
   it('continues with the database state when GitHub fails', async () => {
     const ctx = withSource(createTestContext(), 'CB-1')
     ctx.codeHost.failures.listOpenPullRequests = new CodeHostError(0, 'offline')
-    await expect(startup(ctx.deps)).resolves.toBeUndefined()
+    expect((await startup(ctx.deps)).warnings).toEqual([expect.stringContaining('offline')])
     expect(ctx.deps.tickets.findByKey('CB-1')?.state).toBe('ready')
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('offline'))
+  })
+
+  it('prepares the base branch on every start with token, before anything else on GitHub', async () => {
+    const ctx = withSource(createTestContext(), 'CB-1')
+    ctx.codeHost.baseBranchExists = false
+    await startup(ctx.deps)
+    await startup(ctx.deps)
+    expect(ctx.codeHost.calls.filter((c) => c === 'prepareBaseBranch')).toHaveLength(2)
+    expect(ctx.codeHost.calls[0]).toBe('prepareBaseBranch')
+    expect(ctx.codeHost.baselineFiles).not.toBeNull()
+
+    const noToken = withSource(createTestContext({ token: false }), 'CB-1')
+    await startup(noToken.deps)
+    expect(noToken.codeHost.calls).toEqual([])
+  })
+
+  it('leaves the base branch alone without resetRepo', async () => {
+    const ctx = withSource(createTestContext(), 'CB-1')
+    ctx.codeHost.files.set('docs/work/CB-1/intent.md', 'x')
+    ctx.codeHost.branches.set('CB-1/intent', new Map())
+
+    expect(await startup(ctx.deps)).toEqual({ warnings: [] })
+
+    expect(ctx.codeHost.calls).not.toContain('resetBaseBranch')
+    expect(ctx.codeHost.files.get('docs/work/CB-1/intent.md')).toBe('x')
+    expect(ctx.codeHost.branches.has('CB-1/intent')).toBe(true)
+    expect(ctx.deps.tickets.findByKey('CB-1')?.stage).toBe('design')
   })
 })
 
@@ -127,6 +159,21 @@ describe('startup — isolation', () => {
     expect(ctx.deps.tickets.findByKey('CB-2')?.stage).toBe('design')
     expect(ctx.deps.tickets.findByKey('CB-1')?.stage).toBe('plan')
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('CB-1'))
+  })
+
+  it('collects every caught GitHub problem as warning', async () => {
+    const ctx = withSource(createTestContext(), 'CB-1', 'CB-2')
+    ctx.codeHost.seedPullRequest('CB-1/intent')
+    ctx.codeHost.failures.closePullRequest = new CodeHostError(500, 'kaputt')
+    ctx.codeHost.failures.readFile = new CodeHostError(500, 'unlesbar')
+
+    const { warnings } = await startup(ctx.deps)
+
+    expect(warnings).toEqual([
+      expect.stringMatching(/PR #1 .*kaputt/),
+      expect.stringMatching(/CB-1.*unlesbar/),
+      expect.stringMatching(/CB-2.*unlesbar/),
+    ])
   })
 
   it('still closes the other app PR when closing one fails', async () => {
@@ -167,6 +214,68 @@ describe('resetSystem', () => {
     expect(ctx.agent.stopped).toEqual(['CB-1'])
     expect(ctx.deps.tickets.list().map((t) => [t.key, t.stage, t.state])).toEqual([['CB-1', 'plan', 'ready'], ['CB-2', 'plan', 'ready']])
     expect(ctx.store.audit.map((e) => e.type)).toEqual(['ticket_imported', 'ticket_imported'])
+  })
+
+  it('resets the repo: merged artifacts on the base branch are gone, all tickets back in plan', async () => {
+    const ctx = withSource(createTestContext(), 'CB-1', 'CB-2')
+    ctx.codeHost.baselineFiles = new Map([['README.md', 'base']])
+    const merged = ctx.codeHost.seedPullRequest('CB-1/intent')
+    await ctx.codeHost.commitFile({ branch: 'CB-1/intent', path: 'docs/work/CB-1/intent.md', content: 'x', message: 'm' })
+    ctx.codeHost.merge(merged.number)
+    await startup(ctx.deps)
+    expect(ctx.deps.tickets.findByKey('CB-1')?.stage).toBe('design')
+
+    const report = await resetSystem(ctx.deps)
+
+    expect(report).toEqual({ warnings: [] })
+    expect(ctx.codeHost.files.has('docs/work/CB-1/intent.md')).toBe(false)
+    expect(ctx.codeHost.files.get('README.md')).toBe('base')
+    expect(ctx.deps.tickets.list().map((t) => [t.key, t.stage, t.state])).toEqual([['CB-1', 'plan', 'ready'], ['CB-2', 'plan', 'ready']])
+    expect(ctx.codeHost.calls.filter((c) => c === 'resetBaseBranch')).toHaveLength(1)
+  })
+
+  it('deletes leftover app branches without PR, closes open app PRs and keeps foreign branches', async () => {
+    const ctx = withSource(createTestContext(), 'CB-1', 'CB-2')
+    ctx.codeHost.branches.set('CB-1/intent', new Map([['a', 'b']]))
+    ctx.codeHost.branches.set('CB-1/spec', new Map())
+    ctx.codeHost.branches.set('feature/x', new Map())
+    ctx.codeHost.branches.set('CB-9/intent', new Map())
+    const open = ctx.codeHost.seedPullRequest('CB-2/intent')
+
+    await resetSystem(ctx.deps)
+
+    expect([...ctx.codeHost.branches.keys()]).toEqual(['feature/x', 'CB-9/intent'])
+    expect(open.state).toBe('closed')
+    expect(ctx.store.audit.filter((e) => e.type === 'cleanup')).toMatchObject([{ ticketKey: 'CB-2', payload: { prNumber: open.number } }])
+  })
+
+  it('skips the review sync with resetRepo and resets after closing the PRs', async () => {
+    const ctx = withSource(createTestContext(), 'CB-1')
+    seedTicket(ctx, 'CB-1', { state: 'in_review' })
+    const pr = ctx.codeHost.seedPullRequest('CB-1/intent')
+    ctx.deps.artifacts.create({ ticketKey: 'CB-1', stage: 'plan', path: 'docs/work/CB-1/intent.md', branch: 'CB-1/intent', prNumber: pr.number, prUrl: pr.url })
+
+    await startup(ctx.deps, { resetRepo: true })
+
+    expect(ctx.codeHost.calls).not.toContain('getPullRequest')
+    expect(pr.state).toBe('closed')
+    expect(ctx.codeHost.calls.indexOf('resetBaseBranch')).toBeGreaterThan(ctx.codeHost.calls.indexOf('closePullRequest'))
+  })
+
+  it('keeps running and reports a failed repo reset', async () => {
+    const ctx = withSource(createTestContext(), 'CB-1')
+    ctx.codeHost.failures.resetBaseBranch = new CodeHostError(422, 'Branch-Schutz auf showcase verhindert den Reset')
+    ctx.codeHost.failures.deleteBranch = new CodeHostError(500, 'boom')
+
+    const { warnings } = await resetSystem(ctx.deps)
+
+    expect(warnings).toEqual([
+      expect.stringContaining('CB-1/intent'),
+      expect.stringContaining('CB-1/spec'),
+      expect.stringContaining('Branch-Schutz'),
+    ])
+    expect(ctx.deps.tickets.findByKey('CB-1')).toMatchObject({ stage: 'plan', state: 'ready' })
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('Branch-Schutz'))
   })
 
   it('picks up a new ticket file', async () => {

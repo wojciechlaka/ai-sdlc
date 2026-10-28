@@ -3,6 +3,7 @@ export type { EngineConfig } from './compose'
 
 export { createUseCases } from './application/createUseCases'
 export type { UseCases } from './application/createUseCases'
+export type { StartupOptions, StartupReport } from './application/startup'
 export type { UseCaseDeps } from './application/deps'
 
 export { NotFoundError, ConflictError, ValidationError, errorCode } from './domain/errors'

@@ -1,6 +1,9 @@
 import type { ArtifactStage } from './types'
 import { TICKET_KEY_PATTERN } from './ticketKey'
 
+/** Stages that produce an artifact in the target repo. */
+export const ARTIFACT_STAGES: readonly ArtifactStage[] = ['plan', 'design']
+
 const FILE_NAME: Record<ArtifactStage, string> = { plan: 'intent', design: 'spec' }
 const LABEL: Record<ArtifactStage, string> = { plan: 'Intent', design: 'Spec' }
 const APP_BRANCH_RE = new RegExp(`^(${TICKET_KEY_PATTERN})/(intent|spec)$`)
@@ -20,10 +23,10 @@ export function artifactTitle(key: string, stage: ArtifactStage): string {
   return `${key}: ${LABEL[stage]}`
 }
 
-/** Link to a file on the default branch (`HEAD` resolves to it on GitHub). */
-export function fileUrl(repoUrl: string, path: string): string {
+/** Link to a file on `branch`. */
+export function fileUrl(repoUrl: string, branch: string, path: string): string {
   const base = repoUrl.trim().replace(/\/+$/, '').replace(/\.git$/, '')
-  return `${base}/blob/HEAD/${path}`
+  return `${base}/blob/${branch}/${path}`
 }
 
 /** Recognises a branch the app created for one of the known tickets; null for every other branch. */

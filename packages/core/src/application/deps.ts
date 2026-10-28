@@ -23,6 +23,8 @@ export interface UseCaseDeps {
   events: EventPublisher
   /** Target repository (`TARGET_REPO`): cloned for the agent, linked in the UI. */
   repoUrl: string
+  /** Branch of the target repository the app works on (`showcase`); the code host is configured with the same name. */
+  baseBranch: string
   /** Receives fire-and-forget work (agent runs). The production implementation logs rejections. */
   runInBackground: (task: Promise<void>) => void
   /** Pause after stopping an agent before the ticket state is read again (process needs time to exit). */
