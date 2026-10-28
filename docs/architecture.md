@@ -146,7 +146,7 @@ zu Daten/Constraints stehen in `datenmodell.md`, das Warum in `decisions.md`.
 
 | Achse | Phase 2 | Phase 3 | Phase 4 | Phase 5 |
 |---|---|---|---|---|
-| Deployment-Einheit | lokaler Monolith | lokale App pro Nutzer | wie P3 | gehosteter Multi-Tenant-Dienst |
+| Deployment-Einheit | lokale Next.js-App, ein Prozess (D19) | lokale App pro Nutzer | wie P3 | gehosteter Multi-Tenant-Dienst |
 | Geteilte Komponente | keine | **nur die DB** (D17) | wie P3 | Server + DB |
 | Persistenz | SQLite (lokal) | Postgres (remote, geteilt) | wie P3 | wie P3, mandantenfähig |
 | Ausführungsort der Runs | lokal | lokal, in-process (D17) | lokal | lokal/gemischt |
@@ -156,11 +156,11 @@ zu Daten/Constraints stehen in `datenmodell.md`, das Warum in `decisions.md`.
 | Enforcement | App-Logik | hart=DB / weich=Client (D17) | wie P3 | serverseitig autoritativ (D14) |
 
 ```text
-  P2  lokaler Monolith        P3  DB herausgeloest+geteilt    P4  gleich + mehr Module    P5  gehosteter Dienst
+  P2  lokale App              P3  DB herausgeloest+geteilt    P4  gleich + mehr Module    P5  gehosteter Dienst
   +-------------------+       +----------+    +---------+      +----------+   +-------+     +-----------------+
-  | FE+BE+CLI+SQLite  |  -->  | App lokal| -> |geteilte |  --> | App lokal | ->|geteilte| --> | Server + DB     |
-  | (eine Maschine)   |       | (FE+BE+  |    |  DB     |      | (N Module)|   |  DB    |     | Multi-Tenant    |
-  +-------------------+       |  Run)    |    +---------+      +----------+   +-------+     | SSO/RBAC/Policy |
+  | Next.js+Kern+     |  -->  | App lokal| -> |geteilte |  --> | App lokal | ->|geteilte| --> | Server + DB     |
+  | CLI+SQLite        |       | (Next.js+|    |  DB     |      | (N Module)|   |  DB    |     | Multi-Tenant    |
+  +-------------------+       |  Kern)   |    +---------+      +----------+   +-------+     | SSO/RBAC/Policy |
                              +----------+                                                  +-----------------+
        was bleibt -->  Anwendungslogik (Board, Refine, Review, Audit);  was wandert -->  Persistenz, Vertrauensgrenze, Enforcement
 ```
@@ -194,8 +194,8 @@ Die aktuelle Zielarchitektur ([D17](decisions.md)).
                      | nur Daten (keine Secrets)     |
    +-----------------+--------------+   +------------+----------------------+
    |  LOKAL  --  Nutzer A           |   |  LOKAL  --  Nutzer B              |
-   |   Frontend (Vite/React)        |   |   Frontend (Vite/React)          |
-   |   Backend  (Hono)              |   |   Backend  (Hono)                |
+   |   App: Next.js (UI + Actions)  |   |   App: Next.js (UI + Actions)    |
+   |   Kern: packages/core (Hexa.)  |   |   Kern: packages/core (Hexa.)    |
    |   Agent-Run in-process (CLI)   |   |   Agent-Run in-process (CLI)     |
    |   lokaler Secret-Store         |   |   lokaler Secret-Store           |
    |   Repo-Checkout                |   |   Repo-Checkout                  |
@@ -280,34 +280,57 @@ nicht überschreiben (→ [phase-3-backlog T-5](../tickets/phase-3-backlog.md)).
 das Token die DB nie erreicht. MCP ist andockbar, in Phase 3 nicht gebaut ([D11](decisions.md),
 [D12](decisions.md); → [T-11/T-12](../tickets/phase-3-backlog.md)).*
 
+Im Code ist jede Integration ein weiterer **Adapter hinter einem Port** in `packages/core`
+([D19](decisions.md)); Use Cases und Domäne bleiben unverändert.
+
 ---
 
-## 6. Phase 2 — Lokaler Refinement-Monolith (Ist-Bau-Stand)
+## 6. Phase 2 — Lokale Refinement-App (Ist-Bau-Stand)
 
-> **Hinweis:** Die Phase-2-Implementierung wurde auf eine einzelne Next.js-App mit hexagonalem Kern migriert (`apps/web`, `packages/core`, `packages/shared`), siehe [D19 in `decisions.md`](decisions.md). Die Vite-/Hono-Beschreibungen in diesem Abschnitt sowie in `architecture.mmd` und `architecture-annotated.html` geben den früheren Stand wieder.
-
-Ausgangsbild des Wandels: alles auf einer Maschine, keine geteilte Komponente.
+Alles auf einer Maschine, **ein** Prozess, keine geteilte Komponente ([D19](decisions.md)).
 
 ```text
-   +============================ eine Maschine ============================+
-   |   Frontend (Vite/React)  <-->  Backend (Hono)  <-->  SQLite           |
-   |                                   |                                   |
-   |                                   v                                   |
-   |                            CLI-Wrapper (D3)  -->  "claude -p"         |
-   |                                   |                                   |
-   |                                   v                                   |
-   |                            Repo-Checkout (lokal)                      |
-   |   Secrets: lokal                                                      |
-   +======================================================================+
+   +=============================== eine Maschine ===============================+
+   |  Browser                                                                    |
+   |    | RSC-Seiten (lesen)    Server Actions (schreiben)    EventSource (SSE)  |
+   |    v                                                                        |
+   |  apps/web  --  Next.js 16, ein Node-Prozess (next dev / next start)         |
+   |    lib/container.ts = Composition Root (Engine-Singleton auf globalThis)    |
+   |    |                                                                        |
+   |    v                                                                        |
+   |  packages/core  --  Hexagon                                                 |
+   |    application (Use Cases)  -->  domain (Regeln, Fehler)                    |
+   |    ports:    TicketRepository . AgentRunRepository . AuditLog               |
+   |              AgentRunner . RepoProvider . EventPublisher                    |
+   |    adapters: sqlite (Drizzle) . git (Repo-Cache) . claudeCli . nodeEvents   |
+   |    |               |                   |                                    |
+   |    v               v                   v                                    |
+   |  SQLite       Repo-Checkout       "claude --print" (D3)                     |
+   |  Secrets: lokal (Claude-Login, optional GITHUB_TOKEN)                       |
+   +=============================================================================+
 ```
 
-*Abb. 6 — Phase-2-Topologie ([D2](decisions.md), [D3](decisions.md); Scope →
+*Abb. 6 — Phase-2-Topologie ([D2](decisions.md), [D3](decisions.md), [D19](decisions.md); Scope →
 [feature-roadmap.md](feature-roadmap.md), Tickets → [phase-2-backlog](../tickets/phase-2-backlog.md)).*
 
-**Backend — logische Sicht** *(keine verbindliche Modulgrenze; orientiert an den
-[phase-2-backlog](../tickets/phase-2-backlog.md)-Etappen, nicht am späteren Code):* API · Status-Guard
-(State-Machine) · Run-Orchestrierung · CLI-Adapter ([D3](decisions.md)) · Persistenz · Audit-Writer. Die
-Ticket-State-Machine selbst wird **nicht** hier gezeichnet — sie gehört [datenmodell.md](datenmodell.md).
+**Schichten.** `apps/web` ist der treibende Adapter: Server Components rufen Use Cases direkt auf,
+Server Actions schreiben, `app/api/events/route.ts` streamt Ereignisse. `packages/core` enthält die
+Fachlogik; `domain/`, `ports/` und `application/` importieren weder Adapter noch I/O — das prüft eine
+ESLint-Regel. `packages/shared` hält die Zod-Verträge (DTOs, Inputs, Events, Agent-Ausgabe), die Kern
+und UI teilen.
+
+**Refine-Fluss.** Server Action → Use Case validiert, setzt `refining`, veröffentlicht ein Status-Event
+und startet den Lauf im Hintergrund → Repo klonen/aktualisieren → Codebase-Summary → `claude --print`
+→ Ergebnis (Rückfrage oder Refinement) → Status/Audit → Events über den `EventPublisher` an die
+SSE-Route → Browser aktualisiert Fortschritt und lädt bei Status-/Fragen-Events die Seite neu.
+
+**Grenzen.** Ein dauerhafter Node-Prozess ist Voraussetzung: lang laufende Kindprozesse, Event-Bus im
+Speicher, lokale SQLite-Datei — **kein Serverless-Hosting** ([D19](decisions.md)). Die Ticket-State-Machine
+gehört [datenmodell.md](datenmodell.md).
+
+**Beispiel-Ziel.** Standard-Demo ist der Fork der Blog-API „Conduit“
+([wojciechlaka/node-express-realworld-example-app](https://github.com/wojciechlaka/node-express-realworld-example-app)),
+Seed-Tickets → [`examples/tickets/`](../examples/tickets/README.md).
 
 ---
 
@@ -375,7 +398,9 @@ laufen, prüft jede App beim Start ihre Kompatibilität:
 - **bleibt:** Anwendungslogik (Board, Refine, Review, Audit), das async-Run-Modell, Human-in-the-Loop.
 - **wandert:** Persistenz (lokal → geteilt), die Concurrency-Invariante (App-Logik → DB-Constraint →
   später Server), AuthZ (keine → RBAC-lite clientseitig → SSO/volles RBAC). Secrets bleiben lokal bis
-  Phase 5.
+  Phase 5. Technisch wandern dabei nur **Adapter**: SQLite → Postgres-Repositories, In-Process-Event-Bus
+  → prozessübergreifender `EventPublisher` (z. B. Postgres `LISTEN/NOTIFY`); Use Cases und Domäne
+  bleiben ([D19](decisions.md)).
 
 ---
 
