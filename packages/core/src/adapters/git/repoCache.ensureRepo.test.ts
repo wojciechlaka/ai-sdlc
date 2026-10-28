@@ -66,12 +66,13 @@ describe('ensureRepo', () => {
   it('removes the broken directory and re-clones when git pull fails', async () => {
     mockExistsSync.mockReturnValue(true)
     mockExecFileSync
+      .mockReturnValueOnce(Buffer.from(''))
       .mockImplementationOnce(() => { throw new Error('not a git repository') })
       .mockReturnValueOnce(Buffer.from(''))
     await ensureRepo(REPO_URL)
     expect(mockRmSync).toHaveBeenCalledWith(expect.any(String), { recursive: true, force: true })
     expect(mockMkdirSync).toHaveBeenCalledWith(expect.any(String), { recursive: true })
-    expect(mockExecFileSync).toHaveBeenCalledTimes(2)
+    expect(mockExecFileSync).toHaveBeenCalledTimes(3)
     expect(mockExecFileSync).toHaveBeenLastCalledWith(
       'git',
       ['clone', REPO_URL, expect.stringContaining('repo-cache')],
@@ -79,14 +80,24 @@ describe('ensureRepo', () => {
     )
   })
 
-  it('injects GITHUB_TOKEN into the clone URL when the env var is set', async () => {
+  it('clones with the plain URL even when GITHUB_TOKEN is set', async () => {
     mockExistsSync.mockReturnValue(false)
     vi.stubEnv('GITHUB_TOKEN', 'mytoken123')
     await ensureRepo(REPO_URL)
     expect(mockExecFileSync).toHaveBeenCalledWith(
       'git',
-      ['clone', 'https://mytoken123@github.com/test/repo', expect.stringContaining('repo-cache')],
+      ['clone', REPO_URL, expect.stringContaining('repo-cache')],
       expect.objectContaining({ stdio: 'pipe' }),
     )
+  })
+
+  it('resets the remote URL before pulling an existing cache', async () => {
+    mockExistsSync.mockReturnValue(true)
+    vi.stubEnv('GITHUB_TOKEN', 'mytoken123')
+    await ensureRepo(REPO_URL)
+    const calls = mockExecFileSync.mock.calls.map((c) => c[1])
+    expect(calls[0]).toEqual(['remote', 'set-url', 'origin', REPO_URL])
+    expect(calls[1]).toEqual(['pull'])
+    expect(mockExecFileSync.mock.calls[0][2]).toEqual(expect.objectContaining({ cwd: expect.any(String) }))
   })
 })

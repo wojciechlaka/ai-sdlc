@@ -47,7 +47,9 @@ export function getRepoCacheDir(repoUrl: string): string {
 /**
  * Ensures the repository is present and up-to-date in the local cache.
  * Clones the repo on first use; runs `git pull` on subsequent calls.
- * Injects GITHUB_TOKEN into the URL for authentication if the env var is set.
+ * Uses the plain URL without credentials (the target repo is public); the agent
+ * must never see a write token. Caches cloned earlier with a token in the remote
+ * URL are reset via `git remote set-url origin` before pulling.
  *
  * Note: uses execFileSync — blocks the event loop during network I/O.
  *
@@ -57,26 +59,23 @@ export function getRepoCacheDir(repoUrl: string): string {
  */
 export async function ensureRepo(repoUrl: string): Promise<string> {
   const cacheDir = getRepoCacheDir(repoUrl)
-  const token = process.env.GITHUB_TOKEN
-
-  const authenticatedUrl = token
-    ? repoUrl.replace('https://', `https://${token}@`)
-    : repoUrl
 
   if (fs.existsSync(cacheDir)) {
     try {
       // execFileSync avoids shell interpretation — no injection risk from the URL.
+      // Strip any token an earlier version may have stored in the remote URL.
+      execFileSync('git', ['remote', 'set-url', 'origin', repoUrl], { cwd: cacheDir, stdio: 'pipe' })
       execFileSync('git', ['pull'], { cwd: cacheDir, stdio: 'pipe' })
     } catch {
       // Directory exists but is not a valid git repo (e.g. interrupted clone).
       // Remove it and fall through to a fresh clone.
       fs.rmSync(cacheDir, { recursive: true, force: true })
       fs.mkdirSync(CACHE_ROOT, { recursive: true })
-      execFileSync('git', ['clone', authenticatedUrl, cacheDir], { stdio: 'pipe' })
+      execFileSync('git', ['clone', repoUrl, cacheDir], { stdio: 'pipe' })
     }
   } else {
     fs.mkdirSync(CACHE_ROOT, { recursive: true })
-    execFileSync('git', ['clone', authenticatedUrl, cacheDir], { stdio: 'pipe' })
+    execFileSync('git', ['clone', repoUrl, cacheDir], { stdio: 'pipe' })
   }
 
   return cacheDir
