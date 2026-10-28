@@ -14,6 +14,9 @@ Langfrist-Zielbild gültig.
 
 ## D2 — Stack: TypeScript end-to-end (2026-06-10)
 
+> **Teilweise ersetzt durch [D19]** — Vite/React-Frontend und separates Node-Backend sind durch eine
+> Next.js-App mit Hexagonal-Kern abgelöst; „TypeScript end-to-end“ gilt weiter.
+
 Ein Repo, eine Sprache: Node.js-Backend, SQLite als lokale DB, Vite/React-Frontend.
 Begründung: schnellste Iteration, geteilte Typen zwischen Backend und Frontend,
 keine Infrastruktur-Abhängigkeiten in der MUP-Phase.
@@ -161,3 +164,23 @@ einzige, editor-unabhängige Notation über alle Dokumente zu halten, ohne Rende
 Eigentum: `architecture.md` ownt Topologie, Datenfluss, Vertrauens-/Enforcement-Verortung und Sequenzen
 (ASCII); `datenmodell.md` ownt Entitäten, ER-Überblick und State-Machine (ASCII). So bleibt jede Notation
 dort, wo sie am stärksten ist, und nichts wird dupliziert.
+
+## D19 — Next.js als einziger Prozess, Fachkern nach Ports & Adapters (2026-10-28)
+
+Ersetzt in D2 „Vite/React-Frontend“ und das separate Node-Backend. Die App läuft als **eine Next.js-App**
+(App Router): Server Components lesen, Server Actions schreiben, ein Route Handler streamt SSE. Die Fachlogik
+liegt in `packages/core` nach **Ports & Adapters** (Domäne, Use Cases, Ports; Adapter für SQLite/Drizzle, Git,
+Claude CLI und den In-Process-Event-Bus); `packages/shared` hält die Zod-Verträge. Hono war nur eine
+Zustell-Schicht (~280 von ~1.700 Zeilen Backend-Code) und wurde als Adapter ausgetauscht.
+
+Begründung: ein Prozess und ein Start-Befehl passen zur lokalen Pro-Nutzer-App (D17); Next.js gehört zum
+Ziel-Stack. Hexagonal statt Clean/Onion, weil die Fachlogik schmal ist, die Zahl der Ränder aber wächst
+(Postgres und prozessübergreifende Events in Phase 3, Integrationsadapter nach D12); Ports gibt es nur an
+heute existierenden Rändern. Die Abhängigkeitsrichtung erzwingt eine ESLint-Regel.
+
+Bewusst akzeptierte Trade-offs: **kein Serverless-Hosting** — Agent-Läufe sind lang laufende Kindprozesse,
+der Event-Bus lebt im Speicher eines Prozesses, die Datenbank ist eine lokale Datei. Lang laufende Läufe
+starten fire-and-forget aus Server Actions im Node-Prozess von `next start`. Die Engine ist ein Singleton
+auf `globalThis`, weil Next.js Module in mehreren Bundles lädt; Fachfehler werden deshalb über ein
+`code`-Feld statt `instanceof` erkannt. Der Wechsel von der CLI auf das Claude Agent SDK ist als eigener
+Schritt geplant und betrifft nur den Adapter hinter dem Port `AgentRunner`.

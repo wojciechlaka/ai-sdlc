@@ -9,26 +9,33 @@ npm install
 npm run dev
 ```
 
-Startet Backend und Frontend parallel. Das Frontend wartet automatisch bis das Backend bereit ist, bevor es hochfährt. Beim ersten Start mit leerer Datenbank werden drei Beispiel-Tickets eingefügt.
-
-| Service  | URL                       |
-|----------|---------------------------|
-| Frontend | http://localhost:5173      |
-| Backend  | http://localhost:3000      |
+Startet die Next.js-App unter http://localhost:3000. Beim ersten Start mit leerer Datenbank werden drei Beispiel-Tickets eingefügt.
 
 ## Struktur
 
 ```
 apps/
-  backend/   # Hono API, SQLite, Claude CLI-Integration
-  frontend/  # React + Vite
+  web/            # Next.js (App Router): UI, Server Actions, SSE-Route – der einzige Prozess
 packages/
-  shared/    # Gemeinsame Typen und Schemas (Zod)
+  core/           # Fachkern nach Ports & Adapters (Domäne, Use Cases, Adapter für SQLite, Git, Claude CLI, Events)
+  shared/         # Zod-Verträge zwischen Kern und UI (DTOs, Inputs, Events, Agent-Ausgabe)
 ```
 
-Details zu den einzelnen Apps: [`apps/backend/README.md`](apps/backend/README.md) und [`apps/frontend/README.md`](apps/frontend/README.md).
+Abhängigkeitsrichtung: `web → core → shared`. Domäne und Use Cases importieren keine Adapter; das prüft `npm run lint`.
 
 ## Voraussetzungen
 
 - Node.js 20+
-- `claude` CLI installiert und eingeloggt (`claude login`)
+- `claude` CLI eingeloggt (`claude login`); das Binary kommt über `@anthropic-ai/claude-code` als Abhängigkeit von `packages/core`
+
+## Befehle
+
+| Befehl          | Zweck                                   |
+|-----------------|-----------------------------------------|
+| `npm run dev`   | Entwicklungsserver (http://localhost:3000) |
+| `npm run build` | Typprüfung aller Pakete + `next build`  |
+| `npm start`     | gebaute App starten                     |
+| `npm test`      | alle Tests (Vitest)                     |
+| `npm run lint`  | Abhängigkeitsregel des Hexagons         |
+
+Die App läuft als ein dauerhafter Node-Prozess (lang laufende Agent-Prozesse, Event-Bus im Speicher, lokale SQLite). Serverless-Hosting wird nicht unterstützt (siehe [D19](docs/decisions.md)).
