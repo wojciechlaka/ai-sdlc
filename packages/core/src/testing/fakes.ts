@@ -1,24 +1,38 @@
-import type { AgentOutput, RefinementEvent } from '@refinement/shared'
-import type { AgentRun, Ticket } from '../domain/types'
-import type {
-  AgentRunner,
-  AgentRunnerInput,
-  AgentRunRepository,
-  AgentRunResult,
-  AuditActor,
-  AuditLog,
-  EventPublisher,
-  RepoProvider,
-  TicketRepository,
+import type { Intent, IntentAgentOutput, TicketEvent } from '@refinement/shared'
+import type { AgentRun, Artifact, SourceTicket, Stage, Ticket, TicketState } from '../domain/types'
+import { compareTicketKeys } from '../domain/ticketKey'
+import { errorCode } from '../domain/errors'
+import {
+  AgentRunTerminatedError,
+  CodeHostError,
+  type AgentRunner,
+  type AgentRunnerInput,
+  type AgentRunRepository,
+  type AgentRunResult,
+  type ArtifactRepository,
+  type AuditEvent,
+  type AuditLog,
+  type CodeHost,
+  type EventPublisher,
+  type PullRequest,
+  type RepoProvider,
+  type TicketRepository,
+  type TicketSource,
 } from '../ports'
 import type { UseCaseDeps } from '../application/deps'
 import { createNodeEventPublisher } from '../adapters/nodeEvents/nodeEventPublisher'
-import { errorCode } from '../domain/errors'
 
-export const SAMPLE_REFINEMENT: AgentOutput = {
-  type: 'refinement',
-  result: { title: 'T', userStory: 'U', acceptanceCriteria: [], affectedFiles: [], risks: [], openQuestions: [], confidence: 80 },
+export const TEST_REPO_URL = 'https://github.com/o/r'
+
+export const SAMPLE_INTENT: Intent = {
+  title: 'Lesezeit anzeigen',
+  problem: 'Leser wissen nicht, wie lange ein Artikel dauert.',
+  desiredOutcome: 'Die Artikel-API liefert eine geschätzte Lesezeit.',
+  affected: ['Leser'],
+  openPoints: [],
 }
+
+export const SAMPLE_INTENT_OUTPUT: IntentAgentOutput = { type: 'intent', result: SAMPLE_INTENT }
 
 export const SAMPLE_META = {
   model: 'm', durationSeconds: 1, inputTokens: 10, cacheCreationTokens: 0, cacheReadTokens: 0, outputTokens: 5, costUsd: 0.001,
@@ -34,58 +48,62 @@ export function errorCodeOf(fn: () => unknown): string | null {
   return null
 }
 
-export interface AuditEntry {
-  ticketId: number
-  actor: AuditActor
-  type: string
-  payload?: unknown
+/** A source ticket as the Markdown source would deliver it. */
+export function sourceTicket(key: string, patch: Partial<SourceTicket> = {}): SourceTicket {
+  return {
+    key,
+    title: `Ticket ${key}`,
+    description: `Beschreibung ${key}`,
+    priority: 'Mittel',
+    sourcePath: `examples/tickets/${key.toLowerCase()}.md`,
+    ...patch,
+  }
 }
 
 export interface InMemoryStore {
   tickets: Ticket[]
   runs: AgentRun[]
-  audit: AuditEntry[]
+  artifacts: Artifact[]
+  audit: AuditEvent[]
 }
 
 export function createInMemoryTicketRepository(store: InMemoryStore): TicketRepository {
-  let nextId = 1
-  const find = (id: number) => store.tickets.find((t) => t.id === id)
-  const requireTicket = (id: number) => {
-    const ticket = find(id)
-    if (!ticket) throw new Error(`Ticket ${id} not found`)
-    return ticket
-  }
-  const create = (input: { title: string; description: string }): Ticket => {
-    const now = new Date()
-    const ticket: Ticket = {
-      id: nextId++, title: input.title, description: input.description,
-      status: 'backlog', iteration: 0, createdAt: now, updatedAt: now,
-    }
-    store.tickets.push(ticket)
-    return { ...ticket }
-  }
+  const find = (key: string) => store.tickets.find((t) => t.key === key)
 
   return {
-    list: () => store.tickets.map((t) => ({ ...t })),
-    findById: (id) => { const t = find(id); return t ? { ...t } : null },
-    count: () => store.tickets.length,
-    create,
-    updateStatus(id, status) {
-      const ticket = requireTicket(id)
-      ticket.status = status
+    list: () => [...store.tickets].sort((a, b) => compareTicketKeys(a.key, b.key)).map((t) => ({ ...t })),
+    findByKey: (key) => {
+      const ticket = find(key)
+      return ticket ? { ...ticket } : null
+    },
+    upsertFromSource(items) {
+      const created: string[] = []
+      const now = new Date()
+      for (const item of items) {
+        const fields = { title: item.title, description: item.description, priority: item.priority, sourcePath: item.sourcePath }
+        const existing = find(item.key)
+        if (existing) {
+          Object.assign(existing, fields, { updatedAt: now })
+        } else {
+          store.tickets.push({ key: item.key, ...fields, stage: 'plan', state: 'ready', createdAt: now, updatedAt: now })
+          created.push(item.key)
+        }
+      }
+      return created
+    },
+    update(key, patch) {
+      const ticket = find(key)
+      if (!ticket) throw new Error(`Ticket ${key} not found`)
+      if (patch.stage) ticket.stage = patch.stage
+      if (patch.state) ticket.state = patch.state
       ticket.updatedAt = new Date()
+      return { ...ticket }
     },
-    delete(id) {
-      requireTicket(id)
-      store.tickets = store.tickets.filter((t) => t.id !== id)
-      store.runs = store.runs.filter((r) => r.ticketId !== id)
-      store.audit = store.audit.filter((e) => e.ticketId !== id)
-    },
-    replaceAll(newTickets) {
+    clear() {
       store.tickets = []
       store.runs = []
+      store.artifacts = []
       store.audit = []
-      return newTickets.map(create)
     },
   }
 }
@@ -97,56 +115,128 @@ export function createInMemoryAgentRunRepository(store: InMemoryStore): AgentRun
     if (!run) throw new Error(`AgentRun ${id} not found`)
     return run
   }
-  const listForTicket = (ticketId: number) =>
-    store.runs.filter((r) => r.ticketId === ticketId).sort((a, b) => a.iteration - b.iteration).map((r) => ({ ...r }))
 
   return {
     create(input) {
-      const ticket = store.tickets.find((t) => t.id === input.ticketId)
-      if (!ticket) throw new Error(`Ticket ${input.ticketId} not found`)
-      ticket.iteration += 1
-      ticket.updatedAt = new Date()
+      if (!store.tickets.some((t) => t.key === input.ticketKey)) throw new Error(`Ticket ${input.ticketKey} not found`)
       const run: AgentRun = {
-        id: `run-${nextId++}`, ticketId: input.ticketId, iteration: ticket.iteration, trigger: input.trigger,
-        input: input.input, output: null, status: 'running', model: input.model, costUsd: null, inputTokens: null,
-        cacheCreationTokens: null, cacheReadTokens: null, outputTokens: null, startedAt: new Date(), finishedAt: null,
+        id: `run-${nextId++}`, ticketKey: input.ticketKey, stage: input.stage,
+        seq: store.runs.filter((r) => r.ticketKey === input.ticketKey).length + 1,
+        trigger: input.trigger, input: input.input, output: null, status: 'running', model: input.model,
+        costUsd: null, inputTokens: null, cacheCreationTokens: null, cacheReadTokens: null, outputTokens: null,
+        startedAt: new Date(), finishedAt: null,
       }
       store.runs.push(run)
       return { ...run }
     },
-    findById: (id) => { const r = store.runs.find((x) => x.id === id); return r ? { ...r } : null },
+    findById: (id) => {
+      const run = store.runs.find((r) => r.id === id)
+      return run ? { ...run } : null
+    },
     complete(id, result) {
       Object.assign(requireRun(id), { status: 'succeeded', ...result, finishedAt: new Date() })
     },
     fail(id, status) {
       Object.assign(requireRun(id), { status, finishedAt: new Date() })
     },
-    listForTicket,
-    latestForTicket: (ticketId) => listForTicket(ticketId).at(-1) ?? null,
+    listForTicket: (ticketKey, stage) =>
+      store.runs
+        .filter((r) => r.ticketKey === ticketKey && (!stage || r.stage === stage))
+        .sort((a, b) => a.seq - b.seq)
+        .map((r) => ({ ...r })),
     findStuck: () => store.runs.filter((r) => r.status === 'running').map((r) => ({ ...r })),
   }
 }
 
-export function createInMemoryAuditLog(store: InMemoryStore): AuditLog {
-  return { append: (event) => { store.audit.push(event) } }
+export function createInMemoryArtifactRepository(store: InMemoryStore): ArtifactRepository {
+  let nextId = 1
+  const requireArtifact = (id: string) => {
+    const artifact = store.artifacts.find((a) => a.id === id)
+    if (!artifact) throw new Error(`Artifact ${id} not found`)
+    return artifact
+  }
+
+  return {
+    create(input) {
+      const artifact: Artifact = { id: `artifact-${nextId++}`, ...input, prState: 'open', mergedAt: null, createdAt: new Date() }
+      store.artifacts.push(artifact)
+      return { ...artifact }
+    },
+    listForTicket: (ticketKey) => store.artifacts.filter((a) => a.ticketKey === ticketKey).map((a) => ({ ...a })),
+    findOpen(ticketKey, stage) {
+      const open = store.artifacts.filter((a) => a.ticketKey === ticketKey && a.stage === stage && a.prState === 'open')
+      const latest = open[open.length - 1]
+      return latest ? { ...latest } : null
+    },
+    markMerged(id, mergedAt) {
+      Object.assign(requireArtifact(id), { prState: 'merged', mergedAt })
+    },
+    markClosed(id) {
+      requireArtifact(id).prState = 'closed'
+    },
+  }
 }
 
-/** Agent that returns `outcome` (or throws it) and records every call. */
+export function createInMemoryAuditLog(store: InMemoryStore): AuditLog {
+  return {
+    append: (event) => {
+      store.audit.push({ ...event, payload: event.payload ?? null, createdAt: new Date() })
+    },
+    listForTicket: (ticketKey) => store.audit.filter((e) => e.ticketKey === ticketKey).map((e) => ({ ...e })),
+  }
+}
+
+export class FakeTicketSource implements TicketSource {
+  tickets: SourceTicket[] = []
+
+  list(): SourceTicket[] {
+    return this.tickets.map((t) => ({ ...t }))
+  }
+}
+
+/**
+ * Agent that returns `outcome` (or throws it) and records every call.
+ * Like the CLI, `stop` terminates a run that is still in progress.
+ */
 export class FakeAgentRunner implements AgentRunner {
   readonly calls: AgentRunnerInput[] = []
   readonly stopped: string[] = []
   progress: string[] = []
-  outcome: AgentRunResult | Error = { output: SAMPLE_REFINEMENT, meta: SAMPLE_META }
+  outcome: AgentRunResult | Error = { output: SAMPLE_INTENT_OUTPUT, meta: SAMPLE_META }
+  private gate: Promise<void> | null = null
+  private readonly active = new Set<string>()
+  private readonly terminated = new Set<string>()
+
+  /** Holds every following run until the returned function is called. */
+  hold(): () => void {
+    let release = () => {}
+    this.gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    return () => {
+      this.gate = null
+      release()
+    }
+  }
 
   async run(input: AgentRunnerInput, onProgress: (message: string) => void): Promise<AgentRunResult> {
     this.calls.push(input)
-    for (const message of this.progress) onProgress(message)
-    if (this.outcome instanceof Error) throw this.outcome
-    return this.outcome
+    this.active.add(input.ticketKey)
+    try {
+      for (const message of this.progress) onProgress(message)
+      if (this.gate) await this.gate
+      if (this.terminated.delete(input.ticketKey)) throw new AgentRunTerminatedError()
+      if (this.outcome instanceof Error) throw this.outcome
+      return this.outcome
+    } finally {
+      this.active.delete(input.ticketKey)
+    }
   }
 
-  stop(ticketId: string): boolean {
-    this.stopped.push(ticketId)
+  stop(ticketKey: string): boolean {
+    this.stopped.push(ticketKey)
+    if (!this.active.has(ticketKey)) return false
+    this.terminated.add(ticketKey)
     return true
   }
 }
@@ -168,12 +258,115 @@ export class FakeRepoProvider implements RepoProvider {
   }
 }
 
-export type RecordingEventPublisher = EventPublisher & { readonly published: RefinementEvent[] }
+type CodeHostMethod = keyof CodeHost
+
+export interface FakePullRequest extends PullRequest {
+  title: string
+  body: string
+}
+
+/** In-memory GitHub: files of the default branch, branches with their files, PRs. */
+export class FakeCodeHost implements CodeHost {
+  defaultBranchName = 'master'
+  /** Files on the default branch. */
+  readonly files = new Map<string, string>()
+  /** Branch name → files committed on that branch. */
+  readonly branches = new Map<string, Map<string, string>>()
+  readonly pulls: FakePullRequest[] = []
+  /** Every called method in order. */
+  readonly calls: CodeHostMethod[] = []
+  /** A method listed here throws the error on every call. */
+  failures: Partial<Record<CodeHostMethod, Error>> = {}
+  private nextPr = 1
+
+  private enter(method: CodeHostMethod): void {
+    this.calls.push(method)
+    const failure = this.failures[method]
+    if (failure) throw failure
+  }
+
+  private requirePull(number: number): FakePullRequest {
+    const pr = this.pulls.find((p) => p.number === number)
+    if (!pr) throw new CodeHostError(404, `PR #${number} nicht gefunden`)
+    return pr
+  }
+
+  private addPull(branch: string, title: string, body: string): FakePullRequest {
+    const number = this.nextPr++
+    const pr: FakePullRequest = { number, url: `${TEST_REPO_URL}/pull/${number}`, state: 'open', headBranch: branch, mergedAt: null, title, body }
+    this.pulls.push(pr)
+    return pr
+  }
+
+  async defaultBranch(): Promise<string> {
+    this.enter('defaultBranch')
+    return this.defaultBranchName
+  }
+
+  async readFile(path: string): Promise<string | null> {
+    this.enter('readFile')
+    return this.files.get(path) ?? null
+  }
+
+  async createBranch(name: string): Promise<void> {
+    this.enter('createBranch')
+    if (this.branches.has(name)) throw new CodeHostError(422, `Branch ${name} existiert bereits`)
+    this.branches.set(name, new Map())
+  }
+
+  async commitFile(input: { branch: string; path: string; content: string; message: string }): Promise<void> {
+    this.enter('commitFile')
+    const files = this.branches.get(input.branch)
+    if (!files) throw new CodeHostError(404, `Branch ${input.branch} nicht gefunden`)
+    files.set(input.path, input.content)
+  }
+
+  async openPullRequest(input: { branch: string; title: string; body: string }): Promise<PullRequest> {
+    this.enter('openPullRequest')
+    return { ...this.addPull(input.branch, input.title, input.body) }
+  }
+
+  async getPullRequest(number: number): Promise<PullRequest> {
+    this.enter('getPullRequest')
+    return { ...this.requirePull(number) }
+  }
+
+  async listOpenPullRequests(): Promise<PullRequest[]> {
+    this.enter('listOpenPullRequests')
+    return this.pulls.filter((p) => p.state === 'open').map((p) => ({ ...p }))
+  }
+
+  async closePullRequest(number: number): Promise<void> {
+    this.enter('closePullRequest')
+    this.requirePull(number).state = 'closed'
+  }
+
+  async deleteBranch(name: string): Promise<void> {
+    this.enter('deleteBranch')
+    this.branches.delete(name)
+  }
+
+  /** Test helper: an open PR from `branch` (created if missing), e.g. left over from an earlier start. */
+  seedPullRequest(branch: string): FakePullRequest {
+    if (!this.branches.has(branch)) this.branches.set(branch, new Map())
+    return this.addPull(branch, branch, '')
+  }
+
+  /** Test helper: merges like GitHub — the files of the head branch land on the default branch. */
+  merge(number: number, at = new Date('2026-10-28T12:00:00Z')): void {
+    const pr = this.requirePull(number)
+    pr.state = 'merged'
+    pr.mergedAt = at
+    for (const [path, content] of this.branches.get(pr.headBranch) ?? []) this.files.set(path, content)
+  }
+}
+
+export type RecordingEventPublisher = EventPublisher & { readonly published: TicketEvent[] }
 
 /** Real in-process bus that additionally records every published event. */
 export function createRecordingEventPublisher(): RecordingEventPublisher {
   const inner = createNodeEventPublisher()
-  const published: RefinementEvent[] = []
+  const published: TicketEvent[] = []
   return {
     published,
     publish(event) {
@@ -189,28 +382,56 @@ export interface TestContext {
   store: InMemoryStore
   agent: FakeAgentRunner
   repos: FakeRepoProvider
+  /** Always present; `deps.codeHost` is null when created with `{ token: false }`. */
+  codeHost: FakeCodeHost
+  source: FakeTicketSource
   events: RecordingEventPublisher
   /** Waits for all background tasks handed to `runInBackground`. */
   settle(): Promise<void>
 }
 
-export function createTestContext(): TestContext {
-  const store: InMemoryStore = { tickets: [], runs: [], audit: [] }
+/** @param options.token - false simulates a missing `GITHUB_TOKEN` (`deps.codeHost` is null). */
+export function createTestContext(options: { token?: boolean } = {}): TestContext {
+  const store: InMemoryStore = { tickets: [], runs: [], artifacts: [], audit: [] }
   const agent = new FakeAgentRunner()
   const repos = new FakeRepoProvider()
+  const codeHost = new FakeCodeHost()
+  const source = new FakeTicketSource()
   const events = createRecordingEventPublisher()
   const tasks: Promise<void>[] = []
 
   const deps: UseCaseDeps = {
     tickets: createInMemoryTicketRepository(store),
     runs: createInMemoryAgentRunRepository(store),
+    artifacts: createInMemoryArtifactRepository(store),
     audit: createInMemoryAuditLog(store),
+    source,
+    codeHost: options.token === false ? null : codeHost,
     agent,
     repos,
     events,
-    runInBackground: (task) => { tasks.push(task) },
+    repoUrl: TEST_REPO_URL,
+    runInBackground: (task) => {
+      tasks.push(task)
+    },
     stopSettleMs: 0,
   }
 
-  return { deps, store, agent, repos, events, settle: async () => { await Promise.all(tasks) } }
+  return {
+    deps, store, agent, repos, codeHost, source, events,
+    settle: async () => {
+      await Promise.all(tasks)
+    },
+  }
+}
+
+/** Inserts one ticket directly into the repository (no import log entry) and returns it. */
+export function seedTicket(
+  ctx: TestContext,
+  key = 'CB-1',
+  patch: Partial<SourceTicket> & { stage?: Stage; state?: TicketState } = {},
+): Ticket {
+  const { stage, state, ...source } = patch
+  ctx.deps.tickets.upsertFromSource([sourceTicket(key, source)])
+  return ctx.deps.tickets.update(key, { stage, state })
 }

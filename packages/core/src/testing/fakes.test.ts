@@ -1,63 +1,63 @@
 import { describe, it, expect } from 'vitest'
-import { createTestContext, errorCodeOf } from './fakes'
-import { ConflictError } from '../domain/errors'
+import { AgentRunTerminatedError, CodeHostError } from '../ports'
+import { createTestContext, seedTicket, sourceTicket } from './fakes'
 
-describe('errorCodeOf', () => {
-  it('returns the domain code or null', () => {
-    expect(errorCodeOf(() => { throw new ConflictError('x') })).toBe('CONFLICT')
-    expect(errorCodeOf(() => { throw new Error('x') })).toBeNull()
-    expect(errorCodeOf(() => 1)).toBeNull()
+describe('in-memory ticket repository', () => {
+  it('inserts new tickets as plan/ready and keeps stage and state on update', () => {
+    const { deps } = createTestContext()
+    expect(deps.tickets.upsertFromSource([sourceTicket('CB-10'), sourceTicket('CB-2')])).toEqual(['CB-10', 'CB-2'])
+    deps.tickets.update('CB-2', { stage: 'design', state: 'failed' })
+
+    expect(deps.tickets.upsertFromSource([sourceTicket('CB-2', { title: 'Neu' })])).toEqual([])
+    expect(deps.tickets.findByKey('CB-2')).toMatchObject({ title: 'Neu', stage: 'design', state: 'failed' })
+    expect(deps.tickets.list().map((t) => t.key)).toEqual(['CB-2', 'CB-10'])
+  })
+
+  it('returns snapshots, not the stored objects', () => {
+    const ctx = createTestContext()
+    const ticket = seedTicket(ctx, 'CB-1')
+    ticket.state = 'failed'
+    expect(ctx.deps.tickets.findByKey('CB-1')?.state).toBe('ready')
   })
 })
 
-describe('in-memory repositories', () => {
-  it('increment the ticket iteration when a run is created', () => {
-    const ctx = createTestContext()
-    const ticket = ctx.deps.tickets.create({ title: 'T', description: 'D' })
-    const run = ctx.deps.runs.create({
-      ticketId: ticket.id, trigger: 'initial', model: 'm',
-      input: { ticketTitle: 'T', ticketDescription: 'D', acceptanceCriteria: '', repo: 'r', model: 'm' },
-    })
-    expect(run.iteration).toBe(1)
-    expect(ctx.deps.tickets.findById(ticket.id)?.iteration).toBe(1)
-    expect(ctx.deps.runs.latestForTicket(ticket.id)?.id).toBe(run.id)
+describe('FakeCodeHost', () => {
+  it('merges a PR like GitHub: the branch files land on the default branch', async () => {
+    const { codeHost } = createTestContext()
+    await codeHost.createBranch('CB-1/intent')
+    await codeHost.commitFile({ branch: 'CB-1/intent', path: 'docs/work/CB-1/intent.md', content: 'x', message: 'm' })
+    const pr = await codeHost.openPullRequest({ branch: 'CB-1/intent', title: 'CB-1: Intent', body: 'b' })
+
+    codeHost.merge(pr.number)
+
+    expect(await codeHost.readFile('docs/work/CB-1/intent.md')).toBe('x')
+    expect((await codeHost.getPullRequest(pr.number)).state).toBe('merged')
   })
 
-  it('record published events and collect background tasks', async () => {
-    const ctx = createTestContext()
-    let done = false
-    ctx.deps.runInBackground(new Promise<void>((resolve) => setTimeout(() => { done = true; resolve() }, 5)))
-    ctx.deps.events.publish({ type: 'progress', ticketId: 'T-1', message: 'x' })
-    await ctx.settle()
-    expect(done).toBe(true)
-    expect(ctx.events.published).toEqual([{ type: 'progress', ticketId: 'T-1', message: 'x' }])
+  it('reports unknown PRs as 404 and injected failures as given', async () => {
+    const { codeHost } = createTestContext()
+    await expect(codeHost.getPullRequest(9)).rejects.toMatchObject({ status: 404 })
+    codeHost.failures.readFile = new CodeHostError(0, 'offline')
+    await expect(codeHost.readFile('a')).rejects.toThrow('offline')
+  })
+})
+
+describe('FakeAgentRunner', () => {
+  it('terminates a held run when it is stopped', async () => {
+    const { agent } = createTestContext()
+    const release = agent.hold()
+    const run = agent.run({ ticketKey: 'CB-1', stage: 'plan', title: 't', description: 'd', repoPath: '/r', model: 'm', previousRuns: [] }, () => {})
+
+    expect(agent.stop('CB-1')).toBe(true)
+    release()
+
+    await expect(run).rejects.toBeInstanceOf(AgentRunTerminatedError)
   })
 
-  it('return snapshots instead of live objects', () => {
-    const ctx = createTestContext()
-    const ticket = ctx.deps.tickets.create({ title: 'T', description: 'D' })
-    ctx.deps.tickets.updateStatus(ticket.id, 'refining')
-    expect(ticket.status).toBe('backlog')
-    expect(ctx.deps.tickets.findById(ticket.id)?.status).toBe('refining')
-    expect(ctx.deps.tickets.findById(ticket.id)).not.toBe(ctx.deps.tickets.findById(ticket.id))
-
-    const run = ctx.deps.runs.create({
-      ticketId: ticket.id, trigger: 'initial', model: 'm',
-      input: { ticketTitle: 'T', ticketDescription: 'D', acceptanceCriteria: '', repo: 'r', model: 'm' },
-    })
-    ctx.deps.runs.fail(run.id, 'failed')
-    expect(run.status).toBe('running')
-    expect(ctx.deps.runs.findById(run.id)?.status).toBe('failed')
-    expect(ctx.store.runs[0].status).toBe('failed')
-  })
-
-  it('cascade ticket deletion to audit entries', () => {
-    const ctx = createTestContext()
-    const a = ctx.deps.tickets.create({ title: 'A', description: 'D' })
-    const b = ctx.deps.tickets.create({ title: 'B', description: 'D' })
-    ctx.deps.audit.append({ ticketId: a.id, actor: 'human', type: 'x' })
-    ctx.deps.audit.append({ ticketId: b.id, actor: 'human', type: 'x' })
-    ctx.deps.tickets.delete(a.id)
-    expect(ctx.store.audit.map((e) => e.ticketId)).toEqual([b.id])
+  it('does not affect a later run when nothing was running', async () => {
+    const { agent } = createTestContext()
+    expect(agent.stop('CB-1')).toBe(false)
+    const result = await agent.run({ ticketKey: 'CB-1', stage: 'plan', title: 't', description: 'd', repoPath: '/r', model: 'm', previousRuns: [] }, () => {})
+    expect(result.output.type).toBe('intent')
   })
 })
