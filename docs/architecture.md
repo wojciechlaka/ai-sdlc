@@ -18,6 +18,8 @@ nicht startbar** (§5). Das Übersichtsbild: [architecture.png](architecture.png
 - **Eine Quelle pro Information:** Inhalte in Git, Zustand und Log in der App-Datenbank (E1).
 - **Gate per PR:** Ein Mensch merged; der Merge ist der Übergang zur nächsten Stufe (E1).
 - **Kern ohne Framework:** Fachlogik in `packages/core`, jeder Rand ein Adapter hinter einem Port (E2).
+- **Geprüfte Abhängigkeiten:** Architekturtests (ArchUnitTS, `architecture.test.ts` je Workspace) sichern die
+  Schichten des Hexagons, die Unabhängigkeit der Adapter, Zyklenfreiheit und `web → core → shared` bei jedem `npm test`.
 - **Agent als Werkzeug:** Coding-Agent als CLI hinter `AgentRunner`, austauschbar (E3).
 - **Keine Secrets in der App:** Credentials bleiben beim Nutzer (E4).
 

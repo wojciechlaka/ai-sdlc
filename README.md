@@ -131,6 +131,8 @@ examples/tickets/ # simulierte Jira-Tickets (Ticket-Eingang)
 ```
 
 Abhängigkeitsrichtung: `web → core → shared`. Domäne und Use Cases importieren keine Adapter; das prüft `npm run lint`.
+Die vollständigen Architekturregeln (Schichten, Adapter untereinander, Zyklen, Core nur über `@refinement/core`)
+prüfen Architekturtests mit ArchUnitTS als Teil von `npm test` (`architecture.test.ts` in jedem Workspace).
 
 ## Voraussetzungen
 
@@ -156,7 +158,7 @@ Abhängigkeitsrichtung: `web → core → shared`. Domäne und Use Cases importi
 | `npm run dev`   | Entwicklungsserver (http://localhost:3000) |
 | `npm run build` | Typprüfung aller Pakete + `next build`     |
 | `npm start`     | gebaute App starten                        |
-| `npm test`      | alle Tests (Vitest)                        |
+| `npm test`      | alle Tests (Vitest), inkl. Architekturtests |
 | `npm run lint`  | Abhängigkeitsregel des Hexagons            |
 
 Die App läuft als ein dauerhafter Node-Prozess (lang laufende Agent-Prozesse, Event-Bus im Speicher, lokale
