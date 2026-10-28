@@ -1,71 +1,29 @@
 flowchart LR
-    subgraph Browser["Browser"]
-        direction TB
-        UI["UI\nReact 19 Client Components\nlocalhost:3000"]
+    B["Browser<br/><small>localhost:3000</small>"]
+
+    subgraph Web["apps/web · Next.js"]
+        W["Seiten · Actions · SSE"]
     end
 
-    subgraph Web["apps/web — Next.js 16, ein Prozess"]
-        direction TB
-        RSC["Server Components\nlayout.tsx, tickets/[id]"]
-        ACT["Server Actions\nactions.ts"]
-        SSE["SSE-Route\n/api/events"]
-        CONT["Composition Root\nlib/container.ts"]
+    subgraph Core["packages/core · Hexagon"]
+        UC["Use Cases + Domäne"]
+        AD["Adapter<br/><small>sqlite · git · claudeCli · Events</small>"]
+        UC --> AD
     end
 
-    subgraph Core["packages/core — Hexagon"]
-        direction TB
-        UC["Use Cases\napplication/"]
-        DOM["Domäne\nRegeln, Fehler"]
-        PORTS["Ports\nRepositories, AuditLog,\nAgentRunner, RepoProvider,\nEventPublisher"]
+    subgraph Ext["Extern"]
+        DB[("SQLite")]
+        GIT["Git-Repo"]
+        CL["claude CLI"]
     end
 
-    subgraph Adapters["packages/core — Adapter"]
-        direction TB
-        SQL["sqlite\nDrizzle ORM"]
-        GIT["git\nRepo-Cache + Summary"]
-        CLI["claudeCli\nAgentRunner"]
-        BUS["nodeEvents\nEvent-Bus"]
-    end
+    B <-->|"Befehle / Live-Events"| W
+    W --> UC
+    AD --> DB
+    AD --> GIT
+    AD --> CL
 
-    subgraph External["Extern"]
-        direction TB
-        DB[("SQLite-Datei\napps/web/data")]
-        REPO["Git-Repository\nz. B. Conduit-Fork"]
-        CLAUDE["claude CLI\nSubprocess"]
-    end
-
-    subgraph Shared["packages/shared"]
-        direction TB
-        ZOD["Zod-Verträge\nDTOs, Inputs, Events,\nAgent-Ausgabe"]
-    end
-
-    UI -->|"Seiten laden"| RSC
-    UI -->|"Befehle: anlegen, refine,\nantworten, stop, löschen"| ACT
-    UI -->|"EventSource"| SSE
-    RSC --> CONT
-    ACT --> CONT
-    SSE --> CONT
-    CONT --> UC
-    UC --> DOM
-    UC --> PORTS
-    PORTS -.->|"implementiert von"| Adapters
-    PORTS ~~~ SQL
-    PORTS ~~~ GIT
-    PORTS ~~~ CLI
-    PORTS ~~~ BUS
-
-    SQL --> DB
-    GIT -->|"git clone / pull"| REPO
-    GIT -->|"Codebase-Summary"| CLAUDE
-    CLI -->|"claude --print\nstream-json"| CLAUDE
-    BUS -->|"progress / question / status"| SSE
-
-    UC -.-> ZOD
-    UI -.->|"Typen"| ZOD
-
-    style Browser fill:#dbeafe,stroke:#3b82f6
     style Web fill:#dcfce7,stroke:#16a34a
     style Core fill:#ffedd5,stroke:#ea580c
-    style Adapters fill:#fff7ed,stroke:#fb923c
-    style Shared fill:#fef9c3,stroke:#ca8a04
-    style External fill:#f3e8ff,stroke:#9333ea
+    style Ext fill:#f3e8ff,stroke:#9333ea
+    style B fill:#dbeafe,stroke:#3b82f6
