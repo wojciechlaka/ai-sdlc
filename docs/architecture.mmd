@@ -1,50 +1,60 @@
-flowchart TD
+flowchart LR
     subgraph Browser["Browser"]
-        FE["Frontend\nReact 19 + Vite\n:5173"]
+        UI["UI\nReact 19 Client Components\nlocalhost:3000"]
     end
 
-    subgraph Backend["Backend — Hono :3000"]
-        REST["REST API\nrestApi.ts"]
-        SSE["SSE Layer\nsseLayer.ts"]
-        ORC["Refinement\nOrchestrator"]
-        CACHE["Repo Cache\nrepoCache.ts"]
-        CLI["Agent CLI\nagentCli/"]
-        EV["Event Bus\nrefinementEvents"]
-        DB[("SQLite\nDrizzle ORM\nrefinement.db")]
+    subgraph Web["apps/web — Next.js 16, ein Prozess"]
+        RSC["Server Components\nlayout.tsx, tickets/[id]"]
+        ACT["Server Actions\nactions.ts"]
+        SSE["SSE-Route\n/api/events"]
+        CONT["Composition Root\nlib/container.ts"]
+    end
+
+    subgraph Core["packages/core — Hexagon"]
+        UC["Use Cases\napplication/"]
+        DOM["Domäne\nRegeln, Fehler"]
+        PORTS["Ports\nRepositories, AuditLog,\nAgentRunner, RepoProvider,\nEventPublisher"]
+        subgraph Adapters["Adapter"]
+            SQL["sqlite\nDrizzle ORM"]
+            GIT["git\nRepo-Cache + Summary"]
+            CLI["claudeCli\nAgentRunner"]
+            BUS["nodeEvents\nEvent-Bus"]
+        end
     end
 
     subgraph Shared["packages/shared"]
-        ZOD["AgentOutputSchema\n(Zod)"]
+        ZOD["Zod-Verträge\nDTOs, Inputs, Events,\nAgent-Ausgabe"]
     end
 
     subgraph External["Extern"]
+        DB[("SQLite-Datei\napps/web/data")]
+        REPO["Git-Repository\nz. B. Conduit-Fork"]
         CLAUDE["claude CLI\nSubprocess"]
-        REPO["Git Repository\n(GitHub etc.)"]
     end
 
-    FE -->|"REST: POST /tickets/:id/refine\nPOST /tickets/:id/answer\nGET /tickets"| REST
-    FE -->|"SSE: GET /events?ticketId"| SSE
+    UI -->|"Seiten laden"| RSC
+    UI -->|"Befehle: anlegen, refine,\nantworten, stop, löschen"| ACT
+    UI -->|"EventSource"| SSE
+    RSC --> CONT
+    ACT --> CONT
+    SSE --> CONT
+    CONT --> UC
+    UC --> DOM
+    UC --> PORTS
+    PORTS -.->|"implementiert von"| Adapters
 
-    REST --> ORC
-    REST --> DB
+    SQL --> DB
+    GIT -->|"git clone / pull"| REPO
+    GIT -->|"Codebase-Summary"| CLAUDE
+    CLI -->|"claude --print\nstream-json"| CLAUDE
+    BUS -->|"progress / question / status"| SSE
 
-    ORC --> CACHE
-    ORC --> CLI
-    ORC --> DB
-    ORC -->|"emit: status\nprogress\nquestion"| EV
-
-    EV --> SSE
-    SSE -->|"stream JSON events\nstatus / progress / question"| FE
-
-    CACHE -->|"git clone / pull"| REPO
-    CACHE -->|"spawn: claude --print\n(codebase summary)"| CLAUDE
-
-    CLI -->|"spawn: claude --print\n--output-format stream-json"| CLAUDE
-    CLI --> ZOD
-
-    CLAUDE -->|"stream-json stdout"| CLI
+    UC --> ZOD
+    UI -.->|"Typen"| ZOD
 
     style Browser fill:#dbeafe,stroke:#3b82f6
-    style Backend fill:#dcfce7,stroke:#16a34a
+    style Web fill:#dcfce7,stroke:#16a34a
+    style Core fill:#ffedd5,stroke:#ea580c
+    style Adapters fill:#fff7ed,stroke:#fb923c
     style Shared fill:#fef9c3,stroke:#ca8a04
     style External fill:#f3e8ff,stroke:#9333ea
