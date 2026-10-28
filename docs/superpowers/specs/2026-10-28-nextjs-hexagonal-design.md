@@ -81,12 +81,15 @@ Fachregeln, die heute in `restApi.ts` stecken (zulässige Status, Statuswechsel)
 ```ts
 type TicketStatus = 'backlog' | 'refining' | 'review' | 'ready' | 'failed'
 canStartRefinement(ticket)        // status ∈ { backlog, review }
-canAnswer(ticket, runs)           // refining + offene Frage + kein laufender Antwort-Lauf
+isAnswerInProgress(latestRun)     // Antwort nur, wenn refining und kein laufender Antwort-Lauf
+planAnswerRun(runs, answer)       // letzte offene Frage + Q&A-Verlauf; null → Hintergrund-Lauf bricht ab (wie bisher)
 canDelete(ticket)                 // status ≠ refining
 nextStatusAfterRun(output)        // question → refining bleibt, refinement → review
 ```
 
-Fehlertypen: `NotFoundError`, `ConflictError`, `ValidationError`.
+Fehlertypen: `NotFoundError`, `ConflictError`, `ValidationError`, jeweils mit Feld `code`
+(`NOT_FOUND` | `CONFLICT` | `VALIDATION`). Adapter prüfen über `errorCode(err)` statt `instanceof`,
+weil Next.js den Kern in mehrere Bundles kopieren kann (Klassen-Identität nicht garantiert).
 
 ### `application/`
 
@@ -101,7 +104,11 @@ Fehlertypen: `NotFoundError`, `ConflictError`, `ValidationError`.
 | `resetSystem` | laufende stoppen, Seeds wiederherstellen | `restApi.ts` |
 | `executeRun` (intern) | Repo → Summary → Agent → Lauf/Audit/Status/Events | `refinementOrchestrator.ts` |
 
-Use Cases erhalten ihre Ports per Parameter/Factory (`createUseCases(deps)`).
+Use Cases erhalten ihre Ports per Parameter/Factory (`createUseCases(deps)`). Sie **validieren ihre
+Eingaben selbst** mit den Zod-Schemas aus `shared` (→ `ValidationError`); Adapter reichen Rohdaten durch.
+Hintergrund-Läufe gehen an `deps.runInBackground(promise)` (in Tests einsammel- und abwartbar).
+`createRefinementEngine(config)` in `packages/core/src/compose.ts` verdrahtet die echten Adapter;
+Hono (Übergang) und Next.js rufen nur noch diese Funktion mit Pfaden auf.
 
 ### `ports/`
 
@@ -114,8 +121,8 @@ interface RepoProvider {
   ensureRepo(url: string): Promise<string>
   ensureSummary(dir: string, model: string, onProgress: (msg: string) => void): Promise<string | null>
 }
-interface TicketRepository   { list; get; create; updateStatus; delete; resetToSeeds }
-interface AgentRunRepository { create; complete; fail; listForTicket; latestForTicket }
+interface TicketRepository   { list; findById; count; create; updateStatus; delete; replaceAll(seeds) }
+interface AgentRunRepository { create; findById; complete; fail; listForTicket; latestForTicket; findStuck }
 interface AuditLog           { append(event) }
 interface EventPublisher {
   publish(event: RefinementEvent): void
@@ -131,7 +138,7 @@ Adapter: `claudeCli/` (heute `agentCli/`), `git/` (heute `repoCache.ts`), `sqlit
 ```
 app/
 ├─ layout.tsx               Server  linke Spalte: RepoSettings, „Neues Ticket“, Reset, TicketList;
-│                                    umschließt alles mit <ProgressLogProvider> (Client)
+│                                    umschließt alles mit <AppStateProvider> (Client: Repo-URL + Logs)
 ├─ page.tsx                 Server  „Ticket auswählen oder neu erstellen“
 ├─ tickets/[id]/page.tsx    Server  getTicket(id) → <TicketDetail>; unbekannt → notFound()
 ├─ error.tsx, not-found.tsx
@@ -141,8 +148,8 @@ app/
 ```
 
 - **Lesen:** Server Components rufen Use Cases direkt auf (kein `fetch` auf eine eigene API).
-- **Schreiben:** Server Action → `Schema.parse` → Use Case → `revalidatePath`. `ConflictError` /
-  `ValidationError` → `{ ok: false, error }`, sonst `{ ok: true }`.
+- **Schreiben:** Server Action (typisierte Objekt-Argumente) → Use Case (validiert) → `revalidatePath`.
+  Fachfehler → `{ ok: false, error }`, sonst `{ ok: true, data }`.
 - **SSE:** `GET /api/events?ticketId=…`, `runtime = 'nodejs'`, `dynamic = 'force-dynamic'`.
   `ReadableStream`: initialer Ping, `subscribe(ticketId)`, jedes Event als `data: <json>\n\n`;
   bei `request.signal` abort → Abmelden und Stream schließen.
@@ -150,10 +157,11 @@ app/
   Reconnect → `router.refresh()`. Ersetzt das 5-Minuten-Polling.
 - **Client-Komponenten:** `RepoSettings`, `CreateTicketDialog`, `ModelSelect`, `TicketLive`
   (SSE, Timer, Start/Stop, Fortschritts-Log), `QuestionPanel`, `AgentRunningCard`.
-  **Server Components:** `TicketList` (Links statt `onSelect`), `TicketMetaRow`, statischer Teil von
-  `TicketDetail`.
-- **Unverändertes Verhalten:** Repo-URL bleibt in `localStorage` und geht als Formularfeld mit;
-  Fortschritts-Logs pro Ticket liegen im `ProgressLogProvider` des Root-Layouts und überleben
+  `TicketList` (braucht `usePathname` für die Hervorhebung), `TicketMetaRow` (enthält `ModelSelect`),
+  `PlanSection` (auf-/zuklappbar).
+  **Server Components:** `Sidebar`, `TicketDetail` (Kopf, Beschreibung; bettet `TicketLive` ein).
+- **Unverändertes Verhalten:** Repo-URL bleibt in `localStorage` und geht als Action-Argument mit;
+  Fortschritts-Logs pro Ticket liegen im `AppStateProvider` des Root-Layouts und überleben
   Navigation wie heute in `App.tsx`. shadcn-UI, Tailwind v4, Geist ziehen mit um.
 - UI-Konstanten (Modelle, Preise, Status-Labels) → `apps/web/lib/`.
 
@@ -165,7 +173,8 @@ app/
 refinementSchema.ts   AgentOutputSchema, RefinementOutputSchema            (bestehend)
 api.ts                TicketStatusSchema, TicketSchema (id: "T-1"), AgentRunSchema,
                       TicketDetailSchema, CreateTicketInput,
-                      StartRefinementInput { repo: url, model, acceptanceCriteria? },
+                      StartRefinementInput { repo: nicht leer (kein URL-Check: SSH/lokal erlaubt),
+                                             model, acceptanceCriteria? },
                       AnswerInput { answer: nicht leer }
 events.ts             RefinementEventSchema = discriminatedUnion('type', [
                         { type: 'progress', ticketId, message },
@@ -174,7 +183,7 @@ events.ts             RefinementEventSchema = discriminatedUnion('type', [
 ```
 
 - Use Cases liefern DTOs aus `shared`; ID-Formatierung (`"T-1"`) im Kern, nicht in der UI.
-- Server Actions parsen Inputs; der Kern verarbeitet nur geprüfte Daten.
+- Use Cases parsen ihre Inputs; Adapter (Hono, Server Actions) reichen Rohdaten durch.
 - Von Hand nachgebaute Typen im Frontend (`Ticket`, `AgentRun`, `SseMessage`) entfallen.
 - `nodeEvents`-Adapter: `EventEmitter` mit Kanal pro Ticket (`ticket:<id>`), `setMaxListeners(0)`,
   `subscribe` gibt eine Abmelde-Funktion zurück. Die SSE-Nachricht ist das `RefinementEvent`.
@@ -182,8 +191,9 @@ events.ts             RefinementEventSchema = discriminatedUnion('type', [
 ### Datenfluss „Refinement starten“
 
 ```
-Browser  Formular → startRefinementAction(id, formData)
-Next     StartRefinementInput.parse → container.startRefinement(id, input)
+Browser  Klick → startRefinementAction(id, { repo, model, acceptanceCriteria })
+Next     getEngine().startRefinement(id, input)
+Core     StartRefinementInput.parse
 Core     canStartRefinement → tickets.updateStatus('refining') → events.publish(status)
          → executeRun(...) im Hintergrund (nicht awaited; Fehler intern behandelt)
          ← sofort zurück; Action: revalidatePath
