@@ -106,7 +106,7 @@ eigenen Spec):
 | Artefakt | das Ergebnis einer Stufe als Markdown-Datei im Ziel-Repo (`intent.md`, `spec.md`, `plan.md`) |
 | Intent | geprüfte, strukturierte Fassung des rohen Tickets: Problem, Ziel, Betroffene, offene Punkte |
 | Spec | Anforderungen für die Umsetzung: User Story, Akzeptanzkriterien, betroffene Dateien, Risiken |
-| Gate | Freigabe durch einen Menschen — der Merge des PR einer Stufe |
+| Gate | Freigabe durch einen Menschen — meist der Merge des PR einer Stufe |
 | Zustand | die aktuelle Stufe eines Tickets in der App-Datenbank |
 | Log | persistente Einträge pro Ticket: Läufe, Rückfragen, Freigaben, Übergänge |
 | Port | Schnittstelle, die der Kern braucht (z. B. `AgentRunner`) |
