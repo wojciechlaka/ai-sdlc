@@ -31,6 +31,14 @@ describe('parseTicketMarkdown', () => {
     expect(parseTicketMarkdown('# CB-9: T\r\n\r\nText\r\n', 'a.md')).toMatchObject({ description: 'Text', priority: null })
   })
 
+  it('strips a UTF-8 BOM', () => {
+    expect(parseTicketMarkdown('\uFEFF# CB-4: T\n\nText', 'a.md')).toMatchObject({ key: 'CB-4', title: 'T' })
+  })
+
+  it('rejects an empty title', () => {
+    expect(parseTicketMarkdown('# CB-5:   \n\nText', 'a.md')).toBeNull()
+  })
+
   it('returns null without a ticket heading in the first line', () => {
     expect(parseTicketMarkdown('# Seed-Tickets\n\nText', 'README.md')).toBeNull()
     expect(parseTicketMarkdown('Text\n# CB-1: T', 'a.md')).toBeNull()

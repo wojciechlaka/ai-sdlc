@@ -159,7 +159,7 @@ function extractResult(raw: string): ExtractedResult {
           cacheCreationTokens: usage?.cache_creation_input_tokens ?? 0,
           cacheReadTokens: usage?.cache_read_input_tokens ?? 0,
           outputTokens: usage?.output_tokens ?? 0,
-          costUsd: typeof obj.cost_usd === 'number' ? obj.cost_usd : 0,
+          costUsd: typeof obj.total_cost_usd === 'number' ? obj.total_cost_usd : typeof obj.cost_usd === 'number' ? obj.cost_usd : 0,
         } satisfies ExtractedResult
       }
     } catch { /* skip */ }

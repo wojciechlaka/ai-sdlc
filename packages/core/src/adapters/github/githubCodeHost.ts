@@ -32,7 +32,8 @@ function statusOf(err: unknown): number {
 function toCodeHostError(err: unknown, action: string): CodeHostError {
   const status = statusOf(err)
   const detail = err instanceof Error ? err.message : String(err)
-  const hint = STATUS_HINT[status] ?? (status === 422 ? `GitHub lehnt die Anfrage ab (422): ${detail}` : `GitHub-Fehler: ${detail}`)
+  const rateLimited = status === 429 || (status === 403 && /rate limit/i.test(detail))
+  const hint = rateLimited ? 'GitHub-Rate-Limit erreicht — später erneut versuchen.' : STATUS_HINT[status] ?? (status === 422 ? `GitHub lehnt die Anfrage ab (422): ${detail}` : `GitHub-Fehler: ${detail}`)
   return new CodeHostError(status, `${action}: ${hint}`)
 }
 
@@ -57,7 +58,12 @@ function toPullRequest(pr: GitHubPull): PullRequest {
 /** CodeHost port backed by the GitHub REST API. */
 export function createGitHubCodeHost(options: GitHubCodeHostOptions): CodeHost {
   const { owner, repo } = parseGitHubRepoUrl(options.repoUrl)
-  const octokit = new Octokit({ auth: options.token, request: options.fetch ? { fetch: options.fetch } : undefined })
+  const octokit = new Octokit({
+    auth: options.token,
+    request: options.fetch ? { fetch: options.fetch } : undefined,
+    // Every error becomes a CodeHostError; Octokit's own request logging would only duplicate it.
+    log: { debug() {}, info() {}, warn: console.warn, error() {} },
+  })
   let cachedDefaultBranch: string | null = null
 
   /** Runs one API step and turns every failure into a user-facing CodeHostError. */
@@ -125,7 +131,7 @@ export function createGitHubCodeHost(options: GitHubCodeHostOptions): CodeHost {
 
     listOpenPullRequests: () =>
       step('Offene PRs lesen', async () =>
-        (await octokit.rest.pulls.list({ owner, repo, state: 'open', per_page: 100 })).data.map(toPullRequest)),
+        (await octokit.paginate(octokit.rest.pulls.list, { owner, repo, state: 'open', per_page: 100 })).map((p) => toPullRequest(p))),
 
     closePullRequest: (number) =>
       step(`PR #${number} schließen`, async () => {

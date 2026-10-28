@@ -4,7 +4,7 @@ import type { TicketSource } from '../../ports'
 import type { SourceTicket } from '../../domain/types'
 import { TICKET_KEY_PATTERN, compareTicketKeys } from '../../domain/ticketKey'
 
-const HEADING_RE = new RegExp(`^#\\s+(${TICKET_KEY_PATTERN}):\\s*(.+?)\\s*$`)
+const HEADING_RE = new RegExp(`^#\\s+(${TICKET_KEY_PATTERN}):\\s*(\\S.*?)\\s*$`)
 const PRIORITY_RE = /^\*\*Priorität:\*\*\s*(.+?)\s*$/
 const README = 'README.md'
 
@@ -13,7 +13,7 @@ const README = 'README.md'
  * Returns null when the first line is no ticket heading (e.g. README.md).
  */
 export function parseTicketMarkdown(markdown: string, sourcePath: string): SourceTicket | null {
-  const lines = markdown.replace(/\r\n/g, '\n').split('\n')
+  const lines = markdown.replace(/^﻿/, '').replace(/\r\n/g, '\n').split('\n')
   const heading = HEADING_RE.exec(lines[0] ?? '')
   if (!heading) return null
 
@@ -41,6 +41,7 @@ export interface MarkdownTicketSourceOptions {
 export function createMarkdownTicketSource(options: MarkdownTicketSourceOptions): TicketSource {
   return {
     list() {
+      if (!fs.existsSync(options.dir)) throw new Error(`Ticket-Ordner fehlt: ${options.dir}`)
       const tickets: SourceTicket[] = []
       const seen = new Set<string>()
       const names = fs.readdirSync(options.dir).filter((name) => name.endsWith('.md')).sort()

@@ -45,8 +45,11 @@ Your entire answer is exactly one JSON object — no text before or after it, no
   }
 }
 
+`affected` and `openPoints` may be empty arrays. `title` must not exceed 60 characters.
+
 ## Rules
 
 - Never modify files in the repository — read only.
 - Write in the language of the ticket.
+- Do not invent requirements that neither the ticket nor the answered questions support.
 - Stay at the level of problem and outcome; mention code only where it explains today's behaviour.

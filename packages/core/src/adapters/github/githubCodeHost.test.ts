@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { createGitHubCodeHost, parseGitHubRepoUrl } from './githubCodeHost'
 
 interface Route { status: number; body?: unknown }
-interface Call { method: string; path: string; query: string; body: unknown }
+interface Call { method: string; path: string; rawPath: string; query: string; body: unknown }
 
 /** Minimal GitHub REST stand-in for Octokit's injectable fetch. Unknown routes answer 404. */
 function fakeGitHub(routes: Record<string, Route>) {
@@ -12,7 +12,7 @@ function fakeGitHub(routes: Record<string, Route>) {
     const method = (init?.method ?? 'GET').toUpperCase()
     const path = decodeURIComponent(url.pathname)
     const body = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined
-    calls.push({ method, path, query: url.search, body })
+    calls.push({ method, path, rawPath: url.pathname, query: url.search, body })
     const route = routes[`${method} ${path}`] ?? { status: 404, body: { message: 'Not Found' } }
     return new Response(route.body === undefined ? null : JSON.stringify(route.body), {
       status: route.status,
@@ -108,6 +108,7 @@ describe('writing', () => {
     await codeHost.deleteBranch('CB-1/intent')
     await codeHost.deleteBranch('CB-2/intent')
     await codeHost.deleteBranch('CB-3/intent') // 404
+    expect(gh.calls.find((c) => c.method === 'DELETE')?.rawPath).toBe('/repos/o/r/git/refs/heads%2FCB-1%2Fintent')
     expect(gh.calls.find((c) => c.method === 'PATCH')?.body).toEqual({ state: 'closed' })
   })
 })
@@ -132,6 +133,11 @@ describe('pull requests', () => {
 })
 
 describe('errors', () => {
+  it('reports rate limits', async () => {
+    const { codeHost } = setup({ 'GET /repos/o/r/pulls': { status: 403, body: { message: 'API rate limit exceeded for user' } } })
+    await expect(codeHost.listOpenPullRequests()).rejects.toMatchObject({ status: 403, message: expect.stringContaining('Rate-Limit') })
+  })
+
   it('turns HTTP errors into CodeHostError with a helpful message', async () => {
     const { codeHost } = setup({ 'POST /repos/o/r/pulls': { status: 403, body: { message: 'Resource not accessible by personal access token' } } })
     await expect(codeHost.openPullRequest({ branch: 'CB-1/intent', title: 't', body: 'b' })).rejects.toMatchObject({

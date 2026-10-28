@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { EventEmitter } from 'events'
 import path from 'path'
 import type { AgentRunnerInput } from '../../ports'
@@ -46,6 +46,10 @@ beforeEach(() => {
   vi.clearAllMocks()
 })
 
+afterEach(() => {
+  vi.unstubAllEnvs()
+})
+
 describe('runAgent (stage plan)', () => {
   it.each([
     ['plain JSON', INTENT_OUTPUT],
@@ -68,6 +72,13 @@ describe('runAgent (stage plan)', () => {
     const { meta } = await runAgent(INPUT, vi.fn(), OPTIONS)
     expect(proc.stdin.write.mock.calls[0][0]).toContain('# Intent Agent Skill')
     expect(meta).toMatchObject({ model: 'claude-sonnet-4-6', inputTokens: 100, outputTokens: 20, cacheReadTokens: 5, costUsd: 0.04 })
+  })
+
+  it('prefers total_cost_usd over cost_usd', async () => {
+    mockSpawn.mockReturnValue(makeFakeProcess(resultLine(INTENT_OUTPUT, { total_cost_usd: 0.07, cost_usd: 0.01 }), 0))
+    const { runAgent } = await import('./index')
+    const { meta } = await runAgent(INPUT, vi.fn(), OPTIONS)
+    expect(meta.costUsd).toBe(0.07)
   })
 
   it('retries once on invalid output, then throws SchemaValidationError', async () => {
@@ -93,11 +104,10 @@ describe('runAgent (stage plan)', () => {
     proc.stderr = new EventEmitter()
     proc.kill = vi.fn()
     mockSpawn.mockReturnValue(proc)
-    process.env['REFINEMENT_TIMEOUT_MS'] = '50'
+    vi.stubEnv('REFINEMENT_TIMEOUT_MS', '50')
     const { runAgent } = await import('./index')
     const { AgentRunTimeoutError } = await import('../../ports')
     await expect(runAgent(INPUT, vi.fn(), OPTIONS)).rejects.toBeInstanceOf(AgentRunTimeoutError)
-    delete process.env['REFINEMENT_TIMEOUT_MS']
   })
 
   it('rejects stages without an agent before spawning claude', async () => {

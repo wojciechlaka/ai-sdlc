@@ -48,7 +48,7 @@ function correctionSection(retry: NonNullable<PromptInput['retryContext']>): str
     // The message reaches us wrapped by SchemaValidationError, hence `includes`.
     retry.schemaError.includes(INVALID_JSON_ERROR)
       ? 'Dein letzter Output enthielt kein gültiges JSON. Du hast vermutlich Text statt JSON ausgegeben:'
-      : 'Du hast die Codebase bereits analysiert. Dein letzter Output war strukturell ungültig:',
+      : 'Dein letzter Output war strukturell ungültig:',
     '',
     '```',
     retry.previousOutput.slice(0, MAX_RETRY_OUTPUT_CHARS),

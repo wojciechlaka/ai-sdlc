@@ -20,7 +20,7 @@ export interface CodeHost {
   /** Opens a PR from `branch` against the default branch. */
   openPullRequest(input: { branch: string; title: string; body: string }): Promise<PullRequest>
   getPullRequest(number: number): Promise<PullRequest>
-  /** Open PRs of the repository (first 100). */
+  /** Open PRs of the repository. */
   listOpenPullRequests(): Promise<PullRequest[]>
   closePullRequest(number: number): Promise<void>
   /** Deletes a branch; a missing branch is not an error. */
