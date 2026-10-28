@@ -157,11 +157,11 @@ zu Daten/Constraints stehen in `datenmodell.md`, das Warum in `decisions.md`.
 
 ```text
   P2  lokale App              P3  DB herausgeloest+geteilt    P4  gleich + mehr Module    P5  gehosteter Dienst
-  +-------------------+       +----------+    +---------+      +----------+   +-------+     +-----------------+
+  +-------------------+       +----------+    +---------+      +-----------+   +--------+     +-----------------+
   | Next.js+Kern+     |  -->  | App lokal| -> |geteilte |  --> | App lokal | ->|geteilte| --> | Server + DB     |
   | CLI+SQLite        |       | (Next.js+|    |  DB     |      | (N Module)|   |  DB    |     | Multi-Tenant    |
-  +-------------------+       |  Kern)   |    +---------+      +----------+   +-------+     | SSO/RBAC/Policy |
-                             +----------+                                                  +-----------------+
+  +-------------------+       |  Kern)   |    +---------+      +-----------+   +--------+     | SSO/RBAC/Policy |
+                              +----------+                                                    +-----------------+
        was bleibt -->  Anwendungslogik (Board, Refine, Review, Audit);  was wandert -->  Persistenz, Vertrauensgrenze, Enforcement
 ```
 
@@ -192,8 +192,8 @@ Die aktuelle Zielarchitektur ([D17](decisions.md)).
    |   +-----------------------------------------------------------------+   |
    +=================^===============================^=======================+
                      | nur Daten (keine Secrets)     |
-   +-----------------+--------------+   +------------+----------------------+
-   |  LOKAL  --  Nutzer A           |   |  LOKAL  --  Nutzer B              |
+   +-----------------+--------------+   +------------+---------------------+
+   |  LOKAL  --  Nutzer A           |   |  LOKAL  --  Nutzer B             |
    |   App: Next.js (UI + Actions)  |   |   App: Next.js (UI + Actions)    |
    |   Kern: packages/core (Hexa.)  |   |   Kern: packages/core (Hexa.)    |
    |   Agent-Run in-process (CLI)   |   |   Agent-Run in-process (CLI)     |
