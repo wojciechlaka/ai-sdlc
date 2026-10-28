@@ -1,6 +1,5 @@
-import type { AgentOutput } from '@refinement/shared'
+import type { StageOutput } from '@refinement/shared'
 import type { SchemaValidationError } from './errors'
-import type { AgentRunMeta, AgentRunResult, AgentRunnerInput } from '../../ports'
 
 export interface ClaudeStreamMessage {
   content?: Array<Record<string, unknown>>
@@ -23,9 +22,5 @@ export interface ExtractedResult {
 }
 
 export type AttemptResult =
-  | { ok: true; output: AgentOutput; cliResult: ExtractedResult }
+  | { ok: true; output: StageOutput; cliResult: ExtractedResult }
   | { ok: false; cliResult: ExtractedResult; error: SchemaValidationError }
-
-export type RefinementInput = AgentRunnerInput
-export type RefinementMeta = AgentRunMeta
-export type RefinementResult = AgentRunResult

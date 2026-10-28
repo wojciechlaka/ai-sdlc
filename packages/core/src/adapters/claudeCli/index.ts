@@ -1,33 +1,34 @@
 import { spawn, ChildProcess } from 'child_process'
 import fs from 'fs/promises'
-import { AgentOutputSchema } from '@refinement/shared'
-import type { AgentOutput } from '@refinement/shared'
+import path from 'path'
+import type { ZodIssue, ZodType } from 'zod'
+import { IntentAgentOutputSchema, type StageOutput } from '@refinement/shared'
 import { SchemaValidationError, CliError } from './errors'
 import { AgentRunTerminatedError, AgentRunTimeoutError } from '../../ports'
-import type { AgentRunner } from '../../ports'
+import type { AgentRunner, AgentRunnerInput, AgentRunMeta, AgentRunResult } from '../../ports'
+import type { ArtifactStage } from '../../domain/types'
 import { buildPrompt } from './prompt'
-import type { PromptInput } from './prompt'
-import type {
-  ClaudeStreamMessage,
-  ClaudeTokenUsage,
-  ExtractedResult,
-  AttemptResult,
-  RefinementInput,
-  RefinementMeta,
-  RefinementResult,
-} from './types'
-export type { RefinementInput, RefinementMeta, RefinementResult } from './types'
+import type { ClaudeStreamMessage, ClaudeTokenUsage, ExtractedResult, AttemptResult } from './types'
 
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000
 const SIGTERM_EXIT_CODE = 143
 const ALLOWED_TOOLS = 'Read,LS,Bash'
 const MS_PER_SECOND = 1000
 const UTF8 = 'utf-8' as const
-
-const runningProcesses = new Map<string, ChildProcess>()
-
 const SCHEMA_ERROR_PREVIEW_CHARS = 120
 const MARKDOWN_CODE_BLOCK_RE = /```(?:json)?\s*([\s\S]*?)```/
+
+interface StageAgent {
+  skillFile: string
+  schema: ZodType<StageOutput>
+}
+
+/** Skill and output schema per stage. Part B adds `design`. */
+const STAGE_AGENTS: Partial<Record<ArtifactStage, StageAgent>> = {
+  plan: { skillFile: 'intent-agent.md', schema: IntentAgentOutputSchema },
+}
+
+const runningProcesses = new Map<string, ChildProcess>()
 
 const TOOL_PROGRESS_MESSAGE: Record<string, string> = {
   Read: 'Codebase wird analysiert...',
@@ -50,9 +51,6 @@ function parseProcessExit(code: number | null, output: string, stderr: string): 
 /**
  * Parses one stream-JSON line and emits a progress message if a new tool_use block is detected.
  * Returns the (possibly updated) last progress message to avoid emitting duplicates.
- * @param line            - A single line from the Claude stream-JSON stdout.
- * @param lastProgressMsg - The last progress message emitted, used for deduplication.
- * @param onProgress      - Callback to emit a new progress message.
  */
 function handleLine(line: string, lastProgressMsg: string, onProgress: (msg: string) => void): string {
   const trimmed = line.trim()
@@ -71,28 +69,23 @@ function handleLine(line: string, lastProgressMsg: string, onProgress: (msg: str
 }
 
 /**
- * Sends SIGTERM to the running Claude process for the given ticket ID. Returns false if no process is running.
- * @param ticketId - The public ticket ID string (e.g. `T-42`).
+ * Sends SIGTERM to the running Claude process of the ticket. Returns false if none is running.
+ * @param ticketKey - e.g. `CB-2`.
  */
-export function stopRefinement(ticketId: string): boolean {
-  const proc = runningProcesses.get(ticketId)
+export function stopAgent(ticketKey: string): boolean {
+  const proc = runningProcesses.get(ticketKey)
   if (!proc) return false
-  runningProcesses.delete(ticketId)
+  runningProcesses.delete(ticketKey)
   proc.kill('SIGTERM')
   return true
 }
 
 /**
- * Spawns the Claude CLI process, pipes the prompt via stdin, and streams stdout line-by-line for progress events.
- * Resolves with the raw CLI result; rejects with AgentRunTimeoutError, AgentRunTerminatedError, or CliError.
- * @param ticketId   - Used to register the process in `runningProcesses` for cancellation.
- * @param prompt     - The full prompt string to send via stdin.
- * @param cwd        - Working directory for the Claude process (cloned repository).
- * @param model      - Claude model identifier.
- * @param onProgress - Callback for progress messages parsed from the stream.
+ * Spawns the Claude CLI, pipes the prompt via stdin and streams stdout line by line for progress events.
+ * Rejects with AgentRunTimeoutError, AgentRunTerminatedError or CliError.
  */
 async function spawnClaude(
-  ticketId: string,
+  ticketKey: string,
   prompt: string,
   cwd: string,
   model: string,
@@ -113,9 +106,8 @@ async function spawnClaude(
       '--allowedTools', ALLOWED_TOOLS,
     ], { cwd, env: { ...process.env }, stdio: ['pipe', 'pipe', 'pipe'] })
 
-    runningProcesses.set(ticketId, proc)
-
-    const cleanup = () => { runningProcesses.delete(ticketId) }
+    runningProcesses.set(ticketKey, proc)
+    const cleanup = () => { runningProcesses.delete(ticketKey) }
 
     let stderrBuf = ''
 
@@ -154,11 +146,7 @@ async function spawnClaude(
   })
 }
 
-/**
- * Scans the Claude stream-JSON stdout for the `result` success line and maps it to an ExtractedResult.
- * Throws CliError if no success line is found.
- * @param raw - Full stdout of the Claude CLI process.
- */
+/** Finds the `result`/`success` line of the stream-JSON output. @throws CliError if there is none. */
 function extractResult(raw: string): ExtractedResult {
   for (const line of raw.split('\n')) {
     try {
@@ -179,11 +167,7 @@ function extractResult(raw: string): ExtractedResult {
   throw new CliError(-1, 'No success result in stream-json output')
 }
 
-/**
- * Extracts the JSON object from the agent's raw text output.
- * Strips markdown fences if present, otherwise falls back to the firstAttempt `{...}` substring.
- * @param raw - The agent's raw text output.
- */
+/** Strips a Markdown fence if present, otherwise takes the outermost `{...}`. */
 function extractJsonString(raw: string): string {
   const s = raw.trim()
   const fenceMatch = s.match(MARKDOWN_CODE_BLOCK_RE)
@@ -194,99 +178,68 @@ function extractJsonString(raw: string): string {
   return s
 }
 
-/**
- * Parses and Zod-validates the agent's raw text output.
- * Throws SchemaValidationError if the text is not valid JSON or does not match AgentOutputSchema.
- * @param raw - The agent's raw text output.
- */
-function parseAndValidate(raw: string): AgentOutput {
-  const json = extractJsonString(raw)
+/** Parses the agent text and validates it against the stage schema. @throws SchemaValidationError */
+function parseAndValidate(raw: string, schema: ZodType<StageOutput>): StageOutput {
   let parsed: unknown
   try {
-    parsed = JSON.parse(json)
+    parsed = JSON.parse(extractJsonString(raw))
   } catch {
     throw new SchemaValidationError(
-      [{ message: 'Agent output is not valid JSON', path: [], code: 'custom', input: undefined }] as import('zod').ZodIssue[],
+      [{ message: 'Agent output is not valid JSON', path: [], code: 'custom', input: undefined }] as ZodIssue[],
       raw,
     )
   }
-  const result = AgentOutputSchema.safeParse(parsed)
+  const result = schema.safeParse(parsed)
   if (!result.success) throw new SchemaValidationError(result.error.issues, raw)
   return result.data
 }
 
-/**
- * Runs a single Claude attempt (initial or retryAttempt) and returns a typed result indicating success or schema failure.
- * @param skill        - The skill file content to include in the prompt.
- * @param input        - The refinement input parameters.
- * @param onProgress   - Callback for progress messages during the run.
- * @param retryContext - If set, builds a correction prompt with the previous malformed output.
- */
+/** One Claude attempt; schema failures are returned, all other errors are thrown. */
 async function runAttempt(
-  skill: string,
-  input: RefinementInput,
+  agent: { skill: string; schema: ZodType<StageOutput> },
+  input: AgentRunnerInput,
   onProgress: (msg: string) => void,
   retryContext?: { previousOutput: string; schemaError: string },
 ): Promise<AttemptResult> {
-  const promptInput: PromptInput = {
-    skill,
-    ticketId: input.ticketId,
+  const prompt = buildPrompt({
+    skill: agent.skill,
+    ticketKey: input.ticketKey,
     title: input.title,
     description: input.description,
-    acceptanceCriteria: input.acceptanceCriteria,
-    codebaseSummary: retryContext ? undefined : input.codebaseSummary,
-    summary: retryContext ? undefined : input.feedback,
+    codebaseSummary: input.codebaseSummary,
     previousRuns: input.previousRuns,
     retryContext,
-  }
-  const prompt = buildPrompt(promptInput)
+  })
 
-  const cliResult = await spawnClaude(input.ticketId, prompt, input.repoPath, input.model, onProgress)
+  const cliResult = await spawnClaude(input.ticketKey, prompt, input.repoPath, input.model, onProgress)
   try {
-    return { ok: true, output: parseAndValidate(cliResult.text), cliResult } satisfies AttemptResult
+    return { ok: true, output: parseAndValidate(cliResult.text, agent.schema), cliResult } satisfies AttemptResult
   } catch (err) {
     if (err instanceof SchemaValidationError) return { ok: false, cliResult, error: err } satisfies AttemptResult
     throw err
   }
 }
 
-/**
- * Combines two CLI results into one by summing all token counts and costs.
- * Used when a retryAttempt occurs so the full run cost is reported correctly.
- * @param firstAttempt - Result from the firstAttempt (failed) attempt.
- * @param retryAttempt - Result from the retryAttempt attempt.
- */
-function aggregateCliResults(firstAttempt: ExtractedResult, retryAttempt: ExtractedResult): ExtractedResult {
+/** Sums tokens and cost of both attempts so the full run cost is reported. */
+function aggregateCliResults(first: ExtractedResult, retry: ExtractedResult): ExtractedResult {
   return {
-    text: retryAttempt.text,
-    inputTokens: firstAttempt.inputTokens + retryAttempt.inputTokens,
-    cacheCreationTokens: firstAttempt.cacheCreationTokens + retryAttempt.cacheCreationTokens,
-    cacheReadTokens: firstAttempt.cacheReadTokens + retryAttempt.cacheReadTokens,
-    outputTokens: firstAttempt.outputTokens + retryAttempt.outputTokens,
-    costUsd: firstAttempt.costUsd + retryAttempt.costUsd,
+    text: retry.text,
+    inputTokens: first.inputTokens + retry.inputTokens,
+    cacheCreationTokens: first.cacheCreationTokens + retry.cacheCreationTokens,
+    cacheReadTokens: first.cacheReadTokens + retry.cacheReadTokens,
+    outputTokens: first.outputTokens + retry.outputTokens,
+    costUsd: first.costUsd + retry.costUsd,
   }
 }
 
-/**
- * Emits two progress messages before the retry attempt: a preview of the malformed output
- * and the schema validation error message.
- * @param rawOutput  - The agent's raw (malformed) output, used for the preview snippet.
- * @param message    - The schema validation error message.
- * @param onProgress - Callback to emit progress messages.
- */
+/** Progress messages before the retry: preview of the malformed output and the validation error. */
 function reportSchemaError(rawOutput: string | undefined, message: string, onProgress: (msg: string) => void): void {
   const preview = (rawOutput ?? '').slice(0, SCHEMA_ERROR_PREVIEW_CHARS).replace(/\n/g, ' ')
   onProgress(`Schema-Fehler, Retry... (Output: "${preview}")`)
   onProgress(`Schema-Validierungsfehler: ${message}`)
 }
 
-/**
- * Builds a RefinementMeta from the CLI result and elapsed time since `startedAt`.
- * @param model     - The Claude model identifier.
- * @param startedAt - Unix timestamp (ms) when the run began.
- * @param cliResult - Raw result from the Claude CLI process.
- */
-function buildMeta(model: string, startedAt: number, cliResult: ExtractedResult): RefinementMeta {
+function buildMeta(model: string, startedAt: number, cliResult: ExtractedResult): AgentRunMeta {
   return {
     model,
     durationSeconds: Math.round((Date.now() - startedAt) / MS_PER_SECOND),
@@ -299,61 +252,50 @@ function buildMeta(model: string, startedAt: number, cliResult: ExtractedResult)
 }
 
 export interface ClaudeCliOptions {
-  /** Absolute path to `packages/core/skills/refinement-agent.md`. */
-  skillPath: string
+  /** Absolute path to `packages/core/skills`. */
+  skillsDir: string
 }
 
 /**
- * Spawns the Claude CLI with a refinement prompt and returns the validated agent output.
- * Performs one automatic retry if the first attempt produces a `SchemaValidationError`
- * (invalid JSON or Zod schema mismatch). The retry prompt includes the malformed output
- * and the validation error so Claude can self-correct.
- * Hard errors (`AgentRunTerminatedError`, `AgentRunTimeoutError`, `CliError`) bypass the retry and propagate immediately.
- * Token counts and cost are aggregated across both attempts when a retry occurs.
- * @param input      - Ticket data, repo path, model, and optional Q&A history.
- * @param onProgress - Callback for progress messages emitted during the run.
- * @throws {AgentRunTerminatedError} if the process is killed via `stopRefinement`.
+ * Runs the agent of `input.stage` and returns its validated output.
+ * One automatic retry on a SchemaValidationError (the retry prompt quotes the malformed output);
+ * terminate, timeout and CLI errors propagate immediately. Tokens and cost cover both attempts.
+ * @throws {Error} if the stage has no agent yet.
+ * @throws {AgentRunTerminatedError} if the process is killed via `stopAgent`.
  * @throws {AgentRunTimeoutError} if the run exceeds `REFINEMENT_TIMEOUT_MS`.
  * @throws {CliError} if the Claude process exits with a non-zero code.
  * @throws {SchemaValidationError} if both attempts produce invalid output.
  */
-export async function runRefinement(
-  input: RefinementInput,
+export async function runAgent(
+  input: AgentRunnerInput,
   onProgress: (msg: string) => void,
   options: ClaudeCliOptions,
-): Promise<RefinementResult> {
-  const skill = await fs.readFile(options.skillPath, UTF8)
+): Promise<AgentRunResult> {
+  const stageAgent = STAGE_AGENTS[input.stage]
+  if (!stageAgent) throw new Error(`Für die Stufe ${input.stage} gibt es noch keinen Agent`)
+  const agent = {
+    skill: await fs.readFile(path.join(options.skillsDir, stageAgent.skillFile), UTF8),
+    schema: stageAgent.schema,
+  }
   const startedAt = Date.now()
 
-  // 1  make frist attempt
-  const firstAttempt = await runAttempt(skill, input, onProgress)
-  if (firstAttempt.ok) {
-    return { output: firstAttempt.output, meta: buildMeta(input.model, startedAt, firstAttempt.cliResult) }
-  }
+  const first = await runAttempt(agent, input, onProgress)
+  if (first.ok) return { output: first.output, meta: buildMeta(input.model, startedAt, first.cliResult) }
 
-  // 2. report errors
-  const firstAttemptErrorMessage = firstAttempt.error.message
-  const firstAttemptErrorRawOutput = firstAttempt.error.rawOutput
-
-  reportSchemaError(firstAttemptErrorRawOutput, firstAttemptErrorMessage, onProgress)
-
-  // 3 make retryAttempt
-  const retryAttempt = await runAttempt(skill, input, onProgress, {
-    previousOutput: firstAttemptErrorRawOutput ?? firstAttemptErrorMessage,
-    schemaError: firstAttemptErrorMessage,
+  reportSchemaError(first.error.rawOutput, first.error.message, onProgress)
+  const retry = await runAttempt(agent, input, onProgress, {
+    previousOutput: first.error.rawOutput ?? first.error.message,
+    schemaError: first.error.message,
   })
+  if (!retry.ok) throw retry.error
 
-  if (!retryAttempt.ok) throw retryAttempt.error
-
-  // 4. aggregateCliResults
-  const cliResult = aggregateCliResults(firstAttempt.cliResult, retryAttempt.cliResult)
-  return { output: retryAttempt.output, meta: buildMeta(input.model, startedAt, cliResult) }
+  return { output: retry.output, meta: buildMeta(input.model, startedAt, aggregateCliResults(first.cliResult, retry.cliResult)) }
 }
 
 /** AgentRunner port backed by the headless Claude Code CLI (`claude --print`). */
 export function createClaudeCliAgentRunner(options: ClaudeCliOptions): AgentRunner {
   return {
-    run: (input, onProgress) => runRefinement(input, onProgress, options),
-    stop: (ticketId) => stopRefinement(ticketId),
+    run: (input, onProgress) => runAgent(input, onProgress, options),
+    stop: (ticketKey) => stopAgent(ticketKey),
   }
 }
