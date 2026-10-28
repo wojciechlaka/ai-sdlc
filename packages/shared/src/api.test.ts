@@ -38,7 +38,7 @@ describe('TicketDetailSchema', () => {
       state: 'awaiting_answer',
       stages: [{
         stage: 'plan', path: 'docs/work/CB-2/intent.md',
-        fileUrl: 'https://github.com/o/r/blob/HEAD/docs/work/CB-2/intent.md',
+        fileUrl: 'https://github.com/o/r/blob/showcase/docs/work/CB-2/intent.md',
         completed: false, pr: null, mergedAt: null, content: null,
       }],
       log: [{ actor: 'agent', type: 'question_asked', payload: { question: 'Wer?' }, createdAt: NOW }],

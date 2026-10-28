@@ -3,7 +3,7 @@ import type { SettingsDto } from '@refinement/shared'
 import { Separator } from './ui/separator'
 import { ResetButton } from './ResetButton'
 
-/** Navigation, target repository (from `TARGET_REPO`, read-only) and reset. */
+/** Navigation, target repository (from `TARGET_REPO`, read-only) with the branch the app works on, and reset. */
 export function Sidebar({ settings }: { settings: SettingsDto }) {
   return (
     <aside className="flex w-64 shrink-0 flex-col border-r border-slate-200">
@@ -16,6 +16,7 @@ export function Sidebar({ settings }: { settings: SettingsDto }) {
         <a href={settings.repoUrl} target="_blank" rel="noreferrer" className="block break-all font-mono text-xs text-slate-700 hover:underline">
           {settings.repoUrl.replace('https://github.com/', '')}
         </a>
+        <p className="font-mono text-xs text-slate-500">Branch: {settings.baseBranch}</p>
         {!settings.tokenConfigured && (
           <p role="status" className="text-xs text-amber-700">
             Token fehlt — GITHUB_TOKEN in apps/web/.env.local setzen (siehe README).

@@ -101,10 +101,18 @@ a PR opened by a stale attempt is closed again.
 
 ### Startup (`application/startup.ts`, also run by `resetSystem` after clearing the DB)
 
-End interrupted runs → import `examples/tickets/*.md` (upsert by key) → without token: warn and stop.
-With token: `syncReviews` (merges during downtime) → close open PRs of the app (head branch `<KEY>/intent|spec`
-of a known ticket, own repo only) and delete their branches → derive stage from files on the default branch.
-GitHub errors are logged; the app continues with the DB state.
+The app works against the base branch `showcase`, not the default branch (`master` stays untouched): PRs target it,
+stages and content are read from it, links point to `blob/showcase/…`. Tag `showcase-base` marks its initial state
+(names in `compose.ts`, `SHOWCASE_BRANCH`/`BASELINE_TAG`).
+
+`startup(deps, { resetRepo })`: end interrupted runs → import `examples/tickets/*.md` (upsert by key) → without
+token: warn and stop. With token: `prepareBaseBranch` (missing tag → head of the default branch; missing
+`showcase` → the tag) → `syncReviews` (merges during downtime; skipped with `resetRepo`) → close open PRs of the
+app (head branch `<KEY>/intent|spec` of a known ticket, own repo only) and delete their branches → with
+`resetRepo` only: delete `<KEY>/intent|spec` of all known tickets, force `showcase` back to `showcase-base` →
+derive stage from files on `showcase`. GitHub errors are logged and returned as `{ warnings }`; the app continues
+with the DB state. `resetSystem` (reset button) always runs with `resetRepo: true` and shows the warnings;
+a restart resets the repo only with `RESET_ON_START=true`.
 
 ### Key modules
 
@@ -114,7 +122,7 @@ GitHub errors are logged; the app continues with the DB state.
 - `packages/core/src/domain/errors.ts` — `NotFoundError`/`ConflictError`/`ValidationError`; adapters check
   `errorCode(err)`, never `instanceof` (Next.js may duplicate modules across bundles)
 - `packages/core/src/ports/codeHost.ts` + `adapters/github/githubCodeHost.ts` — GitHub via Octokit (15 s timeout,
-  `CodeHostError` with user-facing German messages)
+  `CodeHostError` with user-facing German messages); base branch, `prepareBaseBranch`, `resetBaseBranch`
 - `packages/core/src/adapters/sqlite/schema.ts` — Drizzle schema: `tickets`, `agent_runs`, `artifacts`, `audit_events`
 - `packages/core/src/testing/fakes.ts` — in-memory repositories, `FakeCodeHost` (GitHub-like semantics),
   `FakeTicketSource`, `FakeAgentRunner` (`hold()`/`stop()`), `createTestContext({ token })`, `seedTicket`
@@ -150,3 +158,4 @@ Variables in `apps/web/.env.local`:
 | `REPO_CACHE_DIR`        | `$TMPDIR/repo-cache`                                                 | Where the target repo is cloned             |
 | `DB_PATH`               | `apps/web/data/refinement.db`                                        | SQLite file path                            |
 | `REFINEMENT_TIMEOUT_MS` | `600000` (10 min)                                                    | Max Claude subprocess runtime               |
+| `RESET_ON_START`        | —                                                                    | `true`: every start resets `showcase` to `showcase-base` |

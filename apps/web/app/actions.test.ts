@@ -30,9 +30,10 @@ describe('server actions', () => {
     expect(revalidatePath).toHaveBeenCalledWith('/', 'layout')
   })
 
-  it('awaits the reset', async () => {
-    engine.resetSystem.mockResolvedValue(undefined)
-    expect(await resetSystemAction()).toEqual({ ok: true, data: undefined })
+  it('awaits the reset and passes its warnings on', async () => {
+    engine.resetSystem.mockResolvedValue({ warnings: ['Repo nicht zurückgesetzt'] })
+    expect(await resetSystemAction()).toEqual({ ok: true, data: { warnings: ['Repo nicht zurückgesetzt'] } })
+    expect(revalidatePath).toHaveBeenCalledWith('/', 'layout')
   })
 
   it('reports domain errors as a failed result', async () => {

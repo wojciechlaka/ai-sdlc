@@ -5,15 +5,16 @@ const globalForTimer = globalThis as typeof globalThis & { __reviewSyncTimer?: R
 
 /**
  * Runs once when the Next.js server starts, before the first request: migrations, ticket import,
- * clean-up of open app PRs and stage derivation (see `startup` in packages/core). Then starts
- * the review sync timer.
+ * clean-up of open app PRs and stage derivation (see `startup` in packages/core). With
+ * `RESET_ON_START=true` the target repo is reset as well (branch `showcase` back to `showcase-base`).
+ * Then starts the review sync timer.
  */
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME !== 'nodejs') return
   const { getEngine } = await import('./lib/container')
   const engine = getEngine()
   try {
-    await engine.startup()
+    await engine.startup({ resetRepo: process.env.RESET_ON_START === 'true' })
   } catch (err) {
     console.error('[startup] App konnte nicht starten:', err)
     throw err

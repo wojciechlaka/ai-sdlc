@@ -23,7 +23,7 @@ Startet die Next.js-App unter http://localhost:3000. Ohne Token läuft die App, 
 - **Das Ziel-Repo ist öffentlich.** Lesen und Klonen gehen ohne Token. Private Repos sind noch nicht vorgesehen.
 - **Schreiben braucht trotzdem ein Token** (GitHub-Vorgabe): Branch anlegen, Datei committen, PR öffnen.
 - Ablage im Ziel-Repo: `docs/work/<TICKET>/intent.md` (später `spec.md`) auf dem Branch `<TICKET>/intent`
-  (später `<TICKET>/spec`), PR gegen den Default-Branch (beim Beispiel-Repo `master`).
+  (später `<TICKET>/spec`), PR gegen den Branch `showcase` (siehe [Showcase-Branch und Repo-Reset](#showcase-branch-und-repo-reset)).
 
 ## Einrichten
 
@@ -42,7 +42,7 @@ selbst ausprobiert, forkt es (oder nimmt ein eigenes öffentliches Repo) und tr�
 3. **Resource owner:** das Konto, dem das Ziel-Repo gehört.
 4. **Repository access:** **Only select repositories** → nur das Ziel-Repo auswählen.
 5. **Permissions → Repository permissions:**
-   - **Contents:** Read and write (Branch anlegen, Datei committen, Branch löschen)
+   - **Contents:** Read and write (Branch anlegen, Datei committen, Branch löschen, Tag anlegen, `showcase` zurücksetzen)
    - **Pull requests:** Read and write (PR öffnen, Status lesen, PR schließen)
    - **Metadata:** Read-only (setzt GitHub automatisch)
 6. **Generate token** und den Wert (`github_pat_…`) kopieren — GitHub zeigt ihn nur einmal.
@@ -56,24 +56,46 @@ TARGET_REPO=https://github.com/<dein-konto>/node-express-realworld-example-app
 
 Die Datei ist in Git ignoriert. Nach einer Änderung die App neu starten.
 
+## Showcase-Branch und Repo-Reset
+
+Für Vorführungen lässt sich das Ziel-Repo auf seinen Ausgangsstand zurücksetzen, ohne dass sich die Historie von
+`master` ändert:
+
+- **Arbeitsbranch `showcase`:** PRs der App gehen gegen `showcase`; Inhalte und Stufen werden von dort gelesen,
+  Links in der App zeigen auf `blob/showcase/…`. **`master` bleibt unberührt.**
+- **Ausgangsstand = Tag `showcase-base`.** Beim Start (mit Token) legt die App fehlende Teile selbst an: fehlt der
+  Tag, kommt er auf den aktuellen Stand des Default-Branches; fehlt `showcase`, kommt der Branch auf den Tag.
+  Im Repo ist nichts vorzubereiten. Soll der Ausgangsstand wandern, den Tag von Hand verschieben.
+- **Repo-Reset:** offene PRs der App schließen, alle Branches `<TICKET>/intent|spec` bekannter Tickets löschen
+  (auch Reste gemergter PRs), dann `showcase` per Force auf `showcase-base` setzen. Danach stehen alle Tickets in
+  Stufe 1 Plan.
+- **Auslöser:** der **Reset**-Button immer; ein Neustart nur mit `RESET_ON_START=true` in `apps/web/.env.local`.
+  Ohne die Variable lässt ein Neustart `showcase` in Ruhe — praktisch beim Entwickeln.
+- **Rechte:** das Token braucht keine weiteren Rechte (Contents: Read and write deckt Tag und Force-Update ab).
+  **Ein Branch-Schutz auf `showcase` verhindert den Reset;** die App läuft dann mit dem bisherigen Stand weiter
+  und zeigt die Meldung unter dem Reset-Button.
+
 ## Verhalten beim Start
 
 Bei jedem Start (und beim **Reset**-Button, der vorher die Datenbank leert):
 
 1. **Tickets einlesen:** jede Datei `examples/tickets/*.md` wird ein Ticket (siehe
    [`examples/tickets/README.md`](examples/tickets/README.md)). Geänderter Text wird übernommen, Stufe und Zustand bleiben.
-2. **Merges nachziehen:** PRs, die gemergt wurden, während die App aus war, schieben ihr Ticket weiter.
-3. **Aufräumen:** **alle offenen PRs der App werden geschlossen und ihre Branches gelöscht** — erkannt am
+2. **Showcase vorbereiten:** Tag `showcase-base` und Branch `showcase` anlegen, falls sie fehlen.
+3. **Merges nachziehen:** PRs, die gemergt wurden, während die App aus war, schieben ihr Ticket weiter
+   (entfällt beim Repo-Reset).
+4. **Aufräumen:** **alle offenen PRs der App werden geschlossen und ihre Branches gelöscht** — erkannt am
    Branch-Namen `<TICKET>/intent` bzw. `<TICKET>/spec` eines bekannten Tickets. PRs anderer Branches bleiben
    unberührt. GitHub kann PRs nicht löschen; geschlossene PRs bleiben in der Historie des Repos.
-4. **Stufe ableiten:** liegt `docs/work/<TICKET>/spec.md` auf dem Default-Branch → Fertig; liegt dort
-   `intent.md` → Stufe 2 Design; sonst Stufe 1 Plan. Gemergte Artefakte bleiben also erhalten.
+5. **Repo-Reset** (nur Reset-Button oder `RESET_ON_START=true`): siehe oben.
+6. **Stufe ableiten:** liegt `docs/work/<TICKET>/spec.md` auf `showcase` → Fertig; liegt dort
+   `intent.md` → Stufe 2 Design; sonst Stufe 1 Plan. Ohne Repo-Reset bleiben gemergte Artefakte also erhalten.
 
 Ohne Token oder wenn GitHub nicht erreichbar ist, startet die App mit dem Stand der Datenbank und schreibt eine
-Warnung ins Server-Log.
+Warnung ins Server-Log; beim Reset-Button erscheinen die Warnungen zusätzlich unter dem Button.
 Jede GitHub-Anfrage bricht nach 15 Sekunden ab. Fehlt der Ordner `examples/tickets`, startet die App nicht
 (Meldung `[startup] App konnte nicht starten` im Server-Log). Der **Reset**-Button fragt vorher nach, weil er die
-Datenbank leert und offene PRs der App schließt.
+Datenbank leert, offene PRs der App schließt und `showcase` zurücksetzt.
 
 ## Ablauf (Stufe 1)
 
@@ -81,7 +103,7 @@ Datenbank leert und offene PRs der App schließt.
 2. Der Agent liest das Ticket und den Klon des Ziel-Repos. Bei einer blockierenden Unklarheit stellt er eine
    **Rückfrage** in der App; die Antwort fließt in den nächsten Lauf und landet unter „Geklärte Rückfragen“.
 3. Die App legt `docs/work/<TICKET>/intent.md` auf dem Branch `<TICKET>/intent` an und öffnet den PR
-   `<TICKET>: Intent`.
+   `<TICKET>: Intent` gegen `showcase`.
 4. Auf GitHub prüfen und **mergen** — innerhalb von 60 Sekunden (sofort beim Öffnen der Ticketseite) steht das
    Ticket in Stufe 2 Design, der Inhalt des Intent ist in der App sichtbar. **Schließen ohne Merge** setzt das
    Ticket auf „bereit“ zurück und löscht den Branch.
@@ -123,6 +145,7 @@ Abhängigkeitsrichtung: `web → core → shared`. Domäne und Use Cases importi
 | `REPO_CACHE_DIR`        | `$TMPDIR/repo-cache`                                                 | Ablage des Klons                            |
 | `DB_PATH`               | `apps/web/data/refinement.db`                                        | SQLite-Datei                                |
 | `REFINEMENT_TIMEOUT_MS` | `600000` (10 min)                                                    | maximale Laufzeit eines Agent-Laufs         |
+| `RESET_ON_START`        | —                                                                    | `true`: jeder Start setzt `showcase` zurück |
 
 ## Befehle
 

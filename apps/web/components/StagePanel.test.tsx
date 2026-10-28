@@ -6,7 +6,7 @@ import { StagePanel, stripFrontMatter } from './StagePanel'
 const DONE: StageViewDto = {
   stage: 'plan',
   path: 'docs/work/CB-2/intent.md',
-  fileUrl: 'https://github.com/o/r/blob/HEAD/docs/work/CB-2/intent.md',
+  fileUrl: 'https://github.com/o/r/blob/showcase/docs/work/CB-2/intent.md',
   completed: true,
   pr: { number: 1, url: 'https://github.com/o/r/pull/1', state: 'merged' },
   mergedAt: new Date('2026-10-28T12:00:00Z'),
@@ -14,7 +14,7 @@ const DONE: StageViewDto = {
 }
 
 const OPEN: StageViewDto = {
-  stage: 'design', path: 'docs/work/CB-2/spec.md', fileUrl: 'https://github.com/o/r/blob/HEAD/docs/work/CB-2/spec.md',
+  stage: 'design', path: 'docs/work/CB-2/spec.md', fileUrl: 'https://github.com/o/r/blob/showcase/docs/work/CB-2/spec.md',
   completed: false, pr: null, mergedAt: null, content: null,
 }
 
