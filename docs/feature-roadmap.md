@@ -69,7 +69,10 @@ dort stehen Tickets, Reihenfolge und Akzeptanzkriterien. Überblick über die Et
 
 ### Erster echter Use Case
 
-**Backlog Refinement gegen ein Code-Repo** (zunächst [qvest-digital/coffee-chat](https://github.com/qvest-digital/coffee-chat), D8).
+**Backlog Refinement gegen ein Code-Repo** — Ziel-Repo ist der eigene Fork
+[wojciechlaka/node-express-realworld-example-app](https://github.com/wojciechlaka/node-express-realworld-example-app)
+(Blog-API „Conduit“: TypeScript, Express, Prisma; D8). Anfangs zielte die Engine auf
+[qvest-digital/coffee-chat](https://github.com/qvest-digital/coffee-chat).
 
 Warum dieser Zuschnitt zuerst?
 
@@ -95,9 +98,10 @@ Warum dieser Zuschnitt zuerst?
 ### Architektur-Bausteine
 
 - **Stack: TypeScript end-to-end** (D2) — ein Repo, eine Sprache, geteilte Typen
-- Frontend: Vite / React
-- Backend: Node.js / Hono
-- Datenhaltung: **SQLite** (lokal, kein Infra-Overhead in der MUP-Phase) (D2)
+- App: **Next.js 16** (App Router) als einziger Prozess — Server Components lesen, Server Actions
+  schreiben, eine SSE-Route streamt den Fortschritt (D19)
+- Fachkern: `packages/core` nach **Ports & Adapters**; Verträge in `packages/shared` (Zod) (D19)
+- Datenhaltung: **SQLite** via Drizzle (lokal, kein Infra-Overhead in der MUP-Phase) (D2)
 - Orchestrierung: **kein** eigener Agent-Service — Coding-Agent als CLI (D3)
 - Logging: AuditEvents und AgentRuns persistent (D6)
 - Datenmodell: siehe [docs/datenmodell.md](datenmodell.md)
