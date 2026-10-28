@@ -6,7 +6,7 @@ import { createSqliteAgentRunRepository } from './adapters/sqlite/agentRunReposi
 import { createSqliteArtifactRepository } from './adapters/sqlite/artifactRepository'
 import { createSqliteAuditLog } from './adapters/sqlite/auditLog'
 import { createMarkdownTicketSource } from './adapters/markdownTickets/markdownTicketSource'
-import { createGitHubCodeHost } from './adapters/github/githubCodeHost'
+import { createGitHubCodeHost, parseGitHubRepoUrl } from './adapters/github/githubCodeHost'
 import { createClaudeCliAgentRunner } from './adapters/claudeCli'
 import { createGitRepoProvider } from './adapters/git/repoCache'
 import { createNodeEventPublisher } from './adapters/nodeEvents/nodeEventPublisher'
@@ -44,6 +44,8 @@ export function resolveCorePaths(coreDir: string): Pick<EngineConfig, 'migration
 
 /** Composition of the production adapters. Call once per process and keep the result. */
 export function createRefinementEngine(config: EngineConfig): UseCases {
+  // Fail at start with the clear message, with or without token.
+  parseGitHubRepoUrl(config.targetRepo)
   const db = createSqliteDatabase({ path: config.dbPath, migrationsFolder: config.migrationsFolder })
   return createUseCases({
     tickets: createSqliteTicketRepository(db),

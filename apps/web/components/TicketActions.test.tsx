@@ -89,6 +89,13 @@ describe('TicketActions', () => {
     expect(screen.getByRole('button', { name: 'Antworten' })).toBeInTheDocument()
   })
 
+  it('lets the user cancel while waiting for an answer', async () => {
+    vi.mocked(stopRunAction).mockResolvedValue({ ok: true, data: undefined })
+    renderActions({ state: 'awaiting_answer', pendingQuestion: 'Frage?' })
+    fireEvent.click(screen.getByRole('button', { name: 'Abbrechen' }))
+    await waitFor(() => expect(stopRunAction).toHaveBeenCalledWith('CB-2'))
+  })
+
   it('links the open PR while in review', () => {
     renderActions({ state: 'in_review', openPr: { number: 3, url: 'https://github.com/o/r/pull/3', state: 'open' } })
     expect(screen.getByRole('link', { name: 'PR #3 öffnen' })).toHaveAttribute('href', 'https://github.com/o/r/pull/3')

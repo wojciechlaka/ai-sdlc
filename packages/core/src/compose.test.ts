@@ -39,4 +39,18 @@ describe('createRefinementEngine', () => {
     expect(() => engine.startStage('CB-1', { model: 'm' })).toThrow('GITHUB_TOKEN')
     fs.rmSync(dir, { recursive: true, force: true })
   })
+
+  it('rejects an invalid TARGET_REPO even without token', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'engine-'))
+    expect(() =>
+      createRefinementEngine({
+        dbPath: path.join(dir, 'refinement.db'),
+        ...resolveCorePaths(CORE_DIR),
+        ticketsDir: path.join(ROOT_DIR, 'examples', 'tickets'),
+        rootDir: ROOT_DIR,
+        targetRepo: 'not-a-url',
+      }),
+    ).toThrow('TARGET_REPO')
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
 })

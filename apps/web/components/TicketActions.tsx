@@ -97,6 +97,12 @@ export function TicketActions({ ticket, tokenConfigured }: Props) {
         <QuestionPanel ticketKey={ticket.key} question={ticket.pendingQuestion} onAnswered={() => router.refresh()} />
       )}
 
+      {ticket.state === 'awaiting_answer' && (
+        <Button variant="outline" disabled={pending} onClick={() => run(() => stopRunAction(ticket.key))}>
+          Abbrechen
+        </Button>
+      )}
+
       {((ticket.state === 'awaiting_answer' && !ticket.pendingQuestion) || (ticket.state === 'in_review' && !ticket.openPr)) && (
         <p className="text-sm text-slate-500">Zustand wird abgeglichen …</p>
       )}

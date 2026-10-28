@@ -44,7 +44,7 @@ interface GitHubPull {
   html_url: string
   state: string
   merged_at: string | null
-  head: { ref: string }
+  head: { ref: string; repo?: { full_name: string } | null }
 }
 
 function toPullRequest(pr: GitHubPull): PullRequest {
@@ -137,7 +137,10 @@ export function createGitHubCodeHost(options: GitHubCodeHostOptions): CodeHost {
 
     listOpenPullRequests: () =>
       step('Offene PRs lesen', async () =>
-        (await octokit.paginate(octokit.rest.pulls.list, { owner, repo, state: 'open', per_page: 100 })).map((p) => toPullRequest(p))),
+        (await octokit.paginate(octokit.rest.pulls.list, { owner, repo, state: 'open', per_page: 100 }))
+          // PRs from forks may reuse our branch names; they are not ours to touch.
+          .filter((p) => p.head.repo?.full_name === `${owner}/${repo}`)
+          .map((p) => toPullRequest(p))),
 
     closePullRequest: (number) =>
       step(`PR #${number} schließen`, async () => {

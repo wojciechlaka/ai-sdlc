@@ -35,7 +35,7 @@ function setup(routes: Record<string, Route> = {}) {
 const base64 = (text: string) => Buffer.from(text, 'utf-8').toString('base64')
 const INTENT_PATH = 'docs/work/CB-1/intent.md'
 const pr = (patch: Record<string, unknown> = {}) => ({
-  number: 7, html_url: 'https://github.com/o/r/pull/7', state: 'open', merged_at: null, head: { ref: 'CB-1/intent' }, ...patch,
+  number: 7, html_url: 'https://github.com/o/r/pull/7', state: 'open', merged_at: null, head: { ref: 'CB-1/intent', repo: { full_name: 'o/r' } }, ...patch,
 })
 
 describe('request timeout', () => {
@@ -136,10 +136,24 @@ describe('pull requests', () => {
 
   it('lists open PRs with their head branch', async () => {
     const { gh, codeHost } = setup({
-      'GET /repos/o/r/pulls': { status: 200, body: [pr(), pr({ number: 8, head: { ref: 'feature/x' } })] },
+      'GET /repos/o/r/pulls': { status: 200, body: [pr(), pr({ number: 8, head: { ref: 'feature/x', repo: { full_name: 'o/r' } } })] },
     })
     expect((await codeHost.listOpenPullRequests()).map((p) => p.headBranch)).toEqual(['CB-1/intent', 'feature/x'])
     expect(gh.calls.find((c) => c.path === '/repos/o/r/pulls')?.query).toContain('state=open')
+  })
+
+  it('ignores PRs whose head lives in another repository (forks)', async () => {
+    const { codeHost } = setup({
+      'GET /repos/o/r/pulls': {
+        status: 200,
+        body: [
+          pr({ number: 9, head: { ref: 'CB-1/intent', repo: { full_name: 'fork/r' } } }),
+          pr({ number: 10, head: { ref: 'CB-1/intent', repo: null } }),
+          pr({ number: 11 }),
+        ],
+      },
+    })
+    expect((await codeHost.listOpenPullRequests()).map((p) => p.number)).toEqual([11])
   })
 })
 
