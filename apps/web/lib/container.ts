@@ -1,3 +1,4 @@
+import 'server-only'
 import path from 'path'
 import { createRefinementEngine, resolveCorePaths, type UseCases } from '@refinement/core'
 
