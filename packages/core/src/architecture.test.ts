@@ -76,6 +76,22 @@ describe('Architektur (packages/core)', () => {
     await expect(rule).toPassAsync()
   })
 
+  // hooks/ enthält eigenständige Node-Skripte (Guard/Audit, spec §13): Claude Code startet sie als Prozess,
+  // die Adapter kennen nur ihren Pfad (`hooksDir` aus compose). Sie dürfen nichts aus src laden und umgekehrt.
+  it('die Hook-Skripte hängen nicht von src ab', async () => {
+    const rule = projectFiles(TSCONFIG)
+      .inFolder('hooks/**', { except: { withName: '*.test.ts' } })
+      .shouldNot()
+      .dependOnFiles()
+      .inPath('src/**')
+    await expect(rule).toPassAsync()
+  })
+
+  it('kein Produktivcode in src importiert die Hook-Skripte', async () => {
+    const rule = projectFiles(TSCONFIG).inPath('src/**', PRODUCTION).shouldNot().dependOnFiles().inPath('hooks/**')
+    await expect(rule).toPassAsync()
+  })
+
   it('der Produktivcode in src ist frei von Zyklen', async () => {
     const rule = projectFiles(TSCONFIG).inPath('src/**', PRODUCTION).should().haveNoCycles()
     await expect(rule).toPassAsync()
