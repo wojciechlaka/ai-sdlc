@@ -15,7 +15,7 @@ export default defineConfig([
             message: 'Hexagonal: Domäne, Ports und Use Cases dürfen keine Adapter importieren.',
           },
           {
-            group: ['better-sqlite3', 'drizzle-orm', 'drizzle-orm/*', 'child_process', 'fs', 'fs/promises', 'events'],
+            group: ['better-sqlite3', 'drizzle-orm', 'drizzle-orm/*', 'child_process', 'fs', 'fs/promises', 'events', 'node:*'],
             message: 'Hexagonal: I/O gehört in einen Adapter hinter einem Port.',
           },
         ],
