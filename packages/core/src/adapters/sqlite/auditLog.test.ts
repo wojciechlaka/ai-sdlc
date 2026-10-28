@@ -1,23 +1,40 @@
-import { describe, it, expect } from 'vitest'
-import { eq } from 'drizzle-orm'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { createTestDatabase } from '../../testing/testDb'
+import { sourceTicket } from '../../testing/fakes'
 import { createSqliteTicketRepository } from './ticketRepository'
 import { createSqliteAuditLog } from './auditLog'
-import { auditEvents } from './schema'
+import type { AuditLog, TicketRepository } from '../../ports'
 
-describe('createSqliteAuditLog', () => {
-  it('appends events with optional payload', () => {
-    const db = createTestDatabase()
-    const ticket = createSqliteTicketRepository(db).create({ title: 'T', description: 'D' })
-    const audit = createSqliteAuditLog(db)
+let tickets: TicketRepository
+let audit: AuditLog
 
-    audit.append({ ticketId: ticket.id, actor: 'human', type: 'ticket_created' })
-    audit.append({ ticketId: ticket.id, actor: 'system', type: 'run_started', payload: { runId: 'r1' } })
+beforeEach(() => {
+  const db = createTestDatabase()
+  tickets = createSqliteTicketRepository(db)
+  audit = createSqliteAuditLog(db)
+  tickets.upsertFromSource([sourceTicket('CB-1'), sourceTicket('CB-2')])
+})
 
-    const rows = db.select().from(auditEvents).where(eq(auditEvents.ticketId, ticket.id)).all()
-    expect(rows.map((r) => [r.actor, r.type, r.payload])).toEqual([
-      ['human', 'ticket_created', null],
-      ['system', 'run_started', { runId: 'r1' }],
-    ])
+describe('audit log', () => {
+  it('lists the entries of one ticket in insertion order', () => {
+    audit.append({ ticketKey: 'CB-1', actor: 'system', type: 'run_started', payload: { runId: 'a' } })
+    audit.append({ ticketKey: 'CB-2', actor: 'system', type: 'run_started' })
+    audit.append({ ticketKey: 'CB-1', actor: 'agent', type: 'question_asked', payload: { question: 'Wer?' } })
+
+    const entries = audit.listForTicket('CB-1')
+    expect(entries.map((e) => e.type)).toEqual(['run_started', 'question_asked'])
+    expect(entries[1]).toMatchObject({ ticketKey: 'CB-1', actor: 'agent', payload: { question: 'Wer?' } })
+    expect(entries[1]?.createdAt).toBeInstanceOf(Date)
+  })
+
+  it('stores a missing payload as null', () => {
+    audit.append({ ticketKey: 'CB-2', actor: 'system', type: 'cleanup' })
+    expect(audit.listForTicket('CB-2')[0]?.payload).toBeNull()
+  })
+
+  it('removes entries with the ticket', () => {
+    audit.append({ ticketKey: 'CB-1', actor: 'system', type: 'cleanup' })
+    tickets.clear()
+    expect(audit.listForTicket('CB-1')).toEqual([])
   })
 })
