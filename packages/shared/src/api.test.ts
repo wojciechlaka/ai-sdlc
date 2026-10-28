@@ -1,77 +1,61 @@
 import { describe, it, expect } from 'vitest'
-import {
-  TicketSchema,
-  TicketDetailSchema,
-  CreateTicketInput,
-  StartRefinementInput,
-  AnswerInput,
-} from './api'
+import { AnswerInput, StartStageInput, TicketDetailSchema, TicketSchema } from './api'
 
 const NOW = new Date('2026-10-28T10:00:00Z')
 
 const TICKET = {
-  id: 'T-1',
-  title: 'CC-2: Timer',
-  description: 'Desc',
-  status: 'backlog' as const,
-  iteration: 0,
-  createdAt: NOW,
+  key: 'CB-2',
+  title: 'Lesezeit bei Artikeln anzeigen',
+  description: 'Leser möchten vorher sehen, wie lange ein Artikel dauert.',
+  priority: 'Mittel',
+  sourcePath: 'examples/tickets/cb-2-lesezeit.md',
+  stage: 'plan' as const,
+  state: 'ready' as const,
+  openPr: null,
   updatedAt: NOW,
 }
 
 describe('TicketSchema', () => {
-  it('accepts a ticket with a T-{n} id', () => {
+  it('accepts a ticket with a KEY-n key', () => {
     expect(TicketSchema.parse(TICKET)).toEqual(TICKET)
   })
 
-  it('rejects numeric ids', () => {
-    expect(TicketSchema.safeParse({ ...TICKET, id: 1 }).success).toBe(false)
+  it('rejects keys that are not upper-case KEY-n', () => {
+    expect(TicketSchema.safeParse({ ...TICKET, key: 'cb-2' }).success).toBe(false)
+    expect(TicketSchema.safeParse({ ...TICKET, key: 'CB2' }).success).toBe(false)
   })
 
-  it('rejects unknown status values', () => {
-    expect(TicketSchema.safeParse({ ...TICKET, status: 'done' }).success).toBe(false)
+  it('rejects unknown stages and states', () => {
+    expect(TicketSchema.safeParse({ ...TICKET, stage: 'build' }).success).toBe(false)
+    expect(TicketSchema.safeParse({ ...TICKET, state: 'refining' }).success).toBe(false)
   })
 })
 
 describe('TicketDetailSchema', () => {
-  it('accepts a ticket without runs', () => {
-    expect(TicketDetailSchema.parse({ ...TICKET, latestRun: null }).latestRun).toBeNull()
-  })
-
-  it('accepts a ticket with a running run', () => {
-    const run = {
-      id: 'abc', ticketId: 'T-1', iteration: 1, trigger: 'initial', status: 'running', model: 'm',
-      output: null, costUsd: null, inputTokens: null, cacheCreationTokens: null, cacheReadTokens: null,
-      outputTokens: null, startedAt: NOW, finishedAt: null,
-    }
-    expect(TicketDetailSchema.parse({ ...TICKET, latestRun: run }).latestRun?.id).toBe('abc')
-  })
-})
-
-describe('CreateTicketInput', () => {
-  it('requires a non-blank title and description', () => {
-    expect(CreateTicketInput.safeParse({ title: '  ', description: 'x' }).success).toBe(false)
-    expect(CreateTicketInput.safeParse({ title: 'x', description: '' }).success).toBe(false)
-    expect(CreateTicketInput.parse({ title: 'x', description: 'y' })).toEqual({ title: 'x', description: 'y' })
-  })
-})
-
-describe('StartRefinementInput', () => {
-  it('defaults acceptanceCriteria to an empty string', () => {
-    expect(StartRefinementInput.parse({ repo: 'git@github.com:a/b.git', model: 'm' })).toEqual({
-      repo: 'git@github.com:a/b.git', model: 'm', acceptanceCriteria: '',
+  it('accepts stages, log and a pending question', () => {
+    const detail = TicketDetailSchema.parse({
+      ...TICKET,
+      state: 'awaiting_answer',
+      stages: [{
+        stage: 'plan', path: 'docs/work/CB-2/intent.md',
+        fileUrl: 'https://github.com/o/r/blob/HEAD/docs/work/CB-2/intent.md',
+        completed: false, pr: null, mergedAt: null, content: null,
+      }],
+      log: [{ actor: 'agent', type: 'question_asked', payload: { question: 'Wer?' }, createdAt: NOW }],
+      pendingQuestion: 'Wer?',
     })
-  })
-
-  it('requires repo and model', () => {
-    expect(StartRefinementInput.safeParse({ repo: '', model: 'm' }).success).toBe(false)
-    expect(StartRefinementInput.safeParse({ repo: 'r' }).success).toBe(false)
+    expect(detail.pendingQuestion).toBe('Wer?')
+    expect(detail.stages[0]?.stage).toBe('plan')
   })
 })
 
-describe('AnswerInput', () => {
-  it('rejects blank answers', () => {
-    expect(AnswerInput.safeParse({ answer: '   ' }).success).toBe(false)
-    expect(AnswerInput.parse({ answer: 'Postgres' })).toEqual({ answer: 'Postgres' })
+describe('inputs', () => {
+  it('StartStageInput requires a model', () => {
+    expect(StartStageInput.safeParse({ model: ' ' }).success).toBe(false)
+    expect(StartStageInput.parse({ model: 'claude-sonnet-4-6' })).toEqual({ model: 'claude-sonnet-4-6' })
+  })
+
+  it('AnswerInput rejects blank answers', () => {
+    expect(AnswerInput.safeParse({ answer: '  ' }).success).toBe(false)
   })
 })

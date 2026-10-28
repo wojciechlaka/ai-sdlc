@@ -1,64 +1,77 @@
 import { z } from 'zod'
-import { AgentOutputSchema } from './refinementSchema'
+import { ArtifactStageSchema, PrStateSchema, StageSchema, TicketStateSchema } from './stages'
 
 const notBlank = (message: string) => z.string().refine((value) => value.trim().length > 0, message)
 
-export const TicketStatusSchema = z.enum(['backlog', 'refining', 'review', 'ready', 'failed'])
-export type TicketStatus = z.infer<typeof TicketStatusSchema>
-
-export const RunTriggerSchema = z.enum(['initial', 'answer', 'rework'])
-export type RunTrigger = z.infer<typeof RunTriggerSchema>
-
-export const RunStatusSchema = z.enum(['running', 'succeeded', 'failed', 'timeout'])
-export type RunStatus = z.infer<typeof RunStatusSchema>
+export const PullRequestRefSchema = z.object({
+  number: z.number().int(),
+  url: z.string(),
+  state: PrStateSchema,
+})
+export type PullRequestRefDto = z.infer<typeof PullRequestRefSchema>
 
 export const TicketSchema = z.object({
-  id: z.string().regex(/^T-\d+$/),
+  /** Ticket key from the source file, e.g. `CB-3`. */
+  key: z.string().regex(/^[A-Z][A-Z0-9]*-\d+$/),
   title: z.string(),
   description: z.string(),
-  status: TicketStatusSchema,
-  iteration: z.number().int(),
-  createdAt: z.date(),
+  priority: z.string().nullable(),
+  /** Source file relative to the repository root, e.g. `examples/tickets/cb-3-kommentare-melden.md`. */
+  sourcePath: z.string(),
+  stage: StageSchema,
+  state: TicketStateSchema,
+  /** PR of the current stage while the ticket is `in_review`. */
+  openPr: PullRequestRefSchema.nullable(),
   updatedAt: z.date(),
 })
 export type TicketDto = z.infer<typeof TicketSchema>
 
-export const AgentRunSchema = z.object({
-  id: z.string(),
-  ticketId: z.string(),
-  iteration: z.number().int(),
-  trigger: RunTriggerSchema,
-  status: RunStatusSchema,
-  model: z.string(),
-  output: AgentOutputSchema.nullable(),
-  costUsd: z.number().nullable(),
-  inputTokens: z.number().int().nullable(),
-  cacheCreationTokens: z.number().int().nullable(),
-  cacheReadTokens: z.number().int().nullable(),
-  outputTokens: z.number().int().nullable(),
-  startedAt: z.date(),
-  finishedAt: z.date().nullable(),
+export const StageViewSchema = z.object({
+  stage: ArtifactStageSchema,
+  /** Artifact path in the target repository, e.g. `docs/work/CB-3/intent.md`. */
+  path: z.string(),
+  /** Link to the file on the default branch. */
+  fileUrl: z.string(),
+  /** True once the artifact is merged and the ticket moved on. */
+  completed: z.boolean(),
+  /** Latest PR the app opened for this stage. */
+  pr: PullRequestRefSchema.nullable(),
+  mergedAt: z.date().nullable(),
+  /** File content read live from the default branch; null if not merged or not readable. */
+  content: z.string().nullable(),
 })
-export type AgentRunDto = z.infer<typeof AgentRunSchema>
+export type StageViewDto = z.infer<typeof StageViewSchema>
+
+export const AuditActorSchema = z.enum(['human', 'agent', 'system'])
+
+export const AuditEventSchema = z.object({
+  actor: AuditActorSchema,
+  type: z.string(),
+  payload: z.unknown(),
+  createdAt: z.date(),
+})
+export type AuditEventDto = z.infer<typeof AuditEventSchema>
 
 export const TicketDetailSchema = TicketSchema.extend({
-  latestRun: AgentRunSchema.nullable(),
+  stages: z.array(StageViewSchema),
+  log: z.array(AuditEventSchema),
+  /** Question of the agent while the ticket is `awaiting_answer`. */
+  pendingQuestion: z.string().nullable(),
 })
 export type TicketDetailDto = z.infer<typeof TicketDetailSchema>
 
-export const CreateTicketInput = z.object({
-  title: notBlank('Titel ist erforderlich'),
-  description: notBlank('Beschreibung ist erforderlich'),
+export const SettingsSchema = z.object({
+  /** `TARGET_REPO` */
+  repoUrl: z.string(),
+  /** False without `GITHUB_TOKEN`: stages cannot be started. */
+  tokenConfigured: z.boolean(),
 })
-export type CreateTicketInput = z.infer<typeof CreateTicketInput>
+export type SettingsDto = z.infer<typeof SettingsSchema>
 
-/** `repo` is not checked as URL on purpose: SSH remotes and local paths are valid git sources. */
-export const StartRefinementInput = z.object({
-  repo: notBlank('Repository ist erforderlich'),
+export const StartStageInput = z.object({
   model: notBlank('Modell ist erforderlich'),
-  acceptanceCriteria: z.string().default(''),
 })
-export type StartRefinementInput = z.infer<typeof StartRefinementInput>
+export type StartStageInput = z.infer<typeof StartStageInput>
 
 export const AnswerInput = z.object({
   answer: notBlank('Antwort ist erforderlich'),

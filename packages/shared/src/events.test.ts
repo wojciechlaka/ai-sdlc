@@ -1,15 +1,14 @@
 import { describe, it, expect } from 'vitest'
-import { RefinementEventSchema } from './events'
+import { TicketEventSchema } from './events'
 
-describe('RefinementEventSchema', () => {
-  it('accepts the three event types', () => {
-    expect(RefinementEventSchema.parse({ type: 'progress', ticketId: 'T-1', message: 'm' }).type).toBe('progress')
-    expect(RefinementEventSchema.parse({ type: 'question', ticketId: 'T-1', question: 'q' }).type).toBe('question')
-    expect(RefinementEventSchema.parse({ type: 'status', ticketId: 'T-1', status: 'review' }).type).toBe('status')
+describe('TicketEventSchema', () => {
+  it('accepts progress, question and state events', () => {
+    expect(TicketEventSchema.parse({ type: 'progress', ticketKey: 'CB-1', message: 'm' }).type).toBe('progress')
+    expect(TicketEventSchema.parse({ type: 'question', ticketKey: 'CB-1', question: 'q' }).type).toBe('question')
+    expect(TicketEventSchema.parse({ type: 'state', ticketKey: 'CB-1', stage: 'design', state: 'ready' }).type).toBe('state')
   })
 
-  it('rejects unknown types and invalid status values', () => {
-    expect(RefinementEventSchema.safeParse({ type: 'other', ticketId: 'T-1' }).success).toBe(false)
-    expect(RefinementEventSchema.safeParse({ type: 'status', ticketId: 'T-1', status: 'done' }).success).toBe(false)
+  it('rejects the old status event', () => {
+    expect(TicketEventSchema.safeParse({ type: 'status', ticketId: 'T-1', status: 'review' }).success).toBe(false)
   })
 })
