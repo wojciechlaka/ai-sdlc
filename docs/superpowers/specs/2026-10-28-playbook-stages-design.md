@@ -161,3 +161,44 @@ Treibende Adapter (Next.js): `instrumentation.ts` ruft `startup` und startet ein
   löscht deren Branches; gemergte Artefakte bleiben.
 - README dokumentiert: Token einrichten, `TARGET_REPO`, Annahme öffentliches Repo, Verhalten beim Start,
   neues Ticket per md-Datei.
+
+## 12. Nachtrag: Repo-Reset über einen Showcase-Branch
+
+Stand 2026-10-28, nach dem ersten echten Durchlauf. Ziel: Für Vorführungen lässt sich das Ziel-Repo auf den
+Ausgangsstand zurücksetzen, **ohne** dass die Historie von `master` wächst oder umgeschrieben wird.
+
+**Arbeitsbranch statt Default-Branch.** Die App arbeitet gegen den Branch `showcase` (fest vorgegeben). PRs gehen
+gegen `showcase`, Inhalte (`docs/work/…`) und Stufen werden von `showcase` gelesen, Links zeigen auf
+`blob/showcase/…`. `master` bleibt unberührt. Das ersetzt in §2 „PR gegen den Default-Branch“.
+
+**Ausgangsstand.** Der Tag `showcase-base` markiert ihn. Beim Start (mit Token) gilt:
+- fehlt der Tag, legt die App ihn auf den aktuellen Stand des Default-Branches (`master`);
+- fehlt `showcase`, legt die App den Branch auf den Stand des Tags.
+Manuelle Vorbereitung im Repo ist nicht nötig. Soll der Ausgangsstand später wandern, verschiebt man den Tag von Hand.
+
+**Repo-Reset.**
+1. offene PRs der App schließen und ihre Branches löschen (wie §3);
+2. Branches `<KEY>/intent|spec` aller bekannten Tickets löschen, auch ohne offenen PR (Reste gemergter PRs);
+3. `showcase` per Force auf `showcase-base` setzen — betrifft nur diesen Branch;
+4. Stufen ableiten (§3) — ohne `docs/work/` stehen alle Tickets in Stufe 1.
+
+**Auslöser.**
+- **Reset-Button:** DB leeren und Start mit Repo-Reset (immer).
+- **Neustart:** Repo-Reset nur mit `RESET_ON_START=true` in `apps/web/.env.local`; sonst Start wie in §3 (Merges
+  nachziehen, offene App-PRs schließen, Stufe ableiten). Damit trifft ein Neustart beim Entwickeln nicht das Repo.
+
+**Ports und Adapter.** `CodeHost` arbeitet gegen einen konfigurierten Basis-Branch (`baseBranch()` statt
+`defaultBranch()`; `readFile`, `createBranch`, `openPullRequest` beziehen sich darauf). Neu:
+`prepareBaseBranch()` (Tag und Branch anlegen, falls sie fehlen) und `resetBaseBranch()` (Basis-Branch per Force
+auf den Tag). Der GitHub-Adapter erhält `baseBranch` und `baselineTag` als Optionen. Use Case `startup({ resetRepo })`;
+`resetSystem` ruft ihn mit `resetRepo: true`.
+
+**Fehler.** Scheitert der Repo-Reset (z. B. Branch-Schutz auf `showcase`, fehlende Rechte), läuft die App mit dem
+DB-Stand weiter und schreibt eine Warnung; der Reset-Button zeigt die Meldung.
+
+**Doku.** README: Showcase-Branch und Tag, `RESET_ON_START`, PRs gehen gegen `showcase`, `master` bleibt
+unberührt; das Token braucht keine weiteren Rechte (Contents: Read and write deckt Tags und Force-Update ab,
+solange `showcase` nicht geschützt ist).
+
+**Tests.** Kern mit `FakeCodeHost` (Tag/Branch anlegen, Force-Reset, Reste-Branches löschen, Auslöser);
+GitHub-Adapter mit gemocktem `fetch` (Ref-Aufrufe inkl. `force: true`); Web: Reset-Text, Hinweis auf `showcase`.
