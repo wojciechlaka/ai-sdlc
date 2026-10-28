@@ -83,7 +83,7 @@
 </head>
 <body>
   <h1>Refinement Engine — Architektur</h1>
-  <p class="subtitle">AI-gestützte Ticket-Verfeinerung: Ein Agent analysiert Tickets gegen die Codebase und liefert strukturierte Refinements (Specs). Eine Next.js-App, Fachkern nach Ports &amp; Adapters.</p>
+  <p class="subtitle">Führt Tickets durch Stufe 1 (Plan → <code>intent.md</code>) und Stufe 2 (Design → <code>spec.md</code>) des AI-Native SDLC Playbooks. Ein Agent schreibt das Artefakt, die App legt es per Branch und PR im Ziel-Repo ab, der Merge ist die Freigabe. Stufe 1 läuft Ende zu Ende, Stufe 2 folgt. Eine Next.js-App, Fachkern nach Ports &amp; Adapters.</p>
 
   <div class="diagram">
     <img src="architecture.png" alt="Architekturdiagramm">
@@ -93,20 +93,21 @@
 
     <div class="block blue">
       <h2><span class="dot" style="background:#3b82f6"></span>Browser (blau)</h2>
-      <p>Die Web-Oberfläche unter <code>localhost:3000</code>. Hier legst du Tickets an, startest Refinements und beantwortest Rückfragen des Agenten. Jedes Ticket hat eine eigene URL (<code>/tickets/T-1</code>). React 19 Client Components für alles Interaktive: Live-Fortschritt, Timer, Rückfrage, Buttons.</p>
+      <p>Die Oberfläche unter <code>localhost:3000</code>: das <strong>Board</strong> mit den Spalten 1 Plan, 2 Design und Fertig und die <strong>Ticketseite</strong> (<code>/tickets/CB-2</code>) mit genau einer Aktion je Zustand — Plan starten, Stoppen, Rückfrage beantworten oder PR öffnen —, den Stufen mit Inhalt aus Git und dem Log. Die Seitenleiste zeigt Ziel-Repo, Branch <code>showcase</code> und den Reset.</p>
     </div>
 
     <div class="block yellow">
       <h2><span class="dot" style="background:#ca8a04"></span>packages/shared</h2>
-      <p>Zod-Verträge zwischen Kern und UI: Ticket- und Run-DTOs, Eingaben (Ticket anlegen, Refine, Antwort), die drei Event-Typen und das Schema der Agent-Ausgabe. Der Kern validiert damit, die UI nutzt die Typen — es gibt keine von Hand nachgebauten API-Typen.</p>
+      <p>Zod-Verträge zwischen Kern und UI: Ticket-, Stufen- und Log-DTOs, Eingaben (Modell, Antwort), die drei Event-Typen und das Schema der Agent-Ausgabe (<code>IntentAgentOutputSchema</code>: Rückfrage oder Intent). Der Kern validiert damit, die UI nutzt die Typen.</p>
     </div>
 
     <div class="block green" style="grid-column: span 2">
       <h2><span class="dot" style="background:#16a34a"></span>apps/web — Next.js 16, ein Prozess (grün)</h2>
       <ul>
-        <li><strong>Server Components</strong> — rendern Ticket-Liste und Ticket-Detail auf dem Server und rufen dafür direkt die Use Cases auf</li>
-        <li><strong>Server Actions</strong> — Ticket anlegen, Refinement starten, Antwort senden, Stoppen, Löschen, Reset; danach wird die Seite neu geladen (<code>revalidatePath</code>)</li>
-        <li><strong>SSE-Route <code>/api/events</code></strong> — hält pro Browser-Tab einen Stream offen und reicht Ereignisse des Kerns durch</li>
+        <li><strong>Server Components</strong> — rendern Board und Ticketseite auf dem Server und rufen dafür direkt die Use Cases auf; die Ticketseite gleicht beim Öffnen den PR ab (<code>syncReviews</code>)</li>
+        <li><strong>Server Actions</strong> — <code>startStage</code>, <code>answerQuestion</code>, <code>stopRun</code>, <code>resetSystem</code>; danach wird die Seite neu geladen (<code>revalidatePath</code>)</li>
+        <li><strong>SSE-Route <code>/api/events</code></strong> — mit <code>?ticketKey=CB-2</code> für die Ticketseite, ohne für das Board; reicht Ereignisse des Kerns an den Tab durch</li>
+        <li><strong><code>instrumentation.ts</code></strong> — ruft beim Serverstart <code>startup</code> auf und startet den Abgleich der PRs alle 60 Sekunden</li>
         <li><strong>Composition Root <code>lib/container.ts</code></strong> — erzeugt einmal pro Prozess die Engine (Datenbank, Adapter, Event-Bus) und hält sie auf <code>globalThis</code></li>
       </ul>
     </div>
@@ -114,10 +115,10 @@
     <div class="block orange" style="grid-column: span 2">
       <h2><span class="dot" style="background:#ea580c"></span>packages/core — Hexagon (orange)</h2>
       <ul>
-        <li><strong>Use Cases</strong> — die Fachabläufe: Ticket anlegen, Refinement starten, Rückfrage beantworten, Stoppen, Löschen, Reset; Agent-Läufe laufen im Hintergrund weiter</li>
-        <li><strong>Domäne</strong> — reine Regeln ohne I/O: wann ein Refinement starten darf, wann eine Antwort angenommen wird, Aufbau des Frage-Antwort-Verlaufs, Fachfehler</li>
-        <li><strong>Ports</strong> — Schnittstellen, die der Kern braucht: Repositories, Audit-Log, AgentRunner, RepoProvider, EventPublisher</li>
-        <li><strong>Adapter</strong> — <code>sqlite</code> (Drizzle), <code>git</code> (Repo-Cache + Codebase-Summary), <code>claudeCli</code> (Agent als Subprocess, Zod-Validierung, ein Retry), <code>nodeEvents</code> (Event-Bus)</li>
+        <li><strong>Use Cases</strong> — <code>startStage</code> (Klon → Agent → Rückfrage oder Intent → Branch, Datei, PR), <code>answerQuestion</code>, <code>stopRun</code>, <code>syncReviews</code> (Merge → nächste Stufe, geschlossen → bereit), <code>startup</code> (Tickets einlesen, <code>showcase</code> vorbereiten, aufräumen, Stufe ableiten), <code>resetSystem</code> (Datenbank leeren, <code>startup</code> mit Repo-Reset); Agent-Läufe laufen im Hintergrund weiter</li>
+        <li><strong>Domäne</strong> — reine Regeln ohne I/O: Übergänge von Stufe und Zustand, Namen von Branch und Datei (<code>CB-2/intent</code>, <code>docs/work/CB-2/intent.md</code>), Markdown des Intent, Ordnung der Schlüssel, Fachfehler</li>
+        <li><strong>Ports</strong> — <code>TicketRepository</code>, <code>AgentRunRepository</code>, <code>ArtifactRepository</code>, <code>AuditLog</code>, <code>TicketSource</code>, <code>CodeHost</code>, <code>AgentRunner</code>, <code>RepoProvider</code>, <code>EventPublisher</code></li>
+        <li><strong>Adapter</strong> — <code>sqlite</code> (Drizzle), <code>markdownTickets</code> (liest <code>examples/tickets/*.md</code>), <code>github</code> (Octokit: Branch, Datei, PR, Tag, Reset von <code>showcase</code>), <code>git</code> (Repo-Klon + Codebase-Summary, ohne Token), <code>claudeCli</code> (Agent als Subprocess, Zod-Validierung, ein Retry), <code>nodeEvents</code> (Event-Bus)</li>
         <li><strong>Abhängigkeitsregel</strong> — Domäne, Ports und Use Cases importieren keine Adapter; eine ESLint-Regel prüft das</li>
       </ul>
     </div>
@@ -125,8 +126,10 @@
     <div class="block purple" style="grid-column: span 2">
       <h2><span class="dot" style="background:#9333ea"></span>Extern (lila)</h2>
       <ul>
-        <li><strong>SQLite-Datei</strong> — <code>apps/web/data/refinement.db</code>: Tickets, Agent-Läufe, Audit-Events</li>
-        <li><strong>Git-Repository</strong> — das zu analysierende Projekt, z. B. der Conduit-Fork; wird lokal gecacht</li>
+        <li><strong>SQLite-Datei</strong> — <code>apps/web/data/refinement.db</code>: Tabellen <code>tickets</code>, <code>agent_runs</code>, <code>artifacts</code>, <code>audit_events</code> — Stufe, Zustand, Verweise und Log, keine Inhalte</li>
+        <li><strong>GitHub-API</strong> — Ziel-Repo (Conduit-Fork): Branches <code>CB-2/intent</code>, PRs gegen <code>showcase</code>, Inhalte und Stufen von <code>showcase</code>; Tag <code>showcase-base</code> ist der Ausgangsstand, <code>master</code> bleibt unberührt. Schreiben braucht <code>GITHUB_TOKEN</code></li>
+        <li><strong>Repo-Klon</strong> — lokale Kopie des Ziel-Repos, die der Agent liest</li>
+        <li><strong>examples/tickets</strong> — Markdown-Dateien, die Jira-Tickets simulieren (<code># CB-2: Titel</code>)</li>
         <li><strong>claude CLI</strong> — bekommt den Prompt über stdin und liefert die Antwort als JSON-Stream über stdout</li>
       </ul>
     </div>
@@ -136,30 +139,30 @@
       <div class="arrows">
         <div class="arrow-block">
           <strong>↓ Server Actions (Browser → Server)</strong>
-          Befehle wie „Refinement starten“ oder „Antwort senden“. Der Kern prüft und validiert, Fachfehler kommen als Meldung zurück in die Oberfläche.
+          Befehle wie „Plan starten“, „Antworten“, „Stoppen“ oder „Reset“. Der Kern prüft Zustand und Eingabe, Fachfehler kommen als Meldung zurück in die Oberfläche.
         </div>
         <div class="arrow-block">
           <strong>↑ SSE (Server → Browser)</strong>
-          Live-Ereignisse während eines Laufs: Fortschritt erscheint sofort im Log; bei Status-Wechsel oder Rückfrage lädt der Browser die Seite neu und zeigt den aktuellen Stand.
+          Live-Ereignisse während eines Laufs: Fortschritt erscheint sofort auf der Ticketseite; bei Zustandswechsel oder Rückfrage lädt der Browser die Seite neu und zeigt den aktuellen Stand. Das Board hört auf alle Tickets.
         </div>
       </div>
     </div>
 
     <div class="block" style="background:#fff7ed; border-color:#fed7aa; grid-column: span 2">
       <h2><span class="dot" style="background:#ea580c"></span>Wie der Event-Bus funktioniert</h2>
-      <p style="margin-bottom:14px">Der Event-Bus ist ein Port (<code>EventPublisher</code>) mit einem Adapter auf Basis eines Node.js-<code>EventEmitter</code> — ein Kanal pro Ticket, kein externes System. Use Cases und SSE-Route kennen sich nicht; beide sprechen nur mit dem Port. Für mehrere Prozesse würde nur der Adapter getauscht (z. B. Postgres <code>LISTEN/NOTIFY</code>).</p>
+      <p style="margin-bottom:14px">Der Event-Bus ist ein Port (<code>EventPublisher</code>) mit einem Adapter auf Basis eines Node.js-<code>EventEmitter</code> — ein Kanal <code>ticket:&lt;KEY&gt;</code> pro Ticket und ein Kanal <code>all</code> für das Board, kein externes System. Use Cases und SSE-Route kennen sich nicht; beide sprechen nur mit dem Port. Für mehrere Prozesse würde nur der Adapter getauscht (z. B. Postgres <code>LISTEN/NOTIFY</code>).</p>
 
       <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 14px">
         <div>
           <strong style="font-size:13px; display:block; margin-bottom:6px">Ablauf</strong>
           <div style="font-family: monospace; font-size: 12.5px; background:#fff; border:1px solid #fed7aa; border-radius:8px; padding:14px; line-height:2">
             Use Case / Agent-Lauf<br>
-            &nbsp;&nbsp;│ events.publish({ type, ticketId, … })<br>
+            &nbsp;&nbsp;│ events.publish({ type, ticketKey: "CB-2", … })<br>
             &nbsp;&nbsp;▼<br>
-            EventPublisher (nodeEvents, Kanal ticket:T-1)<br>
-            &nbsp;&nbsp;│ subscribe(ticketId, handler) — eine Anmeldung pro Tab<br>
+            EventPublisher (nodeEvents, Kanäle ticket:CB-2 und all)<br>
+            &nbsp;&nbsp;│ subscribe(ticketKey | null, handler) — eine Anmeldung pro Tab<br>
             &nbsp;&nbsp;▼<br>
-            SSE-Route /api/events<br>
+            SSE-Route /api/events?ticketKey=CB-2<br>
             &nbsp;&nbsp;│ data: {"type":"progress", …}<br>
             &nbsp;&nbsp;▼<br>
             Browser (useSSE)
@@ -177,11 +180,11 @@
             <tbody>
               <tr>
                 <td style="padding:6px 10px; border-bottom:1px solid #fff0e6; font-family:monospace">progress</td>
-                <td style="padding:6px 10px; border-bottom:1px solid #fff0e6; color:#555">Zwischenstand des Laufs — erscheint direkt im Log</td>
+                <td style="padding:6px 10px; border-bottom:1px solid #fff0e6; color:#555">Zwischenstand des Laufs — erscheint direkt in der Karte „Agent läuft“</td>
               </tr>
               <tr>
-                <td style="padding:6px 10px; border-bottom:1px solid #fff0e6; font-family:monospace">status</td>
-                <td style="padding:6px 10px; border-bottom:1px solid #fff0e6; color:#555">Ticket wechselt Status, z. B. <em>refining → review</em> — Seite wird neu geladen</td>
+                <td style="padding:6px 10px; border-bottom:1px solid #fff0e6; font-family:monospace">state</td>
+                <td style="padding:6px 10px; border-bottom:1px solid #fff0e6; color:#555">Stufe oder Zustand ändern sich, z. B. <em>running → in_review</em> oder <em>plan → design</em> — Seite wird neu geladen</td>
               </tr>
               <tr>
                 <td style="padding:6px 10px; font-family:monospace">question</td>
@@ -189,7 +192,7 @@
               </tr>
             </tbody>
           </table>
-          <p style="font-size:12.5px; color:#666; margin-top:10px">Ist für ein Ticket gerade kein Tab verbunden, geht das Ereignis verloren — der Zustand selbst liegt in der Datenbank und wird beim Laden der Seite gelesen.</p>
+          <p style="font-size:12.5px; color:#666; margin-top:10px">Ist gerade kein Tab verbunden, geht das Ereignis verloren — der Zustand selbst liegt in der Datenbank, die Inhalte in Git; beides wird beim Laden der Seite gelesen.</p>
         </div>
       </div>
 
