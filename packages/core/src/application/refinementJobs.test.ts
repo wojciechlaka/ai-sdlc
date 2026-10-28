@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createTestContext, SAMPLE_META, type TestContext } from '../testing/fakes'
 import { AgentRunTerminatedError, AgentRunTimeoutError } from '../ports'
 import { runInitialRefinement, runAnswer } from './refinementJobs'
@@ -35,6 +35,17 @@ describe('runInitialRefinement', () => {
       'Repository bereit.',
       'Agent wird gestartet...',
     ])
+  })
+
+  it('marks the ticket failed when the run cannot be created', async () => {
+    vi.spyOn(ctx.deps.runs, 'create').mockImplementation(() => {
+      throw new Error('db down')
+    })
+    await expect(runInitialRefinement(ctx.deps, ticket, PARAMS)).resolves.toBeUndefined()
+
+    expect(ctx.deps.tickets.findById(ticket.id)?.status).toBe('failed')
+    expect(ctx.events.published.at(-1)).toEqual({ type: 'status', ticketId: 'T-1', status: 'failed' })
+    expect(progressMessages()).toContain('Fehler: db down')
   })
 
   it('announces a missing codebase summary', async () => {

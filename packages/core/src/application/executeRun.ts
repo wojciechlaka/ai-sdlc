@@ -15,14 +15,17 @@ export interface RunRequest {
 
 /**
  * Creates a run, executes the agent and records the outcome.
- * Never throws: every error ends in a terminal run status and a ticket status change.
+ * Never throws: every error ends in a ticket status change and, once the run exists, a terminal run status.
  */
 export async function executeRun(deps: UseCaseDeps, ticketId: number, request: RunRequest): Promise<void> {
   const reporter = createReporter(deps, ticketId)
-  const run = deps.runs.create({ ticketId, trigger: request.trigger, model: request.input.model, input: request.input })
-  deps.audit.append({ ticketId, actor: 'system', type: 'run_started', payload: { runId: run.id } })
+  let runId: string | undefined
 
   try {
+    const run = deps.runs.create({ ticketId, trigger: request.trigger, model: request.input.model, input: request.input })
+    runId = run.id
+    deps.audit.append({ ticketId, actor: 'system', type: 'run_started', payload: { runId } })
+
     const { output, meta } = await deps.agent.run(
       {
         ticketId: formatTicketId(ticketId),
@@ -38,7 +41,7 @@ export async function executeRun(deps: UseCaseDeps, ticketId: number, request: R
     )
 
     reporter.log(`Claude finished in ${meta.durationSeconds}s ($${meta.costUsd.toFixed(4)})`)
-    deps.runs.complete(run.id, {
+    deps.runs.complete(runId, {
       output,
       costUsd: meta.costUsd,
       inputTokens: meta.inputTokens,
@@ -46,7 +49,7 @@ export async function executeRun(deps: UseCaseDeps, ticketId: number, request: R
       cacheReadTokens: meta.cacheReadTokens,
       outputTokens: meta.outputTokens,
     })
-    deps.audit.append({ ticketId, actor: 'agent', type: 'run_finished', payload: { runId: run.id, status: 'succeeded' } })
+    deps.audit.append({ ticketId, actor: 'agent', type: 'run_finished', payload: { runId, status: 'succeeded' } })
 
     if (output.type === 'question') {
       reporter.progress('Agent stellt eine Rückfrage...')
@@ -57,8 +60,10 @@ export async function executeRun(deps: UseCaseDeps, ticketId: number, request: R
   } catch (err) {
     if (err instanceof AgentRunTerminatedError) {
       reporter.log('Refinement terminated by user')
-      deps.runs.fail(run.id, 'failed')
-      deps.audit.append({ ticketId, actor: 'system', type: 'run_finished', payload: { runId: run.id, status: 'failed' } })
+      if (runId !== undefined) {
+        deps.runs.fail(runId, 'failed')
+        deps.audit.append({ ticketId, actor: 'system', type: 'run_finished', payload: { runId, status: 'failed' } })
+      }
       reporter.setStatus('backlog')
       return
     }
@@ -66,8 +71,10 @@ export async function executeRun(deps: UseCaseDeps, ticketId: number, request: R
     reporter.log(`ERROR: ${message}`)
     reporter.progress(`Fehler: ${message}`)
     const runStatus = err instanceof AgentRunTimeoutError ? 'timeout' : 'failed'
-    deps.runs.fail(run.id, runStatus)
-    deps.audit.append({ ticketId, actor: 'system', type: 'run_finished', payload: { runId: run.id, status: runStatus } })
+    if (runId !== undefined) {
+      deps.runs.fail(runId, runStatus)
+      deps.audit.append({ ticketId, actor: 'system', type: 'run_finished', payload: { runId, status: runStatus } })
+    }
     reporter.setStatus('failed')
   }
 }
