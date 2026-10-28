@@ -1,7 +1,7 @@
-import type { RefinementEvent } from '@refinement/shared'
+import type { TicketEvent } from '@refinement/shared'
 
 export interface EventPublisher {
-  publish(event: RefinementEvent): void
-  /** Subscribes to all events of one ticket. Returns the unsubscribe function. */
-  subscribe(ticketId: string, handler: (event: RefinementEvent) => void): () => void
+  publish(event: TicketEvent): void
+  /** Subscribes to the events of one ticket, or of all tickets with `null`. Returns the unsubscribe function. */
+  subscribe(ticketKey: string | null, handler: (event: TicketEvent) => void): () => void
 }

@@ -1,17 +1,19 @@
-import type { AgentOutput } from '@refinement/shared'
-import type { QAPair } from '../domain/types'
+import type { StageOutput } from '@refinement/shared'
+import type { ArtifactStage, QAPair } from '../domain/types'
 
 export interface AgentRunnerInput {
-  /** Public ticket id (`T-{n}`); also the key for `stop`. */
-  ticketId: string
+  /** Ticket key; also the handle for `stop`. */
+  ticketKey: string
+  /** Selects skill and output schema. */
+  stage: ArtifactStage
   title: string
   description: string
-  acceptanceCriteria: string
+  /** Local clone of the target repository. */
   repoPath: string
   model: string
   codebaseSummary?: string
-  feedback?: string
-  previousRuns?: QAPair[]
+  /** Answered questions of earlier runs of this stage. */
+  previousRuns: QAPair[]
 }
 
 export interface AgentRunMeta {
@@ -25,25 +27,25 @@ export interface AgentRunMeta {
 }
 
 export interface AgentRunResult {
-  output: AgentOutput
+  output: StageOutput
   meta: AgentRunMeta
 }
 
 export interface AgentRunner {
   /**
-   * Runs the refinement agent and returns its validated output.
+   * Runs the agent of the stage and returns its validated output.
    * @throws {AgentRunTerminatedError} when stopped via `stop`.
    * @throws {AgentRunTimeoutError} when the run exceeds its time limit.
    */
   run(input: AgentRunnerInput, onProgress: (message: string) => void): Promise<AgentRunResult>
-  /** Stops the running agent for the ticket. Returns false if none is running. */
-  stop(ticketId: string): boolean
+  /** Stops the running agent of the ticket. Returns false if none is running. */
+  stop(ticketKey: string): boolean
 }
 
 /** The run was stopped on user request. */
 export class AgentRunTerminatedError extends Error {
   constructor() {
-    super('Refinement was terminated by user')
+    super('Agent run was terminated by user')
     this.name = 'AgentRunTerminatedError'
   }
 }
