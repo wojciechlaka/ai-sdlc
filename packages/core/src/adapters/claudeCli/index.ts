@@ -84,7 +84,7 @@ export function stopRefinement(ticketId: string): boolean {
 
 /**
  * Spawns the Claude CLI process, pipes the prompt via stdin, and streams stdout line-by-line for progress events.
- * Resolves with the raw CLI result; rejects with TimeoutError, TerminatedError, or CliError.
+ * Resolves with the raw CLI result; rejects with AgentRunTimeoutError, AgentRunTerminatedError, or CliError.
  * @param ticketId   - Used to register the process in `runningProcesses` for cancellation.
  * @param prompt     - The full prompt string to send via stdin.
  * @param cwd        - Working directory for the Claude process (cloned repository).
@@ -308,7 +308,7 @@ export interface ClaudeCliOptions {
  * Performs one automatic retry if the first attempt produces a `SchemaValidationError`
  * (invalid JSON or Zod schema mismatch). The retry prompt includes the malformed output
  * and the validation error so Claude can self-correct.
- * Hard errors (`TerminatedError`, `TimeoutError`, `CliError`) bypass the retry and propagate immediately.
+ * Hard errors (`AgentRunTerminatedError`, `AgentRunTimeoutError`, `CliError`) bypass the retry and propagate immediately.
  * Token counts and cost are aggregated across both attempts when a retry occurs.
  * @param input      - Ticket data, repo path, model, and optional Q&A history.
  * @param onProgress - Callback for progress messages emitted during the run.

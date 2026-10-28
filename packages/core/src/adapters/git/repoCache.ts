@@ -92,14 +92,6 @@ export function getCommitHash(cacheDir: string): string {
     .trim()
 }
 
-/**
- * Ensures a Claude-generated codebase summary exists for the current git commit.
- * Returns the cached file immediately if one exists for the current HEAD hash.
- * Otherwise spawns a Claude (Haiku) process to generate and cache it.
- * Returns null without throwing if generation fails for any reason.
- * @param cacheDir   - Absolute path to the cloned repository directory.
- * @param onProgress - Receives status messages when generation runs (silent on cache hit).
- */
 // Deduplicates concurrent calls for the same summary path — both callers await the same job.
 const inFlight = new Map<string, Promise<string | null>>()
 

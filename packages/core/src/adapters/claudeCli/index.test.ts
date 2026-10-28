@@ -145,7 +145,7 @@ describe('runRefinement', () => {
     await expect(runRefinement(INPUT, vi.fn(), CLI_OPTIONS)).rejects.toBeInstanceOf(CliError)
   })
 
-  it('throws TimeoutError when claude does not respond in time', async () => {
+  it('throws AgentRunTimeoutError when claude does not respond in time', async () => {
     const proc = new EventEmitter() as any
     proc.stdin = { write: vi.fn(), end: vi.fn() }
     proc.stdout = new EventEmitter()
