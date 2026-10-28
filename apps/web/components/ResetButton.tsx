@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { resetSystemAction } from '@/app/actions'
 import { useAppState } from './AppStateProvider'
 
+/** Empties the database and runs the start again (ticket import, PR clean-up, stage derivation). */
 export function ResetButton() {
   const router = useRouter()
   const { clearProgress } = useAppState()
@@ -21,10 +22,10 @@ export function ResetButton() {
     <button
       onClick={handleReset}
       disabled={pending}
-      className="btn-ghost-xs shrink-0"
-      title="Auf Beispiel-Tickets zurücksetzen"
+      className="btn-ghost-xs"
+      title="Datenbank leeren und Tickets aus examples/tickets neu einlesen"
     >
-      Reset
+      {pending ? 'Setze zurück...' : 'Reset'}
     </button>
   )
 }

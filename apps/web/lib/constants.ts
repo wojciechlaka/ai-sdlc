@@ -1,4 +1,4 @@
-import type { TicketStatus } from '@refinement/shared'
+import type { Stage, TicketDto, TicketState } from '@refinement/shared'
 
 export const MODELS = [
   { value: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5' },
@@ -8,20 +8,31 @@ export const MODELS = [
 
 export const DEFAULT_MODEL = 'claude-sonnet-4-6'
 
-export const STATUS_VARIANT: Record<TicketStatus, 'default' | 'secondary' | 'outline'> = {
-  backlog:   'outline',
-  refining:  'secondary',
-  review:    'default',
-  ready:     'default',
-  failed:    'outline',
+export const STAGE_LABEL: Record<Stage, string> = {
+  plan:   '1 Plan',
+  design: '2 Design',
+  done:   'Fertig',
 }
 
-export const STATUS_LABEL: Record<TicketStatus, string> = {
-  backlog:   'Backlog',
-  refining:  'In Bearbeitung',
-  review:    'Review',
-  ready:     'Bereit',
-  failed:    'Fehlgeschlagen',
+export const STATE_LABEL: Record<TicketState, string> = {
+  ready:           'bereit',
+  running:         'Agent läuft',
+  awaiting_answer: 'Rückfrage',
+  in_review:       'in Review',
+  failed:          'fehlgeschlagen',
+}
+
+export const STATE_VARIANT: Record<TicketState, 'default' | 'secondary' | 'outline' | 'destructive'> = {
+  ready:           'outline',
+  running:         'secondary',
+  awaiting_answer: 'default',
+  in_review:       'default',
+  failed:          'destructive',
+}
+
+/** State label; in review it names the PR. */
+export function stateText(ticket: Pick<TicketDto, 'state' | 'openPr'>): string {
+  return ticket.state === 'in_review' && ticket.openPr ? `in Review: PR #${ticket.openPr.number}` : STATE_LABEL[ticket.state]
 }
 
 // Anthropic provides no pricing API — values must be updated manually.

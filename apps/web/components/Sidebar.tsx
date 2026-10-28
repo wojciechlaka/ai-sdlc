@@ -1,24 +1,29 @@
-import type { TicketDto } from '@refinement/shared'
+import Link from 'next/link'
+import type { SettingsDto } from '@refinement/shared'
 import { Separator } from './ui/separator'
-import { RepoSettings } from './RepoSettings'
-import { CreateTicketDialog } from './CreateTicketDialog'
 import { ResetButton } from './ResetButton'
-import { TicketList } from './TicketList'
 
-export function Sidebar({ tickets }: { tickets: TicketDto[] }) {
+/** Navigation, target repository (from `TARGET_REPO`, read-only) and reset. */
+export function Sidebar({ settings }: { settings: SettingsDto }) {
   return (
-    <aside className="min-w-64 w-auto border-r border-slate-200 flex flex-col shrink-0">
-      <div className="px-4 py-3 font-semibold text-sm tracking-wide text-slate-500 uppercase">Tickets</div>
+    <aside className="flex w-64 shrink-0 flex-col border-r border-slate-200">
+      <Link href="/" className="px-4 py-3 text-sm font-semibold uppercase tracking-wide text-slate-500 hover:text-slate-900">
+        Board
+      </Link>
       <Separator />
-      <RepoSettings />
-      <div className="p-3 border-b border-slate-200 flex items-center gap-2">
-        <div className="flex-1">
-          <CreateTicketDialog />
-        </div>
-        <ResetButton />
+      <div className="space-y-1 border-b border-slate-200 p-3">
+        <p className="text-xs text-slate-500">Ziel-Repository</p>
+        <a href={settings.repoUrl} target="_blank" rel="noreferrer" className="block break-all font-mono text-xs text-slate-700 hover:underline">
+          {settings.repoUrl.replace('https://github.com/', '')}
+        </a>
+        {!settings.tokenConfigured && (
+          <p role="status" className="text-xs text-amber-700">
+            Token fehlt — GITHUB_TOKEN in apps/web/.env.local setzen (siehe README).
+          </p>
+        )}
       </div>
-      <div className="overflow-y-auto flex-1">
-        <TicketList tickets={tickets} />
+      <div className="p-3">
+        <ResetButton />
       </div>
     </aside>
   )
