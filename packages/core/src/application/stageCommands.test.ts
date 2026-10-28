@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { AgentRunTerminatedError, AgentRunTimeoutError, CodeHostError } from '../ports'
-import { SAMPLE_META, createTestContext, errorCodeOf, seedTicket, type TestContext } from '../testing/fakes'
-import { startStage } from './stageCommands'
+import { SAMPLE_INTENT_OUTPUT, SAMPLE_META, createTestContext, errorCodeOf, seedTicket, type TestContext } from '../testing/fakes'
+import { answerQuestion, startStage, stopRun } from './stageCommands'
 
 const MODEL = { model: 'claude-sonnet-4-6' }
 
@@ -158,5 +158,106 @@ describe('startStage — rejected', () => {
     expect(errorCodeOf(() => startStage(ctx.deps, 'CB-1', MODEL))).toBe('CONFLICT')
     expect(() => startStage(ctx.deps, 'CB-1', MODEL)).toThrow('GITHUB_TOKEN')
     expect(ctx.deps.tickets.findByKey('CB-1')?.state).toBe('ready')
+  })
+})
+
+async function askQuestion(ctx: TestContext): Promise<void> {
+  ctx.agent.outcome = { output: { type: 'question', question: 'Wer?' }, meta: SAMPLE_META }
+  startStage(ctx.deps, 'CB-2', MODEL)
+  await ctx.settle()
+  ctx.agent.outcome = { output: SAMPLE_INTENT_OUTPUT, meta: SAMPLE_META }
+}
+
+describe('answerQuestion', () => {
+  it('continues the stage with the Q&A history and documents the answer in the intent', async () => {
+    const ctx = setup()
+    await askQuestion(ctx)
+
+    answerQuestion(ctx.deps, 'CB-2', { answer: 'Alle Leser' })
+    expect(ctx.deps.tickets.findByKey('CB-2')?.state).toBe('running')
+    await ctx.settle()
+
+    expect(ctx.deps.tickets.findByKey('CB-2')?.state).toBe('in_review')
+    expect(ctx.agent.calls[1]).toMatchObject({ model: 'claude-sonnet-4-6', previousRuns: [{ question: 'Wer?', answer: 'Alle Leser' }] })
+    expect(ctx.store.runs[1]).toMatchObject({ trigger: 'answer', seq: 2 })
+    expect(ctx.codeHost.branches.get('CB-2/intent')?.get('docs/work/CB-2/intent.md')).toContain('**F:** Wer?\\\n**A:** Alle Leser')
+    expect(ctx.store.audit.find((e) => e.type === 'answer_given')).toMatchObject({ actor: 'human', payload: { answer: 'Alle Leser' } })
+  })
+
+  it('rejects a second answer while the first one runs', async () => {
+    const ctx = setup()
+    await askQuestion(ctx)
+    answerQuestion(ctx.deps, 'CB-2', { answer: 'A' })
+    expect(errorCodeOf(() => answerQuestion(ctx.deps, 'CB-2', { answer: 'B' }))).toBe('CONFLICT')
+    await ctx.settle()
+  })
+
+  it('rejects answers without an open question, blank answers and unknown tickets', async () => {
+    const ctx = setup()
+    expect(errorCodeOf(() => answerQuestion(ctx.deps, 'CB-2', { answer: 'A' }))).toBe('CONFLICT')
+    await askQuestion(ctx)
+    expect(errorCodeOf(() => answerQuestion(ctx.deps, 'CB-2', { answer: '  ' }))).toBe('VALIDATION')
+    expect(errorCodeOf(() => answerQuestion(ctx.deps, 'CB-404', { answer: 'A' }))).toBe('NOT_FOUND')
+  })
+
+  it('rejects answers without token', () => {
+    const ctx = createTestContext({ token: false })
+    seedTicket(ctx, 'CB-2', { state: 'awaiting_answer' })
+    expect(() => answerQuestion(ctx.deps, 'CB-2', { answer: 'A' })).toThrow('GITHUB_TOKEN')
+  })
+})
+
+describe('stopRun', () => {
+  it('stops a running agent and returns the ticket to ready at once', async () => {
+    const ctx = setup()
+    const release = ctx.agent.hold()
+    startStage(ctx.deps, 'CB-2', MODEL)
+    await vi.waitFor(() => expect(ctx.agent.calls).toHaveLength(1))
+
+    stopRun(ctx.deps, 'CB-2')
+
+    expect(ctx.deps.tickets.findByKey('CB-2')?.state).toBe('ready')
+    expect(ctx.agent.stopped).toEqual(['CB-2'])
+    release()
+    await ctx.settle()
+    expect(ctx.deps.tickets.findByKey('CB-2')?.state).toBe('ready')
+    expect(ctx.store.runs[0]?.status).toBe('failed')
+    expect(ctx.codeHost.pulls).toEqual([])
+  })
+
+  it('cancels the job when stopped while the clone is prepared', async () => {
+    const ctx = setup()
+    startStage(ctx.deps, 'CB-2', MODEL)
+    stopRun(ctx.deps, 'CB-2')
+    await ctx.settle()
+    expect(ctx.deps.tickets.findByKey('CB-2')?.state).toBe('ready')
+    expect(ctx.agent.calls).toEqual([])
+  })
+
+  it('discards a result that arrives after the stop', async () => {
+    const ctx = setup()
+    const release = ctx.agent.hold()
+    startStage(ctx.deps, 'CB-2', MODEL)
+    await vi.waitFor(() => expect(ctx.agent.calls).toHaveLength(1))
+    ctx.deps.tickets.update('CB-2', { state: 'ready' }) // stopped, but the agent did not react to the signal
+    release()
+    await ctx.settle()
+    expect(ctx.deps.tickets.findByKey('CB-2')?.state).toBe('ready')
+    expect(ctx.codeHost.pulls).toEqual([])
+  })
+
+  it('drops an open question', async () => {
+    const ctx = setup()
+    await askQuestion(ctx)
+    stopRun(ctx.deps, 'CB-2')
+    expect(ctx.deps.tickets.findByKey('CB-2')?.state).toBe('ready')
+  })
+
+  it('ignores unknown tickets and tickets without a run', () => {
+    const ctx = setup({ state: 'in_review' })
+    expect(() => stopRun(ctx.deps, 'CB-404')).not.toThrow()
+    stopRun(ctx.deps, 'CB-2')
+    expect(ctx.deps.tickets.findByKey('CB-2')?.state).toBe('in_review')
+    expect(ctx.agent.stopped).toEqual([])
   })
 })
