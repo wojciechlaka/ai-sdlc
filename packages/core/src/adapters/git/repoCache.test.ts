@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getRepoCacheDir, getCommitHash, ensureRepoSummary } from '../src/repoCache'
+import { getRepoCacheDir, getCommitHash, ensureRepoSummary } from './repoCache'
 import { execFileSync } from 'child_process'
 import fs from 'fs/promises'
 import os from 'os'
@@ -69,5 +69,14 @@ describe('ensureRepoSummary', () => {
       process.env.PATH = originalPath
       await fs.rm(tmp, { recursive: true })
     }
+  })
+})
+
+describe('createGitRepoProvider', () => {
+  it('exposes ensureRepo and ensureRepoSummary as the RepoProvider port', async () => {
+    const { createGitRepoProvider } = await import('./repoCache')
+    const provider = createGitRepoProvider()
+    expect(typeof provider.ensureRepo).toBe('function')
+    expect(typeof provider.ensureSummary).toBe('function')
   })
 })

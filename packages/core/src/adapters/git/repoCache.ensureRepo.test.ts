@@ -28,7 +28,7 @@ vi.mock('fs', async (importOriginal) => {
   }
 })
 
-import { ensureRepo } from '../src/repoCache'
+import { ensureRepo } from './repoCache'
 
 const REPO_URL = 'https://github.com/test/repo'
 

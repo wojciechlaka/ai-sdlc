@@ -4,6 +4,7 @@ import path from 'path'
 import { execFileSync, spawn } from 'child_process'
 import fs from 'fs'
 import fsPromises from 'fs/promises'
+import type { RepoProvider } from '../../ports'
 
 // Configurable via env var; falls back to the OS temp directory.
 const CACHE_ROOT = process.env.REPO_CACHE_DIR ?? path.join(os.tmpdir(), 'repo-cache')
@@ -225,4 +226,9 @@ async function runSummaryJob(cwd: string, model: string): Promise<string> {
       else reject(new Error(`claude summary exited with code ${code}\nstderr: ${stderr.slice(0, STDERR_PREVIEW_CHARS)}`))
     })
   })
+}
+
+/** RepoProvider port backed by a local git clone cache and a Claude-generated summary. */
+export function createGitRepoProvider(): RepoProvider {
+  return { ensureRepo, ensureSummary: ensureRepoSummary }
 }
