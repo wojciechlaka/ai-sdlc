@@ -75,7 +75,8 @@ Nicht im Umfang: `datenmodell.md` (stimmt), `ui-ux-concept.md`, Inhalte zu Phase
 
 - `npm test`, `npm run build`, `npm run lint` grün.
 - Frische DB (bzw. „Reset“) zeigt CB-1…CB-3.
-- `grep -ri "coffee" docs README.md CLAUDE.md` liefert nur noch den Historien-Satz in der Roadmap.
+- `grep -ri "coffee" docs README.md CLAUDE.md examples --exclude-dir=superpowers` liefert nur Historien-Sätze:
+  Roadmap, `decisions.md` (D8) und `examples/tickets/README.md`.
 - `grep -rwiE "vite|hono|5173" docs --exclude-dir=superpowers` (Wortsuche, damit „Vitest“ nicht zählt) liefert nur Treffer in `decisions.md`
   (Historie D2/D19).
 - Beide PNGs sind neu erzeugt und zeigen den Ist-Stand (visuell geprüft).

@@ -11,6 +11,19 @@ npm run dev
 
 Startet die Next.js-App unter http://localhost:3000. Beim ersten Start mit leerer Datenbank werden drei Beispiel-Tickets eingefügt.
 
+## Ausprobieren
+
+1. App starten (`npm run dev`) und http://localhost:3000 öffnen.
+2. Links als Repository eintragen:
+   ```
+   https://github.com/wojciechlaka/node-express-realworld-example-app
+   ```
+   (eigener Fork der Blog-API „Conduit“, siehe [`examples/tickets/`](examples/tickets/README.md))
+3. Ein Beispiel-Ticket öffnen (CB-2 ist der schnellste Lauf) und **Refine** klicken.
+
+Ein Lauf nutzt den eigenen Claude-Login und verbraucht Tokens. Eine bestehende lokale Datenbank
+zeigt die neuen Beispiel-Tickets erst nach **Reset**.
+
 ## Struktur
 
 ```

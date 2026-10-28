@@ -22,7 +22,7 @@ export function ResetButton() {
       onClick={handleReset}
       disabled={pending}
       className="btn-ghost-xs shrink-0"
-      title="Auf CC-Seed-Tickets zurücksetzen"
+      title="Auf Beispiel-Tickets zurücksetzen"
     >
       Reset
     </button>
