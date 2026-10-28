@@ -12,5 +12,5 @@
     "allowJs": true,
     "checkJs": true
   },
-  "include": ["src", "hooks"]
+  "include": ["src", "hooks", "evals"]
 }

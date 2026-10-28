@@ -98,6 +98,16 @@ describe('Architektur (packages/core)', () => {
     await expect(rule).toPassAsync()
   })
 
+  // evals/ startet echte `claude`-Prozesse (npm run eval:guard) und darf src nutzen; src und hooks nie evals.
+  it('die Evals liegen dort, wo die Regel sie sucht', () => {
+    expect(readdirSync(path.resolve(__dirname, '../evals'))).toContain('guard.eval.ts')
+  })
+
+  it('weder src noch die Hook-Skripte importieren die Evals', async () => {
+    const rule = projectFiles(TSCONFIG).inPath('{src,hooks}/**').shouldNot().dependOnFiles().inPath('evals/**')
+    await expect(rule).toPassAsync()
+  })
+
   it('der Produktivcode in src ist frei von Zyklen', async () => {
     const rule = projectFiles(TSCONFIG).inPath('src/**', PRODUCTION).should().haveNoCycles()
     await expect(rule).toPassAsync()

@@ -3,6 +3,7 @@ import { defineConfig } from 'eslint/config'
 
 // Main job: keep the hexagon clean. Domain, ports and use cases must not reach adapters or I/O.
 // Second job: the hook scripts in hooks/ (plain Node ESM, run by Claude Code as separate processes).
+// Third: the evals in evals/ (run with tsx, may import src — src never imports them, see the architecture tests).
 // Fast editor feedback only — the wider dependency rules (layers, adapters among each other, src/testing,
 // cycles, web → core entry point) are covered by the ArchUnitTS architecture tests (src/architecture.test.ts).
 export default defineConfig([
@@ -43,6 +44,15 @@ export default defineConfig([
           message: 'Hook-Skripte laden nur node:-Module und Nachbarskripte aus hooks/ (kein src, keine Pakete).',
         }],
       }],
+    },
+  },
+  {
+    files: ['evals/**/*.ts'],
+    languageOptions: { parser: tseslint.parser },
+    rules: {
+      'prefer-const': 'error',
+      eqeqeq: 'error',
+      'no-var': 'error',
     },
   },
 ])
