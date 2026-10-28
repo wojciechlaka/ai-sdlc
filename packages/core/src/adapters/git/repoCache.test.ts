@@ -5,6 +5,8 @@ import fs from 'fs/promises'
 import os from 'os'
 import path from 'path'
 
+const OPTIONS = { hooksDir: path.resolve(__dirname, '../../../hooks') }
+
 async function makeTempRepo(): Promise<string> {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'test-repo-'))
   execFileSync('git', ['init'], { cwd: tmp, stdio: 'pipe' })
@@ -48,7 +50,7 @@ describe('ensureRepoSummary', () => {
       await fs.writeFile(summaryPath, '## Test\nCached content.')
 
       const messages: string[] = []
-      const result = await ensureRepoSummary(tmp, model, (msg) => messages.push(msg))
+      const result = await ensureRepoSummary(tmp, model, (msg) => messages.push(msg), OPTIONS)
 
       expect(result).toBe('## Test\nCached content.')
       expect(messages).toHaveLength(1)
@@ -63,7 +65,7 @@ describe('ensureRepoSummary', () => {
     const originalPath = process.env.PATH
     try {
       process.env.PATH = ''
-      const result = await ensureRepoSummary(tmp, 'test-model', () => {})
+      const result = await ensureRepoSummary(tmp, 'test-model', () => {}, OPTIONS)
       expect(result).toBeNull()
     } finally {
       process.env.PATH = originalPath
@@ -75,7 +77,7 @@ describe('ensureRepoSummary', () => {
 describe('createGitRepoProvider', () => {
   it('exposes ensureRepo and ensureRepoSummary as the RepoProvider port', async () => {
     const { createGitRepoProvider } = await import('./repoCache')
-    const provider = createGitRepoProvider()
+    const provider = createGitRepoProvider(OPTIONS)
     expect(typeof provider.ensureRepo).toBe('function')
     expect(typeof provider.ensureSummary).toBe('function')
   })

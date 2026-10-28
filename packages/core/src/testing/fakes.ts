@@ -7,6 +7,8 @@ import {
   CodeHostError,
   type AgentRunner,
   type AgentRunnerInput,
+  type AgentRunCallbacks,
+  type ToolEvent,
   type AgentRunRepository,
   type AgentRunResult,
   type ArtifactRepository,
@@ -199,12 +201,16 @@ export class FakeTicketSource implements TicketSource {
 
 /**
  * Agent that returns `outcome` (or throws it) and records every call.
+ * Emits `progress` and `toolEvents` at the start of every run (before a `hold()` gate).
  * Like the CLI, `stop` terminates a run that is still in progress.
  */
 export class FakeAgentRunner implements AgentRunner {
   readonly calls: AgentRunnerInput[] = []
+  /** Callbacks of every call, so a test can report events later (e.g. after the attempt became stale). */
+  readonly callbacks: AgentRunCallbacks[] = []
   readonly stopped: string[] = []
   progress: string[] = []
+  toolEvents: ToolEvent[] = []
   outcome: AgentRunResult | Error = { output: SAMPLE_INTENT_OUTPUT, meta: SAMPLE_META }
   private gate: Promise<void> | null = null
   private readonly active = new Set<string>()
@@ -223,11 +229,13 @@ export class FakeAgentRunner implements AgentRunner {
     }
   }
 
-  async run(input: AgentRunnerInput, onProgress: (message: string) => void): Promise<AgentRunResult> {
+  async run(input: AgentRunnerInput, callbacks: AgentRunCallbacks): Promise<AgentRunResult> {
     this.calls.push(input)
+    this.callbacks.push(callbacks)
     this.active.add(input.ticketKey)
     try {
-      for (const message of this.progress) onProgress(message)
+      for (const message of this.progress) callbacks.onProgress(message)
+      for (const event of this.toolEvents) callbacks.onToolEvent(event)
       if (this.gate) await this.gate
       if (this.terminated.delete(input.ticketKey)) throw new AgentRunTerminatedError()
       if (this.outcome instanceof Error) throw this.outcome

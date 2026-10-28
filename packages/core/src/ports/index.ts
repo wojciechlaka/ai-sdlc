@@ -5,7 +5,7 @@ export type { AuditLog, AuditActor, AuditEvent, AuditEventType } from './auditLo
 export type { TicketSource } from './ticketSource'
 export type { BaseBranchPreparation, CodeHost, PullRequest } from './codeHost'
 export { CodeHostError } from './codeHost'
-export type { AgentRunner, AgentRunnerInput, AgentRunMeta, AgentRunResult } from './agentRunner'
+export type { AgentRunner, AgentRunnerInput, AgentRunMeta, AgentRunResult, AgentRunCallbacks, ToolEvent } from './agentRunner'
 export { AgentRunTerminatedError, AgentRunTimeoutError } from './agentRunner'
 export type { RepoProvider } from './repoProvider'
 export type { EventPublisher } from './eventPublisher'

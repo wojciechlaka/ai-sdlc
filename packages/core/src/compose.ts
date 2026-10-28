@@ -18,6 +18,8 @@ export interface EngineConfig {
   migrationsFolder: string
   /** `packages/core/skills` */
   skillsDir: string
+  /** `packages/core/hooks` — guard and audit scripts for the agent (spec §13). */
+  hooksDir: string
   /** Directory with the ticket files (`examples/tickets`). */
   ticketsDir: string
   /** Repository root; ticket source paths are shown relative to it. */
@@ -44,10 +46,11 @@ export const BASELINE_TAG = 'showcase-base'
  * (Next.js) relocate the code, so `__dirname` inside the package is not reliable.
  * @param coreDir - Absolute path to `packages/core`.
  */
-export function resolveCorePaths(coreDir: string): Pick<EngineConfig, 'migrationsFolder' | 'skillsDir'> {
+export function resolveCorePaths(coreDir: string): Pick<EngineConfig, 'migrationsFolder' | 'skillsDir' | 'hooksDir'> {
   return {
     migrationsFolder: path.join(coreDir, 'drizzle'),
     skillsDir: path.join(coreDir, 'skills'),
+    hooksDir: path.join(coreDir, 'hooks'),
   }
 }
 
@@ -66,8 +69,8 @@ export function createRefinementEngine(config: EngineConfig): UseCases {
     codeHost: config.githubToken
       ? createGitHubCodeHost({ repoUrl: config.targetRepo, token: config.githubToken, baseBranch, baselineTag })
       : null,
-    agent: createClaudeCliAgentRunner({ skillsDir: config.skillsDir }),
-    repos: createGitRepoProvider(),
+    agent: createClaudeCliAgentRunner({ skillsDir: config.skillsDir, hooksDir: config.hooksDir }),
+    repos: createGitRepoProvider({ hooksDir: config.hooksDir }),
     events: createNodeEventPublisher(),
     repoUrl: config.targetRepo,
     baseBranch,

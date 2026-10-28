@@ -207,6 +207,44 @@ describe('answerQuestion', () => {
   })
 })
 
+describe('startStage — tool calls of the agent', () => {
+  it('logs blocked and used tool calls and reports blocked ones as progress', async () => {
+    const ctx = setup()
+    ctx.agent.toolEvents = [
+      { kind: 'used', tool: 'Bash', target: 'git log -5', exitCode: 0 },
+      { kind: 'blocked', tool: 'Bash', target: 'rm -rf docs', reason: 'Befehl rm ist nicht erlaubt' },
+      { kind: 'used', tool: 'Read', target: 'src/app.ts' },
+    ]
+    await start(ctx)
+
+    const toolEntries = ctx.store.audit.filter((e) => e.type === 'tool_used' || e.type === 'guard_blocked')
+    expect(toolEntries.map(({ actor, type, payload }) => ({ actor, type, payload }))).toEqual([
+      { actor: 'agent', type: 'tool_used', payload: { tool: 'Bash', target: 'git log -5', exitCode: 0 } },
+      { actor: 'system', type: 'guard_blocked', payload: { tool: 'Bash', target: 'rm -rf docs', reason: 'Befehl rm ist nicht erlaubt' } },
+      { actor: 'agent', type: 'tool_used', payload: { tool: 'Read', target: 'src/app.ts' } },
+    ])
+    expect(ctx.events.published).toContainEqual({ type: 'progress', ticketKey: 'CB-2', message: 'Blockiert: Bash rm -rf docs' })
+    expect(ctx.events.published).not.toContainEqual(expect.objectContaining({ message: expect.stringContaining('git log') }))
+  })
+
+  it('ignores tool calls of an attempt that is no longer current', async () => {
+    const ctx = setup()
+    const release = ctx.agent.hold()
+    startStage(ctx.deps, 'CB-2', MODEL)
+    await vi.waitFor(() => expect(ctx.agent.calls).toHaveLength(1))
+    stopRun(ctx.deps, 'CB-2')
+
+    ctx.agent.callbacks[0]!.onToolEvent({ kind: 'blocked', tool: 'Bash', target: 'rm -rf docs', reason: 'nein' })
+    ctx.agent.callbacks[0]!.onToolEvent({ kind: 'used', tool: 'Read', target: 'a.ts' })
+    release()
+    await ctx.settle()
+
+    expect(ctx.store.audit.map((e) => e.type)).not.toContain('guard_blocked')
+    expect(ctx.store.audit.map((e) => e.type)).not.toContain('tool_used')
+    expect(ctx.events.published).not.toContainEqual(expect.objectContaining({ message: 'Blockiert: Bash rm -rf docs' }))
+  })
+})
+
 describe('stopRun', () => {
   it('stops a running agent and returns the ticket to ready at once', async () => {
     const ctx = setup()

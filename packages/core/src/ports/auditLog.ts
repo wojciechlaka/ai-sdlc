@@ -12,6 +12,10 @@ export type AuditEventType =
   | 'stage_changed'
   | 'cleanup'
   | 'error'
+  /** The guard hook denied a tool call of the agent; payload `{ tool, target, reason }`. */
+  | 'guard_blocked'
+  /** The agent ran a tool call; payload `{ tool, target, exitCode? }`. */
+  | 'tool_used'
 
 export interface AuditEvent {
   ticketKey: string

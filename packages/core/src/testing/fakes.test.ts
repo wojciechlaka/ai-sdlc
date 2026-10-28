@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { AgentRunTerminatedError, CodeHostError } from '../ports'
 import { createTestContext, seedTicket, sourceTicket } from './fakes'
 
@@ -132,7 +132,7 @@ describe('FakeAgentRunner', () => {
   it('terminates a held run when it is stopped', async () => {
     const { agent } = createTestContext()
     const release = agent.hold()
-    const run = agent.run({ ticketKey: 'CB-1', stage: 'plan', title: 't', description: 'd', repoPath: '/r', model: 'm', previousRuns: [] }, () => {})
+    const run = agent.run({ ticketKey: 'CB-1', stage: 'plan', title: 't', description: 'd', repoPath: '/r', model: 'm', previousRuns: [] }, { onProgress: () => {}, onToolEvent: () => {} })
 
     expect(agent.stop('CB-1')).toBe(true)
     release()
@@ -143,7 +143,19 @@ describe('FakeAgentRunner', () => {
   it('does not affect a later run when nothing was running', async () => {
     const { agent } = createTestContext()
     expect(agent.stop('CB-1')).toBe(false)
-    const result = await agent.run({ ticketKey: 'CB-1', stage: 'plan', title: 't', description: 'd', repoPath: '/r', model: 'm', previousRuns: [] }, () => {})
+    const result = await agent.run({ ticketKey: 'CB-1', stage: 'plan', title: 't', description: 'd', repoPath: '/r', model: 'm', previousRuns: [] }, { onProgress: () => {}, onToolEvent: () => {} })
     expect(result.output.type).toBe('intent')
+  })
+
+  it('reports the scripted progress and tool events through the callbacks', async () => {
+    const { agent } = createTestContext()
+    agent.progress = ['Analyse']
+    agent.toolEvents = [{ kind: 'used', tool: 'Read', target: 'a.ts' }]
+    const onProgress = vi.fn()
+    const onToolEvent = vi.fn()
+    await agent.run({ ticketKey: 'CB-1', stage: 'plan', title: 't', description: 'd', repoPath: '/r', model: 'm', previousRuns: [] }, { onProgress, onToolEvent })
+    expect(onProgress).toHaveBeenCalledWith('Analyse')
+    expect(onToolEvent).toHaveBeenCalledWith({ kind: 'used', tool: 'Read', target: 'a.ts' })
+    expect(agent.callbacks).toHaveLength(1)
   })
 })

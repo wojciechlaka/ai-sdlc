@@ -12,10 +12,12 @@ afterEach(() => {
 })
 
 describe('resolveCorePaths', () => {
-  it('points to the shipped migrations and skills', () => {
+  it('points to the shipped migrations, skills and hook scripts', () => {
     const paths = resolveCorePaths(CORE_DIR)
     expect(fs.existsSync(path.join(paths.migrationsFolder, 'meta', '_journal.json'))).toBe(true)
     expect(fs.existsSync(path.join(paths.skillsDir, 'intent-agent.md'))).toBe(true)
+    expect(fs.existsSync(path.join(paths.hooksDir, 'guard.mjs'))).toBe(true)
+    expect(fs.existsSync(path.join(paths.hooksDir, 'audit.mjs'))).toBe(true)
   })
 })
 

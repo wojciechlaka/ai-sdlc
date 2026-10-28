@@ -5,14 +5,16 @@ import type { ZodIssue, ZodType } from 'zod'
 import { IntentAgentOutputSchema, type StageOutput } from '@refinement/shared'
 import { SchemaValidationError, CliError } from './errors'
 import { AgentRunTerminatedError, AgentRunTimeoutError } from '../../ports'
-import type { AgentRunner, AgentRunnerInput, AgentRunMeta, AgentRunResult } from '../../ports'
+import type { AgentRunner, AgentRunnerInput, AgentRunMeta, AgentRunResult, AgentRunCallbacks } from '../../ports'
 import type { ArtifactStage } from '../../domain/types'
 import { buildPrompt } from './prompt'
+import { HOOK_LOG_ENV, hookSettings, openHookLog } from './hookLog'
 import type { ClaudeStreamMessage, ClaudeTokenUsage, ExtractedResult, AttemptResult } from './types'
 
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000
 const SIGTERM_EXIT_CODE = 143
-const ALLOWED_TOOLS = 'Read,LS,Bash'
+/** Read-only tools; the guard hook additionally restricts Bash to reading commands (spec §13). */
+const ALLOWED_TOOLS = 'Read,Glob,Grep,Bash'
 const MS_PER_SECOND = 1000
 const UTF8 = 'utf-8' as const
 const SCHEMA_ERROR_PREVIEW_CHARS = 120
@@ -32,7 +34,8 @@ const runningProcesses = new Map<string, ChildProcess>()
 
 const TOOL_PROGRESS_MESSAGE: Record<string, string> = {
   Read: 'Codebase wird analysiert...',
-  LS:   'Codebase wird analysiert...',
+  Glob: 'Codebase wird analysiert...',
+  Grep: 'Codebase wird analysiert...',
   Bash: 'Codebase wird analysiert...',
 }
 
@@ -80,6 +83,12 @@ export function stopAgent(ticketKey: string): boolean {
   return true
 }
 
+/** Guard/audit hooks of one Claude process: `--settings` JSON and the log file the hooks write to. */
+interface HookConfig {
+  settings: string
+  logFile: string
+}
+
 /**
  * Spawns the Claude CLI, pipes the prompt via stdin and streams stdout line by line for progress events.
  * Rejects with AgentRunTimeoutError, AgentRunTerminatedError or CliError.
@@ -90,6 +99,7 @@ async function spawnClaude(
   cwd: string,
   model: string,
   onProgress: (msg: string) => void,
+  hooks: HookConfig,
 ): Promise<ExtractedResult> {
   const parsedTimeout = parseInt(process.env['REFINEMENT_TIMEOUT_MS'] ?? '', 10)
   const timeoutMs = Number.isFinite(parsedTimeout) && parsedTimeout > 0 ? parsedTimeout : DEFAULT_TIMEOUT_MS
@@ -104,7 +114,8 @@ async function spawnClaude(
       '--verbose',
       '--model', model,
       '--allowedTools', ALLOWED_TOOLS,
-    ], { cwd, env: { ...process.env }, stdio: ['pipe', 'pipe', 'pipe'] })
+      '--settings', hooks.settings,
+    ], { cwd, env: { ...process.env, [HOOK_LOG_ENV]: hooks.logFile }, stdio: ['pipe', 'pipe', 'pipe'] })
 
     runningProcesses.set(ticketKey, proc)
     const cleanup = () => { if (runningProcesses.get(ticketKey) === proc) runningProcesses.delete(ticketKey) }
@@ -194,11 +205,14 @@ function parseAndValidate(raw: string, schema: ZodType<StageOutput>): StageOutpu
   return result.data
 }
 
-/** One Claude attempt; schema failures are returned, all other errors are thrown. */
+/**
+ * One Claude attempt with its own hook log; schema failures are returned, all other errors are thrown.
+ * Tool events are reported while the process runs; the rest is drained before the attempt returns.
+ */
 async function runAttempt(
-  agent: { skill: string; schema: ZodType<StageOutput> },
+  agent: { skill: string; schema: ZodType<StageOutput>; hooksDir: string },
   input: AgentRunnerInput,
-  onProgress: (msg: string) => void,
+  callbacks: AgentRunCallbacks,
   retryContext?: { previousOutput: string; schemaError: string },
 ): Promise<AttemptResult> {
   const prompt = buildPrompt({
@@ -211,7 +225,16 @@ async function runAttempt(
     retryContext,
   })
 
-  const cliResult = await spawnClaude(input.ticketKey, prompt, input.repoPath, input.model, onProgress)
+  const hookLog = await openHookLog(callbacks.onToolEvent)
+  let cliResult: ExtractedResult
+  try {
+    cliResult = await spawnClaude(input.ticketKey, prompt, input.repoPath, input.model, callbacks.onProgress, {
+      settings: hookSettings(agent.hooksDir),
+      logFile: hookLog.file,
+    })
+  } finally {
+    await hookLog.close()
+  }
   try {
     return { ok: true, output: parseAndValidate(cliResult.text, agent.schema), cliResult } satisfies AttemptResult
   } catch (err) {
@@ -254,12 +277,15 @@ function buildMeta(model: string, startedAt: number, cliResult: ExtractedResult)
 export interface ClaudeCliOptions {
   /** Absolute path to `packages/core/skills`. */
   skillsDir: string
+  /** Absolute path to `packages/core/hooks` (guard and audit scripts, spec §13). */
+  hooksDir: string
 }
 
 /**
  * Runs the agent of `input.stage` and returns its validated output.
  * One automatic retry on a SchemaValidationError (the retry prompt quotes the malformed output);
  * terminate, timeout and CLI errors propagate immediately. Tokens and cost cover both attempts.
+ * Every attempt runs with the guard and audit hooks (`--settings`); their tool calls reach `callbacks.onToolEvent`.
  * @throws {Error} if the stage has no agent yet.
  * @throws {AgentRunTerminatedError} if the process is killed via `stopAgent`.
  * @throws {AgentRunTimeoutError} if the run exceeds `REFINEMENT_TIMEOUT_MS`.
@@ -268,7 +294,7 @@ export interface ClaudeCliOptions {
  */
 export async function runAgent(
   input: AgentRunnerInput,
-  onProgress: (msg: string) => void,
+  callbacks: AgentRunCallbacks,
   options: ClaudeCliOptions,
 ): Promise<AgentRunResult> {
   const stageAgent = STAGE_AGENTS[input.stage]
@@ -276,14 +302,15 @@ export async function runAgent(
   const agent = {
     skill: await fs.readFile(path.join(/*turbopackIgnore: true*/ options.skillsDir, stageAgent.skillFile), UTF8),
     schema: stageAgent.schema,
+    hooksDir: options.hooksDir,
   }
   const startedAt = Date.now()
 
-  const first = await runAttempt(agent, input, onProgress)
+  const first = await runAttempt(agent, input, callbacks)
   if (first.ok) return { output: first.output, meta: buildMeta(input.model, startedAt, first.cliResult) }
 
-  reportSchemaError(first.error.rawOutput, first.error.message, onProgress)
-  const retry = await runAttempt(agent, input, onProgress, {
+  reportSchemaError(first.error.rawOutput, first.error.message, callbacks.onProgress)
+  const retry = await runAttempt(agent, input, callbacks, {
     previousOutput: first.error.rawOutput ?? first.error.message,
     schemaError: first.error.message,
   })
@@ -295,7 +322,7 @@ export async function runAgent(
 /** AgentRunner port backed by the headless Claude Code CLI (`claude --print`). */
 export function createClaudeCliAgentRunner(options: ClaudeCliOptions): AgentRunner {
   return {
-    run: (input, onProgress) => runAgent(input, onProgress, options),
+    run: (input, callbacks) => runAgent(input, callbacks, options),
     stop: (ticketKey) => stopAgent(ticketKey),
   }
 }

@@ -1,6 +1,6 @@
 import type { Ticket } from '../domain/types'
 import { renderIntent } from '../domain/render'
-import { AgentRunTerminatedError, AgentRunTimeoutError } from '../ports'
+import { AgentRunTerminatedError, AgentRunTimeoutError, type ToolEvent } from '../ports'
 import type { UseCaseDeps } from './deps'
 import { finishRun, isCurrentRun, type RunRequest } from './beginRun'
 import { createReporter } from './reporter'
@@ -25,6 +25,20 @@ export async function executeRun(deps: UseCaseDeps, ticket: Ticket, request: Exe
   const { runId } = request
   const isCurrent = () => isCurrentRun(deps, ticket.key, runId)
 
+  // Tool calls seen by the guard/audit hooks (spec §13); a stale attempt no longer writes to the log.
+  const onToolEvent = ({ kind, tool, target, reason, exitCode }: ToolEvent) => {
+    if (!isCurrent()) return
+    if (kind === 'blocked') {
+      deps.audit.append({ ticketKey: ticket.key, actor: 'system', type: 'guard_blocked', payload: { tool, target, reason } })
+      reporter.report(`Blockiert: ${tool} ${target}`)
+    } else {
+      deps.audit.append({
+        ticketKey: ticket.key, actor: 'agent', type: 'tool_used',
+        payload: exitCode === undefined ? { tool, target } : { tool, target, exitCode },
+      })
+    }
+  }
+
   try {
     const { output, meta } = await deps.agent.run(
       {
@@ -37,7 +51,7 @@ export async function executeRun(deps: UseCaseDeps, ticket: Ticket, request: Exe
         codebaseSummary: request.codebaseSummary ?? undefined,
         previousRuns: request.previousRuns,
       },
-      reporter.report,
+      { onProgress: reporter.report, onToolEvent },
     )
 
     if (!isCurrent()) {
