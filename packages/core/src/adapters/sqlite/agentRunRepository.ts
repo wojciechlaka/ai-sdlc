@@ -1,24 +1,17 @@
-import { desc, eq } from 'drizzle-orm'
+import { and, count, eq } from 'drizzle-orm'
 import type { AgentRunRepository } from '../../ports'
 import type { SqliteDb } from './database'
-import { agentRuns, tickets } from './schema'
+import { agentRuns } from './schema'
 
 export function createSqliteAgentRunRepository(db: SqliteDb): AgentRunRepository {
   return {
     create(input) {
       return db.transaction((tx) => {
-        const ticket = tx.select().from(tickets).where(eq(tickets.id, input.ticketId)).get()
-        if (!ticket) throw new Error(`Ticket ${input.ticketId} not found`)
-
-        const iteration = ticket.iteration + 1
-        tx.update(tickets)
-          .set({ iteration, updatedAt: new Date() })
-          .where(eq(tickets.id, input.ticketId))
-          .run()
-
+        const existing = tx.select({ n: count() }).from(agentRuns).where(eq(agentRuns.ticketKey, input.ticketKey)).get()
         return tx.insert(agentRuns).values({
-          ticketId: input.ticketId,
-          iteration,
+          ticketKey: input.ticketKey,
+          stage: input.stage,
+          seq: (existing?.n ?? 0) + 1,
           trigger: input.trigger,
           input: input.input,
           status: 'running',
@@ -49,15 +42,11 @@ export function createSqliteAgentRunRepository(db: SqliteDb): AgentRunRepository
       if (!row) throw new Error(`AgentRun ${id} not found`)
     },
 
-    listForTicket: (ticketId) =>
-      db.select().from(agentRuns).where(eq(agentRuns.ticketId, ticketId)).orderBy(agentRuns.iteration).all(),
-
-    latestForTicket: (ticketId) =>
+    listForTicket: (ticketKey, stage) =>
       db.select().from(agentRuns)
-        .where(eq(agentRuns.ticketId, ticketId))
-        .orderBy(desc(agentRuns.iteration))
-        .limit(1)
-        .get() ?? null,
+        .where(and(eq(agentRuns.ticketKey, ticketKey), stage ? eq(agentRuns.stage, stage) : undefined))
+        .orderBy(agentRuns.seq)
+        .all(),
 
     findStuck: () => db.select().from(agentRuns).where(eq(agentRuns.status, 'running')).all(),
   }
