@@ -28,7 +28,7 @@ const REPO_ROUTE = { 'GET /repos/o/r': { status: 200, body: { default_branch: 'm
 
 function setup(routes: Record<string, Route> = {}) {
   const gh = fakeGitHub({ ...REPO_ROUTE, ...routes })
-  const codeHost = createGitHubCodeHost({ repoUrl: 'https://github.com/o/r', token: 't', fetch: gh.fetch })
+  const codeHost = createGitHubCodeHost({ repoUrl: 'https://github.com/o/r', token: 't', baseBranch: 'showcase', baselineTag: 'showcase-base', fetch: gh.fetch })
   return { gh, codeHost }
 }
 
@@ -41,7 +41,7 @@ const pr = (patch: Record<string, unknown> = {}) => ({
 describe('request timeout', () => {
   it('passes an abort signal with every request', async () => {
     const { gh, codeHost } = setup()
-    await codeHost.baseBranch()
+    await codeHost.readFile('a.md')
     expect(gh.inits.length).toBeGreaterThan(0)
     expect(gh.inits.every((init) => init?.signal instanceof AbortSignal)).toBe(true)
   })
@@ -59,26 +59,26 @@ describe('parseGitHubRepoUrl', () => {
 })
 
 describe('reading', () => {
-  it('reads a file from the default branch', async () => {
+  it('reads a file from the base branch', async () => {
     const { gh, codeHost } = setup({
       [`GET /repos/o/r/contents/${INTENT_PATH}`]: { status: 200, body: { type: 'file', encoding: 'base64', content: base64('# Intent'), sha: 's1' } },
     })
     expect(await codeHost.readFile(INTENT_PATH)).toBe('# Intent')
-    expect(gh.calls.find((c) => c.path.includes('/contents/'))?.query).toBe('?ref=master')
+    expect(gh.calls.find((c) => c.path.includes('/contents/'))?.query).toBe('?ref=showcase')
   })
 
-  it('returns null for missing files and asks for the default branch only once', async () => {
+  it('returns null for missing files and never asks for the default branch', async () => {
     const { gh, codeHost } = setup()
     expect(await codeHost.readFile('a.md')).toBeNull()
-    expect(await codeHost.readFile('b.md')).toBeNull()
-    expect(gh.calls.filter((c) => c.path === '/repos/o/r')).toHaveLength(1)
+    expect(await codeHost.baseBranch()).toBe('showcase')
+    expect(gh.calls.filter((c) => c.path === '/repos/o/r')).toHaveLength(0)
   })
 })
 
 describe('writing', () => {
-  it('creates a branch from the head of the default branch', async () => {
+  it('creates a branch from the head of the base branch', async () => {
     const { gh, codeHost } = setup({
-      'GET /repos/o/r/git/ref/heads/master': { status: 200, body: { object: { sha: 'abc' } } },
+      'GET /repos/o/r/git/ref/heads/showcase': { status: 200, body: { object: { sha: 'abc' } } },
       'POST /repos/o/r/git/refs': { status: 201, body: { ref: 'refs/heads/CB-1/intent' } },
     })
     await codeHost.createBranch('CB-1/intent')
@@ -101,12 +101,12 @@ describe('writing', () => {
     expect(decodeURIComponent(updated.gh.calls.find((c) => c.method === 'GET' && c.path.includes('/contents/'))?.query ?? '')).toBe('?ref=CB-1/intent')
   })
 
-  it('opens a PR against the default branch', async () => {
+  it('opens a PR against the base branch', async () => {
     const { gh, codeHost } = setup({ 'POST /repos/o/r/pulls': { status: 201, body: pr() } })
     expect(await codeHost.openPullRequest({ branch: 'CB-1/intent', title: 'CB-1: Intent', body: 'b' })).toEqual({
       number: 7, url: 'https://github.com/o/r/pull/7', state: 'open', headBranch: 'CB-1/intent', mergedAt: null,
     })
-    expect(gh.calls.find((c) => c.method === 'POST')?.body).toEqual({ head: 'CB-1/intent', base: 'master', title: 'CB-1: Intent', body: 'b' })
+    expect(gh.calls.find((c) => c.method === 'POST')?.body).toEqual({ head: 'CB-1/intent', base: 'showcase', title: 'CB-1: Intent', body: 'b' })
   })
 
   it('closes PRs and deletes branches; a missing branch is fine', async () => {
@@ -121,6 +121,63 @@ describe('writing', () => {
     await codeHost.deleteBranch('CB-3/intent') // 404
     expect(gh.calls.find((c) => c.method === 'DELETE')?.rawPath).toBe('/repos/o/r/git/refs/heads%2FCB-1%2Fintent')
     expect(gh.calls.find((c) => c.method === 'PATCH')?.body).toEqual({ state: 'closed' })
+  })
+})
+
+const TAG_REF = 'GET /repos/o/r/git/ref/tags/showcase-base'
+const BRANCH_REF = 'GET /repos/o/r/git/ref/heads/showcase'
+const ref = (sha: string, type = 'commit') => ({ status: 200, body: { object: { sha, type } } })
+
+describe('base branch', () => {
+  it('creates nothing when tag and base branch exist', async () => {
+    const { gh, codeHost } = setup({ [TAG_REF]: ref('base1'), [BRANCH_REF]: ref('head1') })
+    expect(await codeHost.prepareBaseBranch()).toEqual({ createdTag: false, createdBranch: false })
+    expect(gh.calls.filter((c) => c.method !== 'GET')).toEqual([])
+    expect(gh.calls.filter((c) => c.path === '/repos/o/r')).toHaveLength(0)
+  })
+
+  it('puts a missing tag on the head of the default branch and a missing base branch on the tag', async () => {
+    const { gh, codeHost } = setup({
+      'GET /repos/o/r/git/ref/heads/master': ref('m1'),
+      'POST /repos/o/r/git/refs': { status: 201, body: {} },
+    })
+    expect(await codeHost.prepareBaseBranch()).toEqual({ createdTag: true, createdBranch: true })
+    expect(gh.calls.filter((c) => c.method === 'POST').map((c) => c.body)).toEqual([
+      { ref: 'refs/tags/showcase-base', sha: 'm1' },
+      { ref: 'refs/heads/showcase', sha: 'm1' },
+    ])
+  })
+
+  it('creates only the missing base branch, on the commit of an annotated tag', async () => {
+    const { gh, codeHost } = setup({
+      [TAG_REF]: ref('tagobj', 'tag'),
+      'GET /repos/o/r/git/tags/tagobj': { status: 200, body: { object: { sha: 'c1', type: 'commit' } } },
+      'POST /repos/o/r/git/refs': { status: 201, body: {} },
+    })
+    expect(await codeHost.prepareBaseBranch()).toEqual({ createdTag: false, createdBranch: true })
+    expect(gh.calls.filter((c) => c.method === 'POST').map((c) => c.body)).toEqual([{ ref: 'refs/heads/showcase', sha: 'c1' }])
+  })
+
+  it('force-moves the base branch to the tag', async () => {
+    const { gh, codeHost } = setup({
+      [TAG_REF]: ref('base1'),
+      'PATCH /repos/o/r/git/refs/heads/showcase': { status: 200, body: {} },
+    })
+    await codeHost.resetBaseBranch()
+    const patch = gh.calls.find((c) => c.method === 'PATCH')
+    expect(patch?.body).toEqual({ sha: 'base1', force: true })
+    expect(gh.calls.some((c) => c.path.includes('heads/master'))).toBe(false)
+  })
+
+  it('names the missing tag and a protected base branch', async () => {
+    const missing = setup()
+    await expect(missing.codeHost.resetBaseBranch()).rejects.toMatchObject({ status: 404, message: expect.stringContaining('Tag showcase-base fehlt') })
+
+    const prot = setup({
+      [TAG_REF]: ref('base1'),
+      'PATCH /repos/o/r/git/refs/heads/showcase': { status: 422, body: { message: 'Cannot force-update a protected branch' } },
+    })
+    await expect(prot.codeHost.resetBaseBranch()).rejects.toMatchObject({ status: 422, message: expect.stringContaining('Branch-Schutz') })
   })
 })
 

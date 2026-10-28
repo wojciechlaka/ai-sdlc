@@ -6,6 +6,10 @@ export interface GitHubCodeHostOptions {
   repoUrl: string
   /** Fine-grained PAT with Contents and Pull requests: Read and write. */
   token: string
+  /** Branch the app works on: content is read from it, app branches start from it, PRs target it. */
+  baseBranch: string
+  /** Tag marking the state `resetBaseBranch` moves the base branch back to. */
+  baselineTag: string
   /** Injected in tests; defaults to the global fetch. */
   fetch?: typeof fetch
 }
@@ -81,11 +85,25 @@ export function createGitHubCodeHost(options: GitHubCodeHostOptions): CodeHost {
     }
   }
 
-  const defaultBranch = () =>
-    step('Default-Branch lesen', async () => {
-      cachedDefaultBranch ??= (await octokit.rest.repos.get({ owner, repo })).data.default_branch
-      return cachedDefaultBranch
-    })
+  const { baseBranch, baselineTag } = options
+
+  /** Default branch of the repository; only needed to place a missing baseline tag. */
+  const defaultBranch = async () => {
+    cachedDefaultBranch ??= (await octokit.rest.repos.get({ owner, repo })).data.default_branch
+    return cachedDefaultBranch
+  }
+
+  /** Commit sha a ref points to; null if the ref does not exist. Annotated tags are resolved to their commit. */
+  const commitOf = async (ref: string): Promise<string | null> => {
+    try {
+      const { object } = (await octokit.rest.git.getRef({ owner, repo, ref })).data
+      if (object.type !== 'tag') return object.sha
+      return (await octokit.rest.git.getTag({ owner, repo, tag_sha: object.sha })).data.object.sha
+    } catch (err) {
+      if (statusOf(err) === 404) return null
+      throw err
+    }
+  }
 
   /** Content and blob sha of a file on `ref`; null if it does not exist. */
   const getFile = async (path: string, ref: string): Promise<{ content: string; sha: string } | null> => {
@@ -100,26 +118,42 @@ export function createGitHubCodeHost(options: GitHubCodeHostOptions): CodeHost {
   }
 
   return {
-    // Interim: still the default branch until the adapter gets its configured base branch.
-    baseBranch: defaultBranch,
+    baseBranch: async () => baseBranch,
 
-    prepareBaseBranch: async () => {
-      throw new CodeHostError(0, 'Basis-Branch vorbereiten: noch nicht unterstützt')
+    prepareBaseBranch: () =>
+      step(`Branch ${baseBranch} vorbereiten`, async () => {
+        let tagSha = await commitOf(`tags/${baselineTag}`)
+        const createdTag = tagSha === null
+        if (tagSha === null) {
+          const head = (await octokit.rest.git.getRef({ owner, repo, ref: `heads/${await defaultBranch()}` })).data.object.sha
+          // Lightweight tag: a plain ref to the commit.
+          await octokit.rest.git.createRef({ owner, repo, ref: `refs/tags/${baselineTag}`, sha: head })
+          tagSha = head
+        }
+        const createdBranch = (await commitOf(`heads/${baseBranch}`)) === null
+        if (createdBranch) await octokit.rest.git.createRef({ owner, repo, ref: `refs/heads/${baseBranch}`, sha: tagSha })
+        return { createdTag, createdBranch }
+      }),
+
+    async resetBaseBranch() {
+      const action = `Branch ${baseBranch} zurücksetzen`
+      const sha = await step(action, () => commitOf(`tags/${baselineTag}`))
+      if (sha === null) throw new CodeHostError(404, `${action}: Tag ${baselineTag} fehlt — beim nächsten Start legt die App ihn auf den Default-Branch.`)
+      try {
+        await octokit.rest.git.updateRef({ owner, repo, ref: `heads/${baseBranch}`, sha, force: true })
+      } catch (err) {
+        if (statusOf(err) === 422 && /protected/i.test(err instanceof Error ? err.message : '')) {
+          throw new CodeHostError(422, `${action}: Branch-Schutz auf ${baseBranch} verhindert den Reset — Schutzregel in GitHub entfernen.`)
+        }
+        throw toCodeHostError(err, action)
+      }
     },
 
-    resetBaseBranch: async () => {
-      throw new CodeHostError(0, 'Basis-Branch zurücksetzen: noch nicht unterstützt')
-    },
-
-    async readFile(path) {
-      const ref = await defaultBranch()
-      return step(`${path} lesen`, async () => (await getFile(path, ref))?.content ?? null)
-    },
+    readFile: (path) => step(`${path} lesen`, async () => (await getFile(path, baseBranch))?.content ?? null),
 
     async createBranch(name) {
-      const base = await defaultBranch()
       await step(`Branch ${name} anlegen`, async () => {
-        const { data } = await octokit.rest.git.getRef({ owner, repo, ref: `heads/${base}` })
+        const { data } = await octokit.rest.git.getRef({ owner, repo, ref: `heads/${baseBranch}` })
         await octokit.rest.git.createRef({ owner, repo, ref: `refs/heads/${name}`, sha: data.object.sha })
       })
     },
@@ -135,11 +169,9 @@ export function createGitHubCodeHost(options: GitHubCodeHostOptions): CodeHost {
       })
     },
 
-    async openPullRequest({ branch, title, body }) {
-      const base = await defaultBranch()
-      return step(`PR für ${branch} öffnen`, async () =>
-        toPullRequest((await octokit.rest.pulls.create({ owner, repo, head: branch, base, title, body })).data))
-    },
+    openPullRequest: ({ branch, title, body }) =>
+      step(`PR für ${branch} öffnen`, async () =>
+        toPullRequest((await octokit.rest.pulls.create({ owner, repo, head: branch, base: baseBranch, title, body })).data)),
 
     getPullRequest: (number) =>
       step(`PR #${number} lesen`, async () => toPullRequest((await octokit.rest.pulls.get({ owner, repo, pull_number: number })).data)),

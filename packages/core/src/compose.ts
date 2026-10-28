@@ -30,6 +30,11 @@ export interface EngineConfig {
 
 const STOP_SETTLE_MS = 500
 
+/** Branch the app works on; PRs target it, `master` stays untouched (spec §12). */
+export const SHOWCASE_BRANCH = 'showcase'
+/** Tag marking the initial state of the showcase branch; the repo reset moves the branch back to it. */
+export const BASELINE_TAG = 'showcase-base'
+
 /**
  * Paths of the assets shipped with this package. Passed in from the app because bundlers
  * (Next.js) relocate the code, so `__dirname` inside the package is not reliable.
@@ -53,7 +58,9 @@ export function createRefinementEngine(config: EngineConfig): UseCases {
     artifacts: createSqliteArtifactRepository(db),
     audit: createSqliteAuditLog(db),
     source: createMarkdownTicketSource({ dir: config.ticketsDir, rootDir: config.rootDir }),
-    codeHost: config.githubToken ? createGitHubCodeHost({ repoUrl: config.targetRepo, token: config.githubToken }) : null,
+    codeHost: config.githubToken
+      ? createGitHubCodeHost({ repoUrl: config.targetRepo, token: config.githubToken, baseBranch: SHOWCASE_BRANCH, baselineTag: BASELINE_TAG })
+      : null,
     agent: createClaudeCliAgentRunner({ skillsDir: config.skillsDir }),
     repos: createGitRepoProvider(),
     events: createNodeEventPublisher(),
