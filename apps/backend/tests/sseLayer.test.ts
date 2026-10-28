@@ -68,12 +68,23 @@ describe('initSSE', () => {
   })
 
   it('unsubscribes after the client disconnects', async () => {
-    const { app, events } = setup()
+    const events = createNodeEventPublisher()
+    let unsubscribed = 0
+    const engine = {
+      subscribeToTicket: (ticketId: string, listener: Parameters<typeof events.subscribe>[1]) => {
+        const unsubscribe = events.subscribe(ticketId, listener)
+        return () => { unsubscribed += 1; unsubscribe() }
+      },
+    } as unknown as UseCases
+    const app = new Hono()
+    initSSE(app, engine)
     const { server, port } = await startServer(app)
     const { req } = await openSSE(port, 'T-4')
     await wait(50)
+    expect(unsubscribed).toBe(0)
     req.destroy()
     await wait(50)
+    expect(unsubscribed).toBe(1)
     expect(() => events.publish({ type: 'progress', ticketId: 'T-4', message: 'after' })).not.toThrow()
     await close(server)
   })

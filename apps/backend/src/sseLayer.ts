@@ -12,15 +12,20 @@ export function initSSE(app: Hono, engine: UseCases): void {
     if (!ticketId) return c.json({ error: 'ticketId query parameter is required' }, 400)
 
     return streamSSE(c, async (stream) => {
-      // Comment frame flushes proxy buffers; the leading ':' makes it a no-op for EventSource.
-      await stream.write(': ok\n\n')
+      // Register the abort handler first so an early disconnect cannot leak the subscription.
+      const closed = new Promise<void>((resolve) => stream.onAbort(resolve))
       const unsubscribe = engine.subscribeToTicket(ticketId, (event) => {
-        stream.writeSSE({ data: JSON.stringify(event) }).catch((err) => {
-          console.warn('[SSE] client disconnected mid-send for ticket', ticketId, err)
+        void stream.writeSSE({ data: JSON.stringify(event) }).catch(() => {
+          // Client went away mid-send; the abort handler cleans up.
         })
       })
-      await new Promise<void>((resolve) => stream.onAbort(resolve))
-      unsubscribe()
+      try {
+        // Comment frame flushes proxy buffers; the leading ':' makes it a no-op for EventSource.
+        await stream.write(': ok\n\n')
+        if (!stream.aborted) await closed
+      } finally {
+        unsubscribe()
+      }
     })
   })
 }

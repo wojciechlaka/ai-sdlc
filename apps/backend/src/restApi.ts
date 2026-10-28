@@ -62,8 +62,12 @@ export function createApp(engine: UseCases) {
   })
 
   app.post('/tickets/:id/stop', async (c) => {
-    await engine.stopRefinement(c.req.param('id'))
-    return c.json({ message: 'Refinement stopped' }, 202)
+    try {
+      await engine.stopRefinement(c.req.param('id'))
+      return c.json({ message: 'Refinement stopped' }, 202)
+    } catch (err) {
+      return handleError(c, err, 'POST /tickets/:id/stop')
+    }
   })
 
   app.delete('/tickets/:id', (c) => {
