@@ -4724,7 +4724,7 @@ describe('answerQuestion', () => {
     expect(ctx.deps.tickets.findByKey('CB-2')?.state).toBe('in_review')
     expect(ctx.agent.calls[1]).toMatchObject({ model: 'claude-sonnet-4-6', previousRuns: [{ question: 'Wer?', answer: 'Alle Leser' }] })
     expect(ctx.store.runs[1]).toMatchObject({ trigger: 'answer', seq: 2 })
-    expect(ctx.codeHost.branches.get('CB-2/intent')?.get('docs/work/CB-2/intent.md')).toContain('**F:** Wer?\n**A:** Alle Leser')
+    expect(ctx.codeHost.branches.get('CB-2/intent')?.get('docs/work/CB-2/intent.md')).toContain('**F:** Wer?\\\n**A:** Alle Leser')
     expect(ctx.store.audit.find((e) => e.type === 'answer_given')).toMatchObject({ actor: 'human', payload: { answer: 'Alle Leser' } })
   })
 
