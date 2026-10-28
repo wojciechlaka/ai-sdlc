@@ -48,7 +48,7 @@ describe('ensureRepo', () => {
     expect(mockMkdirSync).toHaveBeenCalledWith(expect.any(String), { recursive: true })
     expect(mockExecFileSync).toHaveBeenCalledWith(
       'git',
-      ['clone', REPO_URL, expect.stringContaining('repo-cache')],
+      ['clone', '-c', 'core.symlinks=false', REPO_URL, expect.stringContaining('repo-cache')],
       expect.objectContaining({ stdio: 'pipe' }),
     )
   })
@@ -67,15 +67,16 @@ describe('ensureRepo', () => {
     mockExistsSync.mockReturnValue(true)
     mockExecFileSync
       .mockReturnValueOnce(Buffer.from(''))
+      .mockReturnValueOnce(Buffer.from(''))
       .mockImplementationOnce(() => { throw new Error('not a git repository') })
       .mockReturnValueOnce(Buffer.from(''))
     await ensureRepo(REPO_URL)
     expect(mockRmSync).toHaveBeenCalledWith(expect.any(String), { recursive: true, force: true })
     expect(mockMkdirSync).toHaveBeenCalledWith(expect.any(String), { recursive: true })
-    expect(mockExecFileSync).toHaveBeenCalledTimes(3)
+    expect(mockExecFileSync).toHaveBeenCalledTimes(4)
     expect(mockExecFileSync).toHaveBeenLastCalledWith(
       'git',
-      ['clone', REPO_URL, expect.stringContaining('repo-cache')],
+      ['clone', '-c', 'core.symlinks=false', REPO_URL, expect.stringContaining('repo-cache')],
       expect.objectContaining({ stdio: 'pipe' }),
     )
   })
@@ -86,7 +87,7 @@ describe('ensureRepo', () => {
     await ensureRepo(REPO_URL)
     expect(mockExecFileSync).toHaveBeenCalledWith(
       'git',
-      ['clone', REPO_URL, expect.stringContaining('repo-cache')],
+      ['clone', '-c', 'core.symlinks=false', REPO_URL, expect.stringContaining('repo-cache')],
       expect.objectContaining({ stdio: 'pipe' }),
     )
   })
@@ -96,8 +97,13 @@ describe('ensureRepo', () => {
     vi.stubEnv('GITHUB_TOKEN', 'mytoken123')
     await ensureRepo(REPO_URL)
     const calls = mockExecFileSync.mock.calls.map((c) => c[1])
-    expect(calls[0]).toEqual(['remote', 'set-url', 'origin', REPO_URL])
-    expect(calls[1]).toEqual(['pull'])
+    expect(calls).toEqual([
+      ['remote', 'set-url', 'origin', REPO_URL],
+      ['config', 'core.symlinks', 'false'],
+      ['pull'],
+      ['rm', '-r', '-q', '--cached', '.'],
+      ['reset', '-q', '--hard'],
+    ])
     expect(mockExecFileSync.mock.calls[0][2]).toEqual(expect.objectContaining({ cwd: expect.any(String) }))
   })
 })

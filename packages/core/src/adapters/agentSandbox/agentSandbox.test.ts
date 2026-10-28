@@ -37,13 +37,27 @@ describe('sandboxEnv', () => {
     const env = sandboxEnv({
       PATH: '/bin', HOME: '/home/u', USER: 'u', LANG: 'de_DE.UTF-8', TMPDIR: '/tmp', SHELL: '/bin/zsh',
       ANTHROPIC_API_KEY: 'sk', CLAUDE_CONFIG_DIR: '/c', CLAUDE_CODE_USE_BEDROCK: '1', HTTPS_PROXY: 'http://proxy',
-      GITHUB_TOKEN: 'ghp_secret', DB_PATH: '/db', TARGET_REPO: 'x', AWS_SECRET_ACCESS_KEY: 'a', GIT_PAGER: 'sh', NODE_OPTIONS: '--require x',
+      GITHUB_TOKEN: 'ghp_secret', DB_PATH: '/db', TARGET_REPO: 'x', GIT_PAGER: 'sh', NODE_OPTIONS: '--require x',
+      OPENAI_API_KEY: 'o', NPM_TOKEN: 'n', REPO_CACHE_DIR: '/c', AWS_DEFAULT_OUTPUT: 'json', ANTHROPIC_MODEL: undefined,
     }, '/tmp/log.jsonl')
     expect(env).toEqual({
       PATH: '/bin', HOME: '/home/u', USER: 'u', LANG: 'de_DE.UTF-8', TMPDIR: '/tmp', SHELL: '/bin/zsh',
       ANTHROPIC_API_KEY: 'sk', CLAUDE_CONFIG_DIR: '/c', CLAUDE_CODE_USE_BEDROCK: '1', HTTPS_PROXY: 'http://proxy',
       REFINEMENT_HOOK_LOG: '/tmp/log.jsonl', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null',
     })
+  })
+
+  it('gibt die Zugangsdaten für Gateway, Bedrock und Vertex AI weiter, wenn gesetzt', () => {
+    const provider = {
+      ANTHROPIC_BASE_URL: 'https://gw', ANTHROPIC_AUTH_TOKEN: 't', ANTHROPIC_CUSTOM_HEADERS: 'X-A: 1', ANTHROPIC_MODEL: 'm',
+      CLAUDE_CODE_USE_BEDROCK: '1', CLAUDE_CODE_USE_VERTEX: '1', AWS_REGION: 'eu-central-1', AWS_PROFILE: 'p',
+      AWS_ACCESS_KEY_ID: 'k', AWS_SECRET_ACCESS_KEY: 's', AWS_SESSION_TOKEN: 'st', CLOUD_ML_REGION: 'europe-west1',
+      ANTHROPIC_VERTEX_PROJECT_ID: 'proj', GOOGLE_APPLICATION_CREDENTIALS: '/gcp.json',
+    }
+    expect(sandboxEnv({ ...provider, GITHUB_TOKEN: 'ghp' }, '/l')).toEqual({
+      ...provider, REFINEMENT_HOOK_LOG: '/l', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null',
+    })
+    expect(sandboxEnv({}, '/l')).toEqual({ REFINEMENT_HOOK_LOG: '/l', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' })
   })
 
   it('liest die Umgebung des Prozesses, wenn keine übergeben wird', () => {

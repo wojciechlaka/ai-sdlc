@@ -120,14 +120,18 @@ den Prompt. Jeder `claude`-Prozess der App läuft in einer Sandbox:
 - **Lesen nur im Klon:** `Read`, `Glob` und `Grep` sind erlaubt, aber nur für Pfade innerhalb des Klons (Symlinks
   werden aufgelöst; `/etc/…`, `~/.ssh/…`, `../…` werden abgelehnt).
 - **Bash nur für die git-Historie:** `git log`, `show`, `diff`, `blame`, `ls-files`, `status`, `rev-parse` mit
-  wenigen erlaubten Optionen (z. B. `git log --oneline -n20`, `git blame -L10,40 src/app.ts`), ohne jedes
-  Sonderzeichen (`$`, `;`, `|`, `>`, Anführungszeichen, `~`, …) und ohne Pfade außerhalb. Alles andere —
+  wenigen erlaubten Optionen (z. B. `git log --oneline -n20`, `git diff --stat HEAD~1`, `git blame -L10,40 src/app.ts`), ohne jedes
+  Sonderzeichen (`$`, `;`, `|`, `>`, Anführungszeichen, …; `~` und `^` nur in Revisionen wie `HEAD~1`) und ohne Pfade außerhalb. Alles andere —
   `rm`, `cat`, `curl`, `npm`, `git push`, Umleitungen, Verkettungen — wird blockiert.
 - **Alle anderen Werkzeuge** (`Write`, `Edit`, `WebFetch`, …) sind blockiert.
 - **Keine Secrets im Agent:** Der Prozess sieht nur eine kleine Liste an Umgebungsvariablen (`PATH`, `HOME`,
   Claude-Login, Proxy) — kein `GITHUB_TOKEN`. Einstellungen und Hooks aus einem `.claude/`-Ordner des Ziel-Repos
   werden nicht geladen (`--setting-sources user`).
 - **Im Zweifel blockiert:** Kann der Guard nicht laufen, wird der Aufruf abgelehnt.
+- **Symlinks** des Ziel-Repos werden im Klon als normale Dateien ausgecheckt und führen nicht aus ihm heraus.
+
+Restrisiken: Läuft ein Hook in sein Zeitlimit (10 s), blockiert Claude Code nicht. Das Bash-Werkzeug nutzt die
+eigene Shell (`SHELL`) samt deren Startdateien — sie gehören dir und gelten als vertrauenswürdig.
 
 Der Agent sieht die Begründung und arbeitet ohne den Aufruf weiter. Im **Log des Tickets** steht ein blockierter
 Aufruf rot hervorgehoben (z. B. „Blockiert: Bash \`rm -rf docs\` — Befehl rm ist nicht erlaubt. Nur git

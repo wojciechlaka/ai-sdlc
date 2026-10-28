@@ -23,16 +23,21 @@ const MAX_COMMAND_CHARS = 300
 const DEFAULT_TARGET_CHARS = 200
 
 /** Not allowed anywhere in a Bash command, quoted or not; control characters (newline, tab, …) neither. */
-const FORBIDDEN_CHARS = /[$`;&|<>(){}[\]*?!~\\'"]|[\u0000-\u001f\u007f]/
+const FORBIDDEN_CHARS = /[$`;&|<>(){}[\]*?!\\'"]|[\u0000-\u001f\u007f]/
+/**
+ * `~` and `^` only inside a word for revisions (`HEAD~1`, `HEAD^`): at the start of a word or after `=`/`:`
+ * the shell may expand `~` to a home directory (zsh also treats a leading `^` as glob negation).
+ */
+const REVISION_SUFFIX_MISPLACED = /(^|[ =:])[~^]/
 /** Non-option words: revisions, paths in the clone, `rev:path`. */
-const PLAIN_WORD = /^[A-Za-z0-9._/:@=+-]+$/
+const PLAIN_WORD = /^[A-Za-z0-9._/:@=+-][A-Za-z0-9._/:@=+~^-]*$/
 
 /** Allowed git subcommands and their allowed options (exact strings or full-match patterns). */
 /** @type {Record<string, OptionRule[]>} */
 const GIT_OPTIONS = {
-  log: ['--oneline', /^-n\d+$/, /^-\d+$/, '--stat', '--name-only', '--name-status', /^--since=[A-Za-z0-9.:-]+$/,
+  log: ['--oneline', '-p', /^-n\d+$/, /^-\d+$/, '--stat', '--name-only', '--name-status', /^--since=[A-Za-z0-9.:-]+$/,
     /^--author=[A-Za-z0-9._@-]+$/, '--follow', '--'],
-  show: ['--stat', '--name-only', '--oneline'],
+  show: ['--stat', '--name-only', '--oneline', '--'],
   diff: ['--stat', '--name-only', '--name-status', '--no-ext-diff', '--'],
   blame: [/^-L\d+,\d+$/],
   'ls-files': ['--'],
@@ -66,6 +71,8 @@ export function decideBash(command) {
     const shown = /[\u0000-\u001f\u007f]/.test(special[0]) ? 'Steuerzeichen' : `„${special[0]}“`
     return denyBash(`Sonderzeichen ${shown} ist nicht erlaubt`)
   }
+  const misplaced = command.match(REVISION_SUFFIX_MISPLACED)
+  if (misplaced) return denyBash(`„${misplaced[0].trim().slice(-1)}“ ist nur innerhalb einer Revision erlaubt (z. B. HEAD~1)`)
   const words = command.trim().split(' ')
   if (words.some((w) => w === '')) return denyBash('Leerer Befehl oder doppelte Leerzeichen')
   if (words[0] !== 'git') return denyBash(`Befehl ${words[0]} ist nicht erlaubt`)
@@ -127,12 +134,15 @@ function outsideReason(value, cwd) {
 
 /**
  * Glob patterns are resolved by the tool relative to its path: no absolute patterns (also inside `{a,b}`),
- * no home directory, no `..`.
+ * no home directory, no `..`, no `(`, `\` or `[/`.
  * @param {string} pattern
  * @returns {string | null}
  */
 function globReason(pattern) {
-  if (/(^|[{,])\s*[/~]/.test(pattern) || pattern.includes('..')) return `Muster ${pattern} zeigt aus dem Repository heraus`
+  // `(` (extglob such as `@(/etc)`), `\` (escaped `/`) and `[/` (character class with `/`) could hide an absolute path.
+  if (/(^|[{,])\s*[/~]/.test(pattern) || pattern.includes('..') || /[(\\]|\[\//.test(pattern)) {
+    return `Muster ${pattern} zeigt aus dem Repository heraus`
+  }
   return null
 }
 

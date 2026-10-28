@@ -14,8 +14,11 @@ const HOOK_TIMEOUT_SECONDS = 10
 /** Variables the `claude` process may see; everything else (GITHUB_TOKEN, DB_PATH, …) stays in the app. */
 const ENV_ALLOWLIST = new Set([
   'PATH', 'HOME', 'USER', 'LANG', 'LC_ALL', 'TERM', 'TMPDIR', 'SHELL',
-  // Claude login and configuration.
-  'ANTHROPIC_API_KEY', 'CLAUDE_CONFIG_DIR',
+  // Claude login and configuration (Anthropic API, gateway, Bedrock, Vertex AI); CLAUDE_CODE_* below.
+  'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'ANTHROPIC_CUSTOM_HEADERS', 'ANTHROPIC_MODEL',
+  'CLAUDE_CONFIG_DIR', 'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX',
+  'AWS_REGION', 'AWS_PROFILE', 'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN',
+  'CLOUD_ML_REGION', 'ANTHROPIC_VERTEX_PROJECT_ID', 'GOOGLE_APPLICATION_CREDENTIALS',
   // Reaching the Anthropic API behind a corporate proxy.
   'HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY', 'https_proxy', 'http_proxy', 'no_proxy', 'NODE_EXTRA_CA_CERTS',
 ])

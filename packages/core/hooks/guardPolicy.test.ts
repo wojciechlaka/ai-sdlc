@@ -48,6 +48,11 @@ describe('decide — Bash: nur lesende git-Befehle ohne Sonderzeichen', () => {
     'git rev-parse HEAD',
     'git rev-parse --short HEAD',
     'git rev-parse --abbrev-ref HEAD',
+    'git diff --stat HEAD~1',
+    'git show HEAD^ --stat',
+    'git show main~3:src/app.ts',
+    'git show HEAD -- src/app.ts',
+    'git log -p -n5 -- src/app.ts',
   ])('erlaubt %s', (command) => {
     expect(bash(command)).toEqual({ allow: true })
   })
@@ -62,7 +67,7 @@ describe('decide — Bash: nur lesende git-Befehle ohne Sonderzeichen', () => {
     // Nicht lesende git-Befehle und Optionen außerhalb der Positivliste.
     'git push', 'git commit -m x', 'git checkout -b x', 'git branch', 'git branch -a', 'git branch -D main',
     'git branch --set-upstream-to=origin/main', 'git grep -n prisma', 'git cat-file -p HEAD',
-    'git -c core.pager=sh log', 'git -C /etc log', 'git log -p', 'git log --output=x', 'git diff --output=x.patch',
+    'git -c core.pager=sh log', 'git -C /etc log', 'git log --output=x', 'git diff --output=x.patch',
     'git diff --ext-diff', 'git show --textconv HEAD', 'git log --format=x', 'git status -uall', 'git ls-files -o',
     'git rev-parse --git-dir', 'git log --oneline --pretty',
     // Verkettung, Umleitung, Ersetzung — kein Sonderzeichen ist erlaubt, auch nicht in Anführungszeichen.
@@ -77,8 +82,9 @@ describe('decide — Bash: nur lesende git-Befehle ohne Sonderzeichen', () => {
     'sort -o/x a', 'sort --out=/x a', 'uniq - /x', 'sed s/a/b/gw /x', "sed -e'1w /x'", 'sed -f x',
     'cat ~/.ssh/id_rsa', 'cat /etc/passwd', 'find . -delete', "sed -i 's/a/b/' x", "awk 'BEGIN{system(\"x\")}'",
     // Pfade außerhalb des Klons, Bereiche und Revisionsausdrücke.
-    'git show /etc/passwd', 'git log -- /etc', 'git diff HEAD..main', 'git log -- ../outside', 'git show HEAD^',
-    'git show HEAD~1', 'git show HEAD@{1}',
+    'git show /etc/passwd', 'git log -- /etc', 'git diff HEAD..main', 'git diff HEAD~1..HEAD', 'git log -- ../outside',
+    'git show HEAD@{1}', 'git log ~/x', 'git log ~', 'git diff ^HEAD', 'git show HEAD:~/x', 'git log a=~/x',
+    'git show ~root', 'git log -p --output=x',
     // Form.
     '', ' ', 'git', 'git  log', 'git log ' + 'a'.repeat(300),
   ])('blockiert %j', (command) => {
@@ -120,6 +126,10 @@ describe('decide — Read, Glob, Grep nur innerhalb des Repositorys', () => {
     ['Glob', { pattern: '*', path: path.join(repo, 'escape') }],
     ['Grep', { pattern: 'x', path: '/etc' }],
     ['Grep', { pattern: 'x', glob: '../*' }],
+    ['Glob', { pattern: '@(/etc)/*' }],
+    ['Glob', { pattern: '\\/etc/*' }],
+    ['Glob', { pattern: '[/]etc/*' }],
+    ['Grep', { pattern: 'x', glob: '+(/etc)' }],
   ])('blockiert %s %j', (tool, input) => {
     expect(call(tool, input)).toEqual({ allow: false, reason: expect.stringContaining('Nur innerhalb des Repositorys lesen') })
   })

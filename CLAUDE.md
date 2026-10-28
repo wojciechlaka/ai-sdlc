@@ -113,8 +113,8 @@ and hooks are never loaded), `--allowedTools Read,Glob,Grep,Bash`, `--settings` 
 (`packages/core/hooks/guard.mjs`) and a `PostToolUse` hook (`hooks/audit.mjs`), and an allowlisted env (no
 `GITHUB_TOKEN`; `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null`). Policy (`hooks/guardPolicy.mjs`, no shell
 parsing): Read/Glob/Grep only inside the realpath of the clone; Bash only `git log|show|diff|blame|ls-files|status|
-rev-parse` with allowlisted options, no shell special characters at all, no absolute paths or `..`; every other tool
-denied. The guard fails closed (modules loaded inside `try`; shell fallback `|| … exit 2` if node cannot run it);
+rev-parse` with allowlisted options, no shell special characters (`~`/`^` only inside a revision word), no absolute
+paths or `..`; every other tool denied. The clone is checked out with `core.symlinks=false` (`adapters/git`). The guard fails closed (modules loaded inside `try`; shell fallback `|| … exit 2` if node cannot run it);
 audit fails open. Both append JSON lines to `$REFINEMENT_HOOK_LOG`, a temp file per attempt that
 `adapters/claudeCli/hookLog.ts` follows during the run and reports as `ToolEvent` (`{ kind: 'blocked' | 'used', tool,
 target, reason? }`) via `AgentRunner.run(input, { onProgress, onToolEvent })`. `executeRun` turns them into

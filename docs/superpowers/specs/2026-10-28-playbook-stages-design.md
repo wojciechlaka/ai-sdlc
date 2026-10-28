@@ -220,9 +220,14 @@ sitzt deshalb dort, wo das Risiko liegt: an den Werkzeugen des Agents.
   deren Hooks) werden nie geladen. Unsere Hooks kommen pro Aufruf über `--settings`.
 - `--allowedTools Read,Glob,Grep,Bash` (`LS` ist kein Werkzeug mehr).
 - Umgebung nur aus einer Positivliste: `PATH`, `HOME`, `USER`, `LANG`, `LC_ALL`, `TERM`, `TMPDIR`, `SHELL`,
-  `ANTHROPIC_API_KEY`, `CLAUDE_CONFIG_DIR`, `CLAUDE_CODE_*`, Proxy-Variablen (`HTTP(S)_PROXY`, `NO_PROXY`,
-  `NODE_EXTRA_CA_CERTS`); dazu `REFINEMENT_HOOK_LOG`, `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null`.
+  Claude-Login und Anbieter, nur wenn gesetzt (`ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL`,
+  `ANTHROPIC_CUSTOM_HEADERS`, `ANTHROPIC_MODEL`, `CLAUDE_CONFIG_DIR`, `CLAUDE_CODE_*`, `AWS_REGION`, `AWS_PROFILE`,
+  `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `CLOUD_ML_REGION`, `ANTHROPIC_VERTEX_PROJECT_ID`,
+  `GOOGLE_APPLICATION_CREDENTIALS`), Proxy-Variablen (`HTTP(S)_PROXY`, `NO_PROXY`, `NODE_EXTRA_CA_CERTS`); dazu `REFINEMENT_HOOK_LOG`, `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null`.
   **Kein `GITHUB_TOKEN`** und keine anderen Variablen der App. Die `.git/config` des Klons legt die App selbst an.
+- **Symlinks als Dateien:** Der Klon entsteht mit `git clone -c core.symlinks=false`; ein bestehender Cache bekommt
+  vor dem `pull` `core.symlinks=false` und wird danach neu ausgecheckt (`git rm -r --cached .`, `git reset --hard`).
+  Ein Symlink im Ziel-Repo ist im Klon also eine Datei mit dem Linkziel als Inhalt und führt nirgendwohin.
 
 **Hooks.**
 - `PreToolUse` (Matcher: alle Werkzeuge) → `packages/core/hooks/guard.mjs`: entscheidet nach `hooks/guardPolicy.mjs`;
@@ -240,19 +245,20 @@ sitzt deshalb dort, wo das Risiko liegt: an den Werkzeugen des Agents.
 eine schmale Tür für die git-Historie.
 - `Read`, `Glob`, `Grep` nur **innerhalb des Klons**: `file_path`/`path` wird gegen `cwd` aufgelöst und über
   `realpath` (Symlinks!) geprüft; `~` ist nicht erlaubt. Glob-Muster (`Glob.pattern`, `Grep.glob`) dürfen nicht
-  absolut sein (auch nicht in `{a,b}`) und kein `..` enthalten. Der reguläre Ausdruck `Grep.pattern` ist kein Pfad
+  absolut sein (auch nicht in `{a,b}`) und weder `..` noch `(` (extglob), `\` oder `[/` enthalten. Der reguläre Ausdruck `Grep.pattern` ist kein Pfad
   und bleibt frei.
 - `Bash` nur, wenn der Befehl höchstens 300 Zeichen hat, **keines** der Zeichen
-  `` $ ` ; & | < > ( ) { } [ ] * ? ! ~ \ ' " `` und kein Steuerzeichen (Zeilenumbruch, Tab, …) enthält — auch nicht in
+  `` $ ` ; & | < > ( ) { } [ ] * ? ! \ ' " `` und kein Steuerzeichen (Zeilenumbruch, Tab, …) enthält — auch nicht in
   Anführungszeichen —, an einfachen Leerzeichen in Wörter zerfällt und dieser Grammatik folgt:
   `git [--no-pager] <unterbefehl> <wort>…` mit den Optionen
-  `log`: `--oneline`, `-n<zahl>`, `-<zahl>`, `--stat`, `--name-only`, `--name-status`, `--since=<datum>`,
-  `--author=<name>`, `--follow`, `--` · `show`: `--stat`, `--name-only`, `--oneline` ·
+  `log`: `--oneline`, `-p`, `-n<zahl>`, `-<zahl>`, `--stat`, `--name-only`, `--name-status`, `--since=<datum>`,
+  `--author=<name>`, `--follow`, `--` · `show`: `--stat`, `--name-only`, `--oneline`, `--` ·
   `diff`: `--stat`, `--name-only`, `--name-status`, `--no-ext-diff`, `--` · `blame`: `-L<n>,<m>` ·
   `ls-files`: `--` · `status`: `--short`, `--porcelain` · `rev-parse`: `--short`, `--abbrev-ref`.
-  Andere Wörter müssen `^[A-Za-z0-9._/:@=+-]+$` erfüllen, dürfen nicht mit `/` beginnen und kein `..` enthalten.
-  Revisionen sind damit `HEAD`, Hashes, Branch- und Tag-Namen und `rev:pfad`; `HEAD~1`, `HEAD^` und Bereiche
-  `a..b` sind bewusst nicht möglich.
+  Andere Wörter bestehen aus `A-Z a-z 0-9 . _ / : @ = + -`, dazu `~` und `^` nur innerhalb des Worts (nicht am
+  Wortanfang und nicht nach `=` oder `:`, wo die Shell `~` zum Home-Verzeichnis erweitert); sie dürfen nicht mit `/`
+  beginnen und kein `..` enthalten. Revisionen sind damit `HEAD`, `HEAD~1`, `HEAD^`, `main~3`, Hashes, Branch- und
+  Tag-Namen und `rev:pfad`; Bereiche `a..b` sind bewusst nicht möglich.
 - Alle anderen Werkzeuge werden abgelehnt. Die Regel ist `hooks/guardPolicy.mjs` mit Tabellentests, in denen auch
   alle bekannten Umgehungen (Verkettung, Umleitung, Ersetzung, Klammer-Expansion, ANSI-C-Quoting, `/dev/tcp`,
   `git grep -O`, `sort -o`, `sed …w`, Lesen außerhalb des Klons) als Ablehnung stehen.
@@ -269,8 +275,13 @@ lesbar bleibt.
 (ohne Rückweg ins Ticket-Log; blockierte Aufrufe nur im Server-Log). Der Pfad der Skripte kommt aus der Komposition
 (`resolveCorePaths` → `hooksDir` → `createAgentSandbox`), damit kein Adapter einen anderen importiert.
 
-**Grenzen.** Ein Hook, der in sein Zeitlimit (10 s) läuft, blockiert nicht; die Skripte brauchen Millisekunden.
-Was der Agent im Klon liest, sieht er ganz — der Klon ist öffentlich.
+**Grenzen (Restrisiken).**
+- Ein Hook, der in sein Zeitlimit (10 s) läuft, blockiert in Claude Code nicht; die Skripte brauchen Millisekunden.
+- Das Bash-Werkzeug läuft in der Shell des Nutzers (`SHELL` wird durchgereicht); dessen eigene Startdateien
+  (`.zshrc` …) können sie formen. Sie gehören dem Nutzer und gelten als vertrauenswürdig.
+- Symlinks des Ziel-Repos werden als Dateien ausgecheckt; wer den Cache von Hand mit Symlinks anlegt, umgeht das bis
+  zum nächsten `ensureRepo`.
+- Was der Agent im Klon liest, sieht er ganz — der Klon ist öffentlich.
 
 **Tests.** `guardPolicy` mit vielen erlaubten und verbotenen Befehlen und Pfaden; `guard.mjs`/`audit.mjs` als echte
 Prozesse (stdin-JSON → stdout/Log-Datei); Guard-Befehl über `/bin/sh -c` (fehlendes Skript → Exit-Code 2, kaputte

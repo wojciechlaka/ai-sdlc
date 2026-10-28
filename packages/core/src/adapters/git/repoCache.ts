@@ -57,9 +57,33 @@ export function getRepoCacheDir(repoUrl: string): string {
   return path.join(CACHE_ROOT, hash)
 }
 
+/** Clone options: symlinks of the (untrusted) target repo are checked out as plain files holding the link target. */
+const CLONE_CONFIG = ['-c', 'core.symlinks=false']
+
+/** `git clone` without symlinks. */
+function cloneRepo(repoUrl: string, cacheDir: string): void {
+  execFileSync('git', ['clone', ...CLONE_CONFIG, repoUrl, cacheDir], { stdio: 'pipe' })
+}
+
+/**
+ * Updates an existing cache without symlinks. Caches cloned before `core.symlinks=false` may still contain
+ * symlinks; dropping the index and resetting re-checks out every tracked file, so they become plain files.
+ * Safe because the cache belongs to the app (no local changes to keep; untracked summaries survive).
+ */
+function pullWithoutSymlinks(repoUrl: string, cacheDir: string): void {
+  const git = (args: string[]) => execFileSync('git', args, { cwd: cacheDir, stdio: 'pipe' })
+  // Strip any token an earlier version may have stored in the remote URL.
+  git(['remote', 'set-url', 'origin', repoUrl])
+  git(['config', 'core.symlinks', 'false'])
+  git(['pull'])
+  git(['rm', '-r', '-q', '--cached', '.'])
+  git(['reset', '-q', '--hard'])
+}
+
 /**
  * Ensures the repository is present and up-to-date in the local cache.
- * Clones the repo on first use; runs `git pull` on subsequent calls.
+ * Clones the repo on first use; runs `git pull` on subsequent calls. Symlinks are always checked out as plain
+ * files, so the agent cannot follow a link out of the clone (spec §13).
  * Uses the plain URL without credentials (the target repo is public); the agent
  * must never see a write token. Caches cloned earlier with a token in the remote
  * URL are reset via `git remote set-url origin` before pulling.
@@ -76,19 +100,17 @@ export async function ensureRepo(repoUrl: string): Promise<string> {
   if (fs.existsSync(cacheDir)) {
     try {
       // execFileSync avoids shell interpretation — no injection risk from the URL.
-      // Strip any token an earlier version may have stored in the remote URL.
-      execFileSync('git', ['remote', 'set-url', 'origin', repoUrl], { cwd: cacheDir, stdio: 'pipe' })
-      execFileSync('git', ['pull'], { cwd: cacheDir, stdio: 'pipe' })
+      pullWithoutSymlinks(repoUrl, cacheDir)
     } catch {
       // Directory exists but is not a valid git repo (e.g. interrupted clone).
       // Remove it and fall through to a fresh clone.
       fs.rmSync(cacheDir, { recursive: true, force: true })
       fs.mkdirSync(CACHE_ROOT, { recursive: true })
-      execFileSync('git', ['clone', repoUrl, cacheDir], { stdio: 'pipe' })
+      cloneRepo(repoUrl, cacheDir)
     }
   } else {
     fs.mkdirSync(CACHE_ROOT, { recursive: true })
-    execFileSync('git', ['clone', repoUrl, cacheDir], { stdio: 'pipe' })
+    cloneRepo(repoUrl, cacheDir)
   }
 
   return cacheDir
