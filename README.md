@@ -84,7 +84,7 @@ Bei jedem Start (und beim **Reset**-Button, der vorher die Datenbank leert):
 1. **Tickets einlesen:** jede Datei `examples/tickets/*.md` wird ein Ticket (siehe
    [`examples/tickets/README.md`](examples/tickets/README.md)). Geänderter Text wird übernommen, Stufe und Zustand bleiben.
 2. **Showcase vorbereiten:** Tag `showcase-base` und Branch `showcase` anlegen, falls sie fehlen.
-3. **Merges nachziehen:** PRs, die gemergt wurden, während die App aus war, schieben ihr Ticket weiter
+3. **Merges nachziehen:** PRs, die gemergt wurden, während die App aus war, schieben ihr Ticket weiter.
    Das gilt auch vor einem Repo-Reset, damit kein Artefakt als offen stehen bleibt.
 4. **Aufräumen:** **alle offenen PRs der App werden geschlossen und ihre Branches gelöscht** — erkannt am
    Branch-Namen `<TICKET>/intent` bzw. `<TICKET>/spec` eines bekannten Tickets. PRs anderer Branches bleiben

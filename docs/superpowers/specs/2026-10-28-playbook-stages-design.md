@@ -1,6 +1,6 @@
 # Design: App-Umbau auf Playbook-Stufen 1 + 2 (Intent → Spec in Git)
 
-Datum: 2026-10-28 · Status: abgestimmt, bereit für Implementierungsplan · Branch: `feature/playbook-stages`
+Datum: 2026-10-28 · Status: Teil A umgesetzt (inkl. §12), Teil B offen · Branch: `feature/playbook-stages`
 Grundlage: [E1–E5](../../decisions.md), [Roadmap](../../feature-roadmap.md), [Architektur §5](../../architecture.md)
 
 ## 1. Ziel
@@ -45,11 +45,11 @@ Der **Reset-Button** leert die DB und führt den Start-Ablauf aus.
 Ticket    key "CB-3" · title · description · priority · sourcePath
           stage: plan | design | done
           state: ready | running | awaiting_answer | in_review | failed
-  1 -- n  AgentRun    stage · trigger initial|answer · input · output (Rueckfrage/Ergebnis) · status ·
-                      model · Kosten/Tokens · Zeiten
+  1 -- n  AgentRun    stage · seq · trigger initial|answer · input · output (Rueckfrage/Ergebnis) ·
+                      status · model · Kosten/Tokens · Zeiten
   1 -- n  Artifact    stage · path · branch · prNumber · prUrl · prState open|merged|closed · mergedAt
   1 -- n  AuditEvent  Log: ticket_imported, run_started, run_finished, question_asked, answer_given,
-                      pr_opened, pr_merged, pr_closed, stage_changed, cleanup
+                      pr_opened, pr_merged, pr_closed, stage_changed, cleanup, error
 ```
 
 Übergänge (reine Funktionen in `domain/`):
@@ -88,7 +88,7 @@ je Stufe), `AgentRunRepository` (Stufe). Unverändert: `RepoProvider`, `AuditLog
 | `startStage(key, model)` | nur `ready`/`failed` → `running` → Hintergrund: Klon aktualisieren → (Design: gemergtes `intent.md` lesen) → Agent → Rückfrage (`awaiting_answer`) oder Ergebnis → Markdown rendern → übrig gebliebenen Branch der Stufe löschen → Branch + Datei + PR → Artefakt + `in_review` |
 | `answerQuestion(key, answer)` | setzt den Lauf der aktuellen Stufe mit Q&A-Verlauf fort |
 | `stopRun(key)` | `running`/`awaiting_answer` → `ready` |
-| `syncReviews(key?)` | für `in_review`: PR-Status lesen → gemergt: nächste Stufe; geschlossen: Branch löschen, `ready`; nicht lesbar: `ready` + Log |
+| `syncReviews(key?)` | für `in_review`: PR-Status lesen → gemergt: nächste Stufe; geschlossen: Branch löschen, `ready`; vorübergehender GitHub-Fehler: bleibt `in_review`, nächster Abgleich versucht es erneut; nur PR weg (404) oder kein offenes Artefakt: `ready` + `error`-Log |
 | `resetSystem` | DB leeren, `startup` |
 | `listTickets`, `getTicket` | inkl. Artefakte, Log, Inhalt der Artefakte **live** vom Default-Branch (keine Kopie in der DB) |
 

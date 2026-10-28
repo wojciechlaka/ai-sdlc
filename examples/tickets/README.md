@@ -28,9 +28,9 @@ Prisma; REST-API für Artikel, Kommentare, Tags, Favoriten, Follow und Auth.
    **Priorität:** Niedrig
    ```
 
-   - **Erste Zeile** ist Pflicht: `# <SCHLÜSSEL>: <Titel>`. Der Schlüssel besteht aus Großbuchstaben, Bindestrich
-     und Nummer (`CB-4`) und muss eindeutig sein. Er bestimmt Branch (`CB-4/intent`) und Ablage
-     (`docs/work/CB-4/intent.md`).
+   - **Erste Zeile** ist Pflicht: `# <SCHLÜSSEL>: <Titel>`. Der Schlüssel besteht aus einem Präfix
+     (Großbuchstabe, danach Großbuchstaben oder Ziffern), Bindestrich und Nummer (`CB-4`, `B2B-7`) und muss
+     eindeutig sein. Er bestimmt Branch (`CB-4/intent`) und Ablage (`docs/work/CB-4/intent.md`).
    - Der Text darunter wird die Beschreibung.
    - Die Zeile `**Priorität:** …` ist optional.
 3. App neu starten oder **Reset** klicken — **das neue Ticket erscheint in Stufe 1 Plan.**

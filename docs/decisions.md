@@ -10,8 +10,10 @@ Maintain. Jede Stufe erzeugt ein Artefakt, das Mensch und Agent lesen und das di
 `intent.md` → `spec.md` → `plan.md` → Code-PR → Produktion → (Befund) neues `intent.md`.
 
 - **Inhalte liegen in Git**, pro Ticket im Ziel-Repo (z. B. `docs/work/CB-3/intent.md`).
-- **Pro Stufe ein Branch** `<TICKET>/<stufe>` (z. B. `CB-3/intent`) und **ein PR als Gate**; der **Merge ist
-  der Übergang** in die nächste Stufe.
+- **Pro Stufe ein Branch** nach dem Artefakt benannt, `<TICKET>/intent|spec` (z. B. `CB-3/intent`), und **ein PR
+  als Gate**; der **Merge ist der Übergang** in die nächste Stufe.
+- **Arbeitsbranch `showcase`:** PRs gehen gegen `showcase`, Stufen und Inhalte werden von dort gelesen;
+  `master` bleibt unberührt. Ein Reset setzt `showcase` auf den Tag `showcase-base` zurück.
 - **Die Plattform hält nur Zustand und Log**: aktuelle Stufe pro Ticket und ein persistentes Log (Läufe,
   Rückfragen, Freigaben, Übergänge, Zeitstempel). Merges erkennt sie durch Abfrage der Git-Host-API.
 - **Ticket-Systeme wie Jira sind nur Eingang** für den rohen Ticket-Inhalt. Es gibt keinen Spiegel von
@@ -32,7 +34,8 @@ Review und Freigabe bereits mit; jede Information hat genau eine Quelle.
 **Entscheidung.** Die Plattform ist **eine Next.js-App** (App Router) und läuft als **ein Prozess**: Server
 Components lesen, Server Actions schreiben, ein Route Handler streamt Live-Ereignisse per SSE. Die Fachlogik
 liegt in `packages/core` nach **Ports & Adapters** (Domäne, Use Cases, Ports; Adapter für SQLite/Drizzle,
-Git, Claude CLI und einen Event-Bus im Prozess). `packages/shared` hält die Zod-Verträge zwischen Kern und UI.
+GitHub (Octokit), die Markdown-Ticketquelle, den Git-Klon, Claude CLI und einen Event-Bus im Prozess).
+`packages/shared` hält die Zod-Verträge zwischen Kern und UI.
 
 **Begründung.** Ein Prozess und ein Start-Befehl halten die lokale App einfach. Die Fachlogik ist schmal,
 die Ränder wachsen mit den Playbook-Stufen (Git-Host, später Jira, CI, Monitoring) — jeder Rand ist ein
