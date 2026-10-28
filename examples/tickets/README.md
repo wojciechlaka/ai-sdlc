@@ -4,7 +4,7 @@ Diese Tickets sind bewusst roh und unterspezifiziert formuliert — so, wie sie 
 ins Backlog werfen würde. Sie sind der Input für den Refinement Agent, der sie gegen das Repo
 [wojciechlaka/node-express-realworld-example-app](https://github.com/wojciechlaka/node-express-realworld-example-app)
 schärft (Fork von [gothinkster/node-express-realworld-example-app](https://github.com/gothinkster/node-express-realworld-example-app)).
-Eine Datei pro Ticket; das Format ist zugleich die Vorlage für den Markdown-Import (T-17).
+Eine Datei pro Ticket; die Dateien simulieren Jira-Tickets und sind die Vorlage für den Ticket-Eingang.
 
 Kontext zum Repo: Backend des Blogs „Conduit“ (Medium-Klon aus dem RealWorld-Projekt) —
 TypeScript, Express, Prisma; REST-API für Artikel, Kommentare, Tags, Favoriten, Follow und Auth.

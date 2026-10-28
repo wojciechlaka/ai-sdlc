@@ -51,4 +51,4 @@ Abhängigkeitsrichtung: `web → core → shared`. Domäne und Use Cases importi
 | `npm test`      | alle Tests (Vitest)                     |
 | `npm run lint`  | Abhängigkeitsregel des Hexagons         |
 
-Die App läuft als ein dauerhafter Node-Prozess (lang laufende Agent-Prozesse, Event-Bus im Speicher, lokale SQLite). Serverless-Hosting wird nicht unterstützt (siehe [D19](docs/decisions.md)).
+Die App läuft als ein dauerhafter Node-Prozess (lang laufende Agent-Prozesse, Event-Bus im Speicher, lokale SQLite). Serverless-Hosting wird nicht unterstützt (siehe [E2](docs/decisions.md)).

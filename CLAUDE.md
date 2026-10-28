@@ -74,7 +74,7 @@ Note: `apps/web` uses Next.js 16, which has breaking changes versus older versio
 
 - Node.js 20+
 - `claude` CLI authenticated (`claude login`)
-- Runs as one long-lived Node process (`next dev` / `next start`); serverless hosting is not supported (D19)
+- Runs as one long-lived Node process (`next dev` / `next start`); serverless hosting is not supported (E2)
 
 | Variable                | Default                       | Purpose                                           |
 |-------------------------|-------------------------------|---------------------------------------------------|
