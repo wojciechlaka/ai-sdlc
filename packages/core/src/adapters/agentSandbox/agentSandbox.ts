@@ -25,7 +25,7 @@ export interface AgentSandbox {
   /** CLI flags: `--setting-sources user`, `--settings <hooks>`, `--allowedTools`. */
   readonly args: readonly string[]
   /** Environment of one `claude` process whose hooks write to `logFile`. */
-  env(logFile: string): Record<string, string>
+  env(logFile: string): NodeJS.ProcessEnv
 }
 
 /** Quotes a value for `/bin/sh -c` (Claude Code runs hook commands through the shell). */
@@ -54,12 +54,16 @@ export function hookSettings(hooksDir: string, nodePath = process.execPath): str
  * Environment of a `claude` process: only allowlisted variables of `baseEnv`, plus the hook log and git without
  * global or system configuration (the clone's `.git/config` is written by the app).
  */
-export function sandboxEnv(baseEnv: NodeJS.ProcessEnv, logFile: string): Record<string, string> {
-  const env: Record<string, string> = {}
+export function sandboxEnv(baseEnv: NodeJS.ProcessEnv, logFile: string): NodeJS.ProcessEnv {
+  // Built from scratch on purpose; the cast only drops type augmentations (e.g. Next.js requires NODE_ENV).
+  const env = {} as NodeJS.ProcessEnv
   for (const [key, value] of Object.entries(baseEnv)) {
     if (value !== undefined && (ENV_ALLOWLIST.has(key) || key.startsWith(ENV_ALLOWED_PREFIX))) env[key] = value
   }
-  return { ...env, [HOOK_LOG_ENV]: logFile, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' }
+  env[HOOK_LOG_ENV] = logFile
+  env.GIT_CONFIG_NOSYSTEM = '1'
+  env.GIT_CONFIG_GLOBAL = '/dev/null'
+  return env
 }
 
 /**

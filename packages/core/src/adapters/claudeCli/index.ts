@@ -86,7 +86,7 @@ export interface ClaudeSandbox {
   /** Flags for settings sources, hooks and allowed tools. */
   readonly args: readonly string[]
   /** Environment of one process whose hooks write to `logFile`. */
-  env(logFile: string): Record<string, string>
+  env(logFile: string): NodeJS.ProcessEnv
 }
 
 /** Sandbox plus the hook log file of one Claude process. */

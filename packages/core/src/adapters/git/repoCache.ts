@@ -17,7 +17,7 @@ export interface SummarySandbox {
   /** Flags for settings sources, hooks and allowed tools. */
   readonly args: readonly string[]
   /** Environment of one process whose hooks write to `logFile`. */
-  env(logFile: string): Record<string, string>
+  env(logFile: string): NodeJS.ProcessEnv
 }
 
 export interface RepoCacheOptions {
