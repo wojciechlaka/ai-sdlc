@@ -14,7 +14,7 @@ Startet die Next.js-App unter http://localhost:3000. Beim ersten Start mit leere
 ## Ausprobieren
 
 1. App starten (`npm run dev`) und http://localhost:3000 öffnen.
-2. Links als Repository eintragen:
+2. In der linken Spalte unter **Repository** eintragen:
    ```
    https://github.com/wojciechlaka/node-express-realworld-example-app
    ```
