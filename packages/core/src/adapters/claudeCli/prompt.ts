@@ -1,9 +1,8 @@
-const MAX_RETRY_OUTPUT_CHARS = 3000
+import type { QAPair } from '../../domain/types'
 
-export interface QAPair {
-  question: string
-  answer: string
-}
+export type { QAPair }
+
+const MAX_RETRY_OUTPUT_CHARS = 3000
 
 export interface PromptInput {
   skill: string

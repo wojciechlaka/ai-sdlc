@@ -1,6 +1,6 @@
 import type { AgentOutput } from '@refinement/shared'
 import type { SchemaValidationError } from './errors'
-import type { QAPair } from './prompt'
+import type { AgentRunMeta, AgentRunResult, AgentRunnerInput } from '../../ports'
 
 export interface ClaudeStreamMessage {
   content?: Array<Record<string, unknown>>
@@ -26,29 +26,6 @@ export type AttemptResult =
   | { ok: true; output: AgentOutput; cliResult: ExtractedResult }
   | { ok: false; cliResult: ExtractedResult; error: SchemaValidationError }
 
-export interface RefinementInput {
-  ticketId: string
-  title: string
-  description: string
-  acceptanceCriteria: string
-  repoPath: string
-  model: string
-  codebaseSummary?: string
-  feedback?: string
-  previousRuns?: QAPair[]
-}
-
-export interface RefinementMeta {
-  model: string
-  durationSeconds: number
-  inputTokens: number
-  cacheCreationTokens: number
-  cacheReadTokens: number
-  outputTokens: number
-  costUsd: number
-}
-
-export interface RefinementResult {
-  output: AgentOutput
-  meta: RefinementMeta
-}
+export type RefinementInput = AgentRunnerInput
+export type RefinementMeta = AgentRunMeta
+export type RefinementResult = AgentRunResult

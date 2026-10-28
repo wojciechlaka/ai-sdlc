@@ -1,9 +1,10 @@
 import { spawn, ChildProcess } from 'child_process'
-import path from 'path'
 import fs from 'fs/promises'
 import { AgentOutputSchema } from '@refinement/shared'
 import type { AgentOutput } from '@refinement/shared'
-import { TimeoutError, TerminatedError, SchemaValidationError, CliError } from './errors'
+import { SchemaValidationError, CliError } from './errors'
+import { AgentRunTerminatedError, AgentRunTimeoutError } from '../../ports'
+import type { AgentRunner } from '../../ports'
 import { buildPrompt } from './prompt'
 import type { PromptInput } from './prompt'
 import type {
@@ -17,7 +18,6 @@ import type {
 } from './types'
 export type { RefinementInput, RefinementMeta, RefinementResult } from './types'
 
-const SKILL_PATH = path.join(__dirname, '../../skills/refinement-agent.md')
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000
 const SIGTERM_EXIT_CODE = 143
 const ALLOWED_TOOLS = 'Read,LS,Bash'
@@ -42,7 +42,7 @@ const TOOL_PROGRESS_MESSAGE: Record<string, string> = {
  * @param stderr - Full stderr of the Claude process, included in CliError on non-zero exit.
  */
 function parseProcessExit(code: number | null, output: string, stderr: string): ExtractedResult {
-  if (code === SIGTERM_EXIT_CODE || code === null) throw new TerminatedError()
+  if (code === SIGTERM_EXIT_CODE || code === null) throw new AgentRunTerminatedError()
   if (code !== 0) throw new CliError(code, stderr)
   return extractResult(output)
 }
@@ -122,7 +122,7 @@ async function spawnClaude(
     const timer = setTimeout(() => {
       cleanup()
       proc.kill('SIGTERM')
-      settle(() => reject(new TimeoutError(timeoutMs)))
+      settle(() => reject(new AgentRunTimeoutError(timeoutMs)))
     }, timeoutMs)
 
     proc.stdin.write(prompt)
@@ -298,6 +298,11 @@ function buildMeta(model: string, startedAt: number, cliResult: ExtractedResult)
   }
 }
 
+export interface ClaudeCliOptions {
+  /** Absolute path to `packages/core/skills/refinement-agent.md`. */
+  skillPath: string
+}
+
 /**
  * Spawns the Claude CLI with a refinement prompt and returns the validated agent output.
  * Performs one automatic retry if the first attempt produces a `SchemaValidationError`
@@ -307,16 +312,17 @@ function buildMeta(model: string, startedAt: number, cliResult: ExtractedResult)
  * Token counts and cost are aggregated across both attempts when a retry occurs.
  * @param input      - Ticket data, repo path, model, and optional Q&A history.
  * @param onProgress - Callback for progress messages emitted during the run.
- * @throws {TerminatedError} if the process is killed via `stopRefinement`.
- * @throws {TimeoutError} if the run exceeds `REFINEMENT_TIMEOUT_MS`.
+ * @throws {AgentRunTerminatedError} if the process is killed via `stopRefinement`.
+ * @throws {AgentRunTimeoutError} if the run exceeds `REFINEMENT_TIMEOUT_MS`.
  * @throws {CliError} if the Claude process exits with a non-zero code.
  * @throws {SchemaValidationError} if both attempts produce invalid output.
  */
 export async function runRefinement(
   input: RefinementInput,
   onProgress: (msg: string) => void,
+  options: ClaudeCliOptions,
 ): Promise<RefinementResult> {
-  const skill = await fs.readFile(SKILL_PATH, UTF8)
+  const skill = await fs.readFile(options.skillPath, UTF8)
   const startedAt = Date.now()
 
   // 1  make frist attempt
@@ -342,4 +348,12 @@ export async function runRefinement(
   // 4. aggregateCliResults
   const cliResult = aggregateCliResults(firstAttempt.cliResult, retryAttempt.cliResult)
   return { output: retryAttempt.output, meta: buildMeta(input.model, startedAt, cliResult) }
+}
+
+/** AgentRunner port backed by the headless Claude Code CLI (`claude --print`). */
+export function createClaudeCliAgentRunner(options: ClaudeCliOptions): AgentRunner {
+  return {
+    run: (input, onProgress) => runRefinement(input, onProgress, options),
+    stop: (ticketId) => stopRefinement(ticketId),
+  }
 }

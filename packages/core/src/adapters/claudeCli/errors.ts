@@ -1,21 +1,5 @@
 import type { ZodIssue } from 'zod'
 
-/** Thrown when the Claude CLI does not produce output within the configured timeout. */
-export class TimeoutError extends Error {
-  constructor(timeoutMs: number) {
-    super(`Claude did not respond within ${timeoutMs}ms`)
-    this.name = 'TimeoutError'
-  }
-}
-
-/** Thrown when the user explicitly stops a running refinement (SIGTERM sent to Claude). */
-export class TerminatedError extends Error {
-  constructor() {
-    super('Refinement was terminated by user')
-    this.name = 'TerminatedError'
-  }
-}
-
 /** Thrown when Claude's output cannot be parsed or does not satisfy the RefinementOutput schema. */
 export class SchemaValidationError extends Error {
   constructor(

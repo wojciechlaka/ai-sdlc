@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
 import { EventEmitter } from 'events'
 import type { RefinementInput } from './index'
+import path from 'path'
+
+const CLI_OPTIONS = { skillPath: path.resolve(__dirname, '../../../skills/refinement-agent.md') }
 
 const VALID_JSON_OUTPUT = JSON.stringify({
   type: 'refinement',
@@ -64,7 +67,7 @@ describe('JSON extraction (parseAndValidate)', () => {
   it('parses plain JSON output', async () => {
     mockSpawn.mockImplementation(() => makeFakeProcess(makeResultWith(VALID_JSON_OUTPUT), 0) as any)
     const { runRefinement } = await import('./index')
-    const { output } = await runRefinement(EXTRACT_INPUT, vi.fn())
+    const { output } = await runRefinement(EXTRACT_INPUT, vi.fn(), CLI_OPTIONS)
     expect(output.type).toBe('refinement')
     if (output.type === 'refinement') expect(output.result.title).toBe('Add reconnect logic')
   })
@@ -73,7 +76,7 @@ describe('JSON extraction (parseAndValidate)', () => {
     const wrapped = '```json\n' + VALID_JSON_OUTPUT + '\n```'
     mockSpawn.mockImplementation(() => makeFakeProcess(makeResultWith(wrapped), 0) as any)
     const { runRefinement } = await import('./index')
-    const { output } = await runRefinement(EXTRACT_INPUT, vi.fn())
+    const { output } = await runRefinement(EXTRACT_INPUT, vi.fn(), CLI_OPTIONS)
     expect(output.type).toBe('refinement')
     if (output.type === 'refinement') expect(output.result.title).toBe('Add reconnect logic')
   })
@@ -82,7 +85,7 @@ describe('JSON extraction (parseAndValidate)', () => {
     const withPreamble = 'Here is my analysis:\n\n' + VALID_JSON_OUTPUT
     mockSpawn.mockImplementation(() => makeFakeProcess(makeResultWith(withPreamble), 0) as any)
     const { runRefinement } = await import('./index')
-    const { output } = await runRefinement(EXTRACT_INPUT, vi.fn())
+    const { output } = await runRefinement(EXTRACT_INPUT, vi.fn(), CLI_OPTIONS)
     expect(output.type).toBe('refinement')
     if (output.type === 'refinement') expect(output.result.title).toBe('Add reconnect logic')
   })
@@ -104,7 +107,7 @@ describe('runRefinement', () => {
   it('returns validated RefinementOutput on success', async () => {
     mockSpawn.mockReturnValue(makeFakeProcess(STREAM_JSON_RESULT, 0) as any)
     const { runRefinement } = await import('./index')
-    const { output, meta } = await runRefinement(INPUT, vi.fn())
+    const { output, meta } = await runRefinement(INPUT, vi.fn(), CLI_OPTIONS)
     expect(output.type).toBe('refinement')
     if (output.type === 'refinement') {
       expect(output.result.title).toBe('Add reconnect logic')
@@ -120,7 +123,7 @@ describe('runRefinement', () => {
   it('falls back to zero tokens when usage is absent in CLI output', async () => {
     mockSpawn.mockReturnValue(makeFakeProcess(STREAM_JSON_RESULT_NO_USAGE, 0) as any)
     const { runRefinement } = await import('./index')
-    const { meta } = await runRefinement(INPUT, vi.fn())
+    const { meta } = await runRefinement(INPUT, vi.fn(), CLI_OPTIONS)
     expect(meta.inputTokens).toBe(0)
     expect(meta.outputTokens).toBe(0)
     expect(meta.costUsd).toBe(0)
@@ -131,7 +134,7 @@ describe('runRefinement', () => {
     mockSpawn.mockImplementation(() => makeFakeProcess(INVALID, 0) as any)
     const { runRefinement } = await import('./index')
     const { SchemaValidationError } = await import('./errors')
-    await expect(runRefinement(INPUT, vi.fn())).rejects.toBeInstanceOf(SchemaValidationError)
+    await expect(runRefinement(INPUT, vi.fn(), CLI_OPTIONS)).rejects.toBeInstanceOf(SchemaValidationError)
     expect(mockSpawn).toHaveBeenCalledTimes(2)
   })
 
@@ -139,7 +142,7 @@ describe('runRefinement', () => {
     mockSpawn.mockReturnValue(makeFakeProcess('', 1) as any)
     const { runRefinement } = await import('./index')
     const { CliError } = await import('./errors')
-    await expect(runRefinement(INPUT, vi.fn())).rejects.toBeInstanceOf(CliError)
+    await expect(runRefinement(INPUT, vi.fn(), CLI_OPTIONS)).rejects.toBeInstanceOf(CliError)
   })
 
   it('throws TimeoutError when claude does not respond in time', async () => {
@@ -151,8 +154,27 @@ describe('runRefinement', () => {
     mockSpawn.mockReturnValue(proc as any)
     process.env['REFINEMENT_TIMEOUT_MS'] = '50'
     const { runRefinement } = await import('./index')
-    const { TimeoutError } = await import('./errors')
-    await expect(runRefinement(INPUT, vi.fn())).rejects.toBeInstanceOf(TimeoutError)
+    const { AgentRunTimeoutError } = await import('../../ports')
+    await expect(runRefinement(INPUT, vi.fn(), CLI_OPTIONS)).rejects.toBeInstanceOf(AgentRunTimeoutError)
     delete process.env['REFINEMENT_TIMEOUT_MS']
+  })
+})
+
+describe('createClaudeCliAgentRunner', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('runs the refinement through the AgentRunner port', async () => {
+    mockSpawn.mockReturnValue(makeFakeProcess(STREAM_JSON_RESULT, 0) as any)
+    const { createClaudeCliAgentRunner } = await import('./index')
+    const runner = createClaudeCliAgentRunner(CLI_OPTIONS)
+    const { output } = await runner.run({
+      ticketId: 'T-9', title: 'T', description: 'D', acceptanceCriteria: '', repoPath: '/tmp/repo', model: 'm',
+    }, vi.fn())
+    expect(output.type).toBe('refinement')
+  })
+
+  it('returns false when stopping a ticket without a running process', async () => {
+    const { createClaudeCliAgentRunner } = await import('./index')
+    expect(createClaudeCliAgentRunner(CLI_OPTIONS).stop('T-404')).toBe(false)
   })
 })
