@@ -6,8 +6,8 @@ dist/
 .env.*
 
 # lokale SQLite-Datenbank (wird beim Start automatisch angelegt)
-apps/backend/data/*.db
-apps/backend/data/*.db-*
+apps/web/data/
+packages/core/data/
 
 # Next.js
 .next/
