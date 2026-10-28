@@ -6,15 +6,11 @@ export const dynamic = 'force-dynamic'
 const encoder = new TextEncoder()
 
 /**
- * Server-Sent Events for one ticket: `GET /api/events?ticketId=T-1`.
- * One subscription per connection; it is removed when the browser disconnects,
- * so several tabs per ticket work independently.
+ * Server-Sent Events: `GET /api/events?ticketKey=CB-1` for one ticket, `GET /api/events` for all
+ * tickets (board). One subscription per connection; it is removed when the browser disconnects.
  */
 export function GET(request: Request): Response {
-  const ticketId = new URL(request.url).searchParams.get('ticketId')
-  if (!ticketId) {
-    return Response.json({ error: 'ticketId query parameter is required' }, { status: 400 })
-  }
+  const ticketKey = new URL(request.url).searchParams.get('ticketKey')
 
   let closed = false
   let unsubscribe = () => {}
@@ -28,7 +24,7 @@ export function GET(request: Request): Response {
     start(controller) {
       // Comment frame flushes proxy buffers; EventSource ignores it.
       controller.enqueue(encoder.encode(': ok\n\n'))
-      unsubscribe = getEngine().subscribeToTicket(ticketId, (event) => {
+      unsubscribe = getEngine().subscribe(ticketKey, (event) => {
         if (!closed) controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
       })
       const onAbort = () => {

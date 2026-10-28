@@ -1,16 +1,17 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import type { RefinementEvent } from '@refinement/shared'
+import type { TicketEvent } from '@refinement/shared'
 
 export interface SSEHandlers {
-  onMessage: (event: RefinementEvent) => void
+  onMessage: (event: TicketEvent) => void
   /** Called when the browser re-established a lost connection (events may have been missed). */
   onReconnect?: () => void
 }
 
 /**
- * Subscribes to `/api/events?ticketId=<id>`. EventSource reconnects automatically.
+ * Subscribes to `/api/events?ticketKey=<key>`, or to all tickets with `null` (board).
+ * EventSource reconnects automatically.
  *
  * `intentionallyClosed` prevents `onerror` from reporting a lost connection when the effect
  * cleans up — `EventSource.close()` triggers `onerror` in some browsers.
@@ -18,7 +19,7 @@ export interface SSEHandlers {
  * @returns `connected` while the stream is open; `everConnected` latches on first success to
  *          distinguish "not yet connected" from "connection lost".
  */
-export function useSSE(ticketId: string, handlers: SSEHandlers) {
+export function useSSE(ticketKey: string | null, handlers: SSEHandlers) {
   const [connected, setConnected] = useState(false)
   const [everConnected, setEverConnected] = useState(false)
   const handlersRef = useRef(handlers)
@@ -30,7 +31,8 @@ export function useSSE(ticketId: string, handlers: SSEHandlers) {
   useEffect(() => {
     let intentionallyClosed = false
     let openedBefore = false
-    const es = new EventSource(`/api/events?ticketId=${encodeURIComponent(ticketId)}`)
+    const url = ticketKey ? `/api/events?ticketKey=${encodeURIComponent(ticketKey)}` : '/api/events'
+    const es = new EventSource(url)
 
     const markConnected = () => {
       setConnected(true)
@@ -46,13 +48,13 @@ export function useSSE(ticketId: string, handlers: SSEHandlers) {
     es.onmessage = (e) => {
       // Some proxies suppress onopen — make sure the flags are set before any message.
       markConnected()
-      handlersRef.current.onMessage(JSON.parse(e.data) as RefinementEvent)
+      handlersRef.current.onMessage(JSON.parse(e.data) as TicketEvent)
     }
 
     es.onerror = () => {
       if (intentionallyClosed) return
       setConnected(false)
-      console.warn('SSE error for ticket', ticketId)
+      console.warn('SSE error', ticketKey ?? 'all tickets')
     }
 
     return () => {
@@ -60,7 +62,7 @@ export function useSSE(ticketId: string, handlers: SSEHandlers) {
       es.close()
       setConnected(false)
     }
-  }, [ticketId])
+  }, [ticketKey])
 
   return { connected, everConnected }
 }
