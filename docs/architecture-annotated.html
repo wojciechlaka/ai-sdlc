@@ -147,7 +147,7 @@
 
     <div class="block" style="background:#fff7ed; border-color:#fed7aa; grid-column: span 2">
       <h2><span class="dot" style="background:#ea580c"></span>Wie der Event-Bus funktioniert</h2>
-      <p style="margin-bottom:14px">Der Event-Bus ist ein Port (<code>EventPublisher</code>) mit einem Adapter auf Basis eines Node.js-<code>EventEmitter</code> — ein Kanal pro Ticket, kein externes System. Use Cases und SSE-Route kennen sich nicht; beide sprechen nur mit dem Port. In Phase 3 wird nur der Adapter getauscht (z. B. Postgres <code>LISTEN/NOTIFY</code>).</p>
+      <p style="margin-bottom:14px">Der Event-Bus ist ein Port (<code>EventPublisher</code>) mit einem Adapter auf Basis eines Node.js-<code>EventEmitter</code> — ein Kanal pro Ticket, kein externes System. Use Cases und SSE-Route kennen sich nicht; beide sprechen nur mit dem Port. Für mehrere Prozesse würde nur der Adapter getauscht (z. B. Postgres <code>LISTEN/NOTIFY</code>).</p>
 
       <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 14px">
         <div>
