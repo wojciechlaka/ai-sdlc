@@ -1,18 +1,7 @@
 import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core'
 import { randomBytes } from 'crypto'
 import type { AgentOutput } from '@refinement/shared'
-
-export interface AgentRunInput {
-  ticketTitle: string
-  ticketDescription: string
-  acceptanceCriteria: string
-  repo: string
-  model: string
-  previousRuns?: Array<{ question: string; answer: string }>
-  feedback?: string
-}
-
-export type TicketStatus = 'backlog' | 'refining' | 'review' | 'ready' | 'failed'
+import type { AgentRunInput } from '../../domain/types'
 
 const createdAt = () =>
   integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date())
