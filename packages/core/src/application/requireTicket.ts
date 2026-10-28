@@ -1,20 +1,13 @@
 import type { Ticket } from '../domain/types'
 import type { TicketRepository } from '../ports'
-import { parseTicketId } from '../domain/ticketId'
 import { NotFoundError } from '../domain/errors'
 
 /**
- * Resolves a public ticket id (`T-{n}`) to the ticket.
- * @throws {NotFoundError} for malformed or unknown ids.
+ * Resolves a ticket key from a URL or action; case-insensitive (`cb-3` → `CB-3`).
+ * @throws {NotFoundError} for unknown keys.
  */
-export function requireTicket(tickets: TicketRepository, publicId: string): Ticket {
-  let id: number
-  try {
-    id = parseTicketId(publicId)
-  } catch {
-    throw new NotFoundError(`Ticket ${publicId} not found`)
-  }
-  const ticket = tickets.findById(id)
-  if (!ticket) throw new NotFoundError(`Ticket ${publicId} not found`)
+export function requireTicket(tickets: TicketRepository, key: string): Ticket {
+  const ticket = tickets.findByKey(key.trim().toUpperCase())
+  if (!ticket) throw new NotFoundError(`Ticket ${key} nicht gefunden`)
   return ticket
 }
