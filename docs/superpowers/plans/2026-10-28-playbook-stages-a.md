@@ -4894,6 +4894,10 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ---
 
+> **Nachtrag nach Review (Commit `ed1c3b7`):** Der Code aus Task 15/16 wurde nach der Review geändert. Ein Versuch hat jetzt eine Identität: `startStage`/`answerQuestion` legen den Agent-Lauf sofort an (`application/beginRun.ts`: `beginRun`, `isCurrentRun`, `finishRun`). Jobs prüfen `isCurrentRun` statt nur `state === 'running'`; `publishArtifact` prüft nach dem Öffnen des PRs erneut und schließt ihn, wenn der Versuch inzwischen veraltet ist. Damit sind Stop → Neustart, Stop während der PR-Anlage und Reset während eines Laufs ohne Wettlauf. Maßgeblich ist der Code im Repo, nicht die Blöcke in Task 15/16.
+
+---
+
 ## Task 17: Anwendung — PR-Status abgleichen (`syncReviews`)
 
 **Files:**
