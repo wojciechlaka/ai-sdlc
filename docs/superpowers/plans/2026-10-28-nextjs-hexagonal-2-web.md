@@ -647,6 +647,16 @@ describe('GET /api/events', () => {
     expect(bus.count('T-3')).toBe(0)
     expect((await reader.read()).done).toBe(true)
   })
+
+  it('does not stay subscribed when the request is already aborted', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    const res = GET(new Request('http://localhost/api/events?ticketId=T-5', { signal: controller.signal }))
+    expect(bus.count('T-5')).toBe(0)
+    const reader = res.body!.getReader()
+    expect(decoder.decode((await reader.read()).value)).toBe(': ok\n\n')
+    expect((await reader.read()).done).toBe(true)
+  })
 })
 ```
 
@@ -693,11 +703,14 @@ export function GET(request: Request): Response {
       unsubscribe = getEngine().subscribeToTicket(ticketId, (event) => {
         if (!closed) controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
       })
-      request.signal.addEventListener('abort', () => {
+      const onAbort = () => {
         if (closed) return
         stop()
         controller.close()
-      })
+      }
+      // The client may already be gone before the listener exists — the abort event would never fire.
+      if (request.signal.aborted) onAbort()
+      else request.signal.addEventListener('abort', onAbort)
     },
     cancel: stop,
   })
@@ -715,7 +728,7 @@ export function GET(request: Request): Response {
 - [ ] **Step 4: Test laufen lassen – muss grün sein**
 
 Run: `npm test -w apps/web -- app/api/events`
-Expected: PASS (3 Tests).
+Expected: PASS (4 Tests).
 
 - [ ] **Step 5: Commit**
 
@@ -2110,7 +2123,7 @@ export default function ErrorPage({ error, reset }: { error: Error & { digest?: 
 - [ ] **Step 5: Tests laufen lassen – müssen grün sein**
 
 Run: `npm test -w apps/web`
-Expected: PASS (actionResult 3, actions 4, route 3, useSSE 5, CreateTicketDialog 3, QuestionPanel 3, TicketLive 7).
+Expected: PASS (actionResult 3, actions 4, route 4, useSSE 5, CreateTicketDialog 3, QuestionPanel 3, TicketLive 7).
 
 - [ ] **Step 6: Build**
 
