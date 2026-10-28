@@ -3,7 +3,10 @@ import { createUseCases, type UseCases } from './application/createUseCases'
 import { createSqliteDatabase } from './adapters/sqlite/database'
 import { createSqliteTicketRepository } from './adapters/sqlite/ticketRepository'
 import { createSqliteAgentRunRepository } from './adapters/sqlite/agentRunRepository'
+import { createSqliteArtifactRepository } from './adapters/sqlite/artifactRepository'
 import { createSqliteAuditLog } from './adapters/sqlite/auditLog'
+import { createMarkdownTicketSource } from './adapters/markdownTickets/markdownTicketSource'
+import { createGitHubCodeHost } from './adapters/github/githubCodeHost'
 import { createClaudeCliAgentRunner } from './adapters/claudeCli'
 import { createGitRepoProvider } from './adapters/git/repoCache'
 import { createNodeEventPublisher } from './adapters/nodeEvents/nodeEventPublisher'
@@ -13,8 +16,16 @@ export interface EngineConfig {
   dbPath: string
   /** `packages/core/drizzle` */
   migrationsFolder: string
-  /** `packages/core/skills/refinement-agent.md` */
-  skillPath: string
+  /** `packages/core/skills` */
+  skillsDir: string
+  /** Directory with the ticket files (`examples/tickets`). */
+  ticketsDir: string
+  /** Repository root; ticket source paths are shown relative to it. */
+  rootDir: string
+  /** Target repository on GitHub (`TARGET_REPO`). */
+  targetRepo: string
+  /** Fine-grained PAT (`GITHUB_TOKEN`); without it stages cannot be started. */
+  githubToken?: string
 }
 
 const STOP_SETTLE_MS = 500
@@ -24,10 +35,10 @@ const STOP_SETTLE_MS = 500
  * (Next.js) relocate the code, so `__dirname` inside the package is not reliable.
  * @param coreDir - Absolute path to `packages/core`.
  */
-export function resolveCorePaths(coreDir: string): Pick<EngineConfig, 'migrationsFolder' | 'skillPath'> {
+export function resolveCorePaths(coreDir: string): Pick<EngineConfig, 'migrationsFolder' | 'skillsDir'> {
   return {
     migrationsFolder: path.join(coreDir, 'drizzle'),
-    skillPath: path.join(coreDir, 'skills', 'refinement-agent.md'),
+    skillsDir: path.join(coreDir, 'skills'),
   }
 }
 
@@ -37,10 +48,14 @@ export function createRefinementEngine(config: EngineConfig): UseCases {
   return createUseCases({
     tickets: createSqliteTicketRepository(db),
     runs: createSqliteAgentRunRepository(db),
+    artifacts: createSqliteArtifactRepository(db),
     audit: createSqliteAuditLog(db),
-    agent: createClaudeCliAgentRunner({ skillPath: config.skillPath }),
+    source: createMarkdownTicketSource({ dir: config.ticketsDir, rootDir: config.rootDir }),
+    codeHost: config.githubToken ? createGitHubCodeHost({ repoUrl: config.targetRepo, token: config.githubToken }) : null,
+    agent: createClaudeCliAgentRunner({ skillsDir: config.skillsDir }),
     repos: createGitRepoProvider(),
     events: createNodeEventPublisher(),
+    repoUrl: config.targetRepo,
     runInBackground: (task) => {
       task.catch((err) => console.error('[background] unhandled error in agent run', err))
     },

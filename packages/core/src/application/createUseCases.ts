@@ -1,8 +1,9 @@
-import type { RefinementEvent, TicketDetailDto, TicketDto } from '@refinement/shared'
+import type { SettingsDto, TicketDetailDto, TicketDto, TicketEvent } from '@refinement/shared'
 import type { UseCaseDeps } from './deps'
-import { getTicket, listTickets } from './queries'
-import { answerQuestion, createTicket, deleteTicket, resetSystem, startRefinement, stopRefinement } from './commands'
-import { startup } from './startup'
+import { getSettings, getTicket, listTickets } from './queries'
+import { answerQuestion, startStage, stopRun } from './stageCommands'
+import { syncReviews } from './syncReviews'
+import { resetSystem, startup } from './startup'
 
 /**
  * Everything a driving adapter (Next.js) may call.
@@ -10,28 +11,30 @@ import { startup } from './startup'
  */
 export interface UseCases {
   listTickets(): TicketDto[]
-  getTicket(ticketId: string): TicketDetailDto
-  createTicket(input: unknown): TicketDto
-  startRefinement(ticketId: string, input: unknown): void
-  answerQuestion(ticketId: string, input: unknown): void
-  stopRefinement(ticketId: string): Promise<void>
-  deleteTicket(ticketId: string): void
-  resetSystem(): Promise<TicketDto[]>
-  subscribeToTicket(ticketId: string, handler: (event: RefinementEvent) => void): () => void
-  startup(): void
+  getTicket(key: string): Promise<TicketDetailDto>
+  getSettings(): SettingsDto
+  startStage(key: string, input: unknown): void
+  answerQuestion(key: string, input: unknown): void
+  stopRun(key: string): void
+  /** Checks the PRs of tickets in review — all, or the one given. */
+  syncReviews(key?: string): Promise<void>
+  resetSystem(): Promise<void>
+  /** Events of one ticket, or of all tickets with `null`. */
+  subscribe(ticketKey: string | null, handler: (event: TicketEvent) => void): () => void
+  startup(): Promise<void>
 }
 
 export function createUseCases(deps: UseCaseDeps): UseCases {
   return {
     listTickets: () => listTickets(deps),
-    getTicket: (ticketId) => getTicket(deps, ticketId),
-    createTicket: (input) => createTicket(deps, input),
-    startRefinement: (ticketId, input) => startRefinement(deps, ticketId, input),
-    answerQuestion: (ticketId, input) => answerQuestion(deps, ticketId, input),
-    stopRefinement: (ticketId) => stopRefinement(deps, ticketId),
-    deleteTicket: (ticketId) => deleteTicket(deps, ticketId),
+    getTicket: (key) => getTicket(deps, key),
+    getSettings: () => getSettings(deps),
+    startStage: (key, input) => startStage(deps, key, input),
+    answerQuestion: (key, input) => answerQuestion(deps, key, input),
+    stopRun: (key) => stopRun(deps, key),
+    syncReviews: (key) => syncReviews(deps, key),
     resetSystem: () => resetSystem(deps),
-    subscribeToTicket: (ticketId, handler) => deps.events.subscribe(ticketId, handler),
+    subscribe: (ticketKey, handler) => deps.events.subscribe(ticketKey, handler),
     startup: () => startup(deps),
   }
 }
