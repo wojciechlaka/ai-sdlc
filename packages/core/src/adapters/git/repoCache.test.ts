@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import { getRepoCacheDir, getCommitHash, ensureRepoSummary } from './repoCache'
+import { createAgentSandbox } from '../agentSandbox/agentSandbox'
 import { execFileSync } from 'child_process'
 import fs from 'fs/promises'
 import os from 'os'
 import path from 'path'
 
-const OPTIONS = { hooksDir: path.resolve(__dirname, '../../../hooks') }
+const OPTIONS = { sandbox: createAgentSandbox({ hooksDir: path.resolve(__dirname, '../../../hooks') }) }
 
 async function makeTempRepo(): Promise<string> {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'test-repo-'))

@@ -1,0 +1,76 @@
+import path from 'path'
+
+// Sandbox of every `claude` process the app starts (agent and codebase summary, spec §13): which settings are
+// loaded, which hooks guard the tools, which tools are allowed and which environment the process sees.
+// Built once in compose.ts and handed to the adapters that spawn `claude`, so the rules live in one place.
+
+/** Environment variable the hook scripts write their JSON lines to (see `hooks/hookIo.mjs`). */
+export const HOOK_LOG_ENV = 'REFINEMENT_HOOK_LOG'
+/** Read-only tools; the guard additionally confines them to the clone and restricts Bash to reading git commands. */
+export const ALLOWED_TOOLS = 'Read,Glob,Grep,Bash'
+/** Seconds Claude Code waits for a hook; the scripts need milliseconds. */
+const HOOK_TIMEOUT_SECONDS = 10
+
+/** Variables the `claude` process may see; everything else (GITHUB_TOKEN, DB_PATH, …) stays in the app. */
+const ENV_ALLOWLIST = new Set([
+  'PATH', 'HOME', 'USER', 'LANG', 'LC_ALL', 'TERM', 'TMPDIR', 'SHELL',
+  // Claude login and configuration.
+  'ANTHROPIC_API_KEY', 'CLAUDE_CONFIG_DIR',
+  // Reaching the Anthropic API behind a corporate proxy.
+  'HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY', 'https_proxy', 'http_proxy', 'no_proxy', 'NODE_EXTRA_CA_CERTS',
+])
+const ENV_ALLOWED_PREFIX = 'CLAUDE_CODE_'
+
+export interface AgentSandbox {
+  /** CLI flags: `--setting-sources user`, `--settings <hooks>`, `--allowedTools`. */
+  readonly args: readonly string[]
+  /** Environment of one `claude` process whose hooks write to `logFile`. */
+  env(logFile: string): Record<string, string>
+}
+
+/** Quotes a value for `/bin/sh -c` (Claude Code runs hook commands through the shell). */
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`
+}
+
+/**
+ * The `--settings` JSON: guard before and audit after every tool call (empty matcher = all tools).
+ * The guard fails closed: if node or the script cannot run, the shell fallback exits with 2, which blocks the call.
+ * @param hooksDir - Absolute path to `packages/core/hooks`.
+ * @param nodePath - Node binary; the one running the app by default.
+ */
+export function hookSettings(hooksDir: string, nodePath = process.execPath): string {
+  const script = (name: string) => `${shellQuote(nodePath)} ${shellQuote(path.join(/*turbopackIgnore: true*/ hooksDir, name))}`
+  const hook = (command: string) => [{ matcher: '', hooks: [{ type: 'command', command, timeout: HOOK_TIMEOUT_SECONDS }] }]
+  return JSON.stringify({
+    hooks: {
+      PreToolUse: hook(`${script('guard.mjs')} || { echo 'Guard nicht ausführbar' >&2; exit 2; }`),
+      PostToolUse: hook(script('audit.mjs')),
+    },
+  })
+}
+
+/**
+ * Environment of a `claude` process: only allowlisted variables of `baseEnv`, plus the hook log and git without
+ * global or system configuration (the clone's `.git/config` is written by the app).
+ */
+export function sandboxEnv(baseEnv: NodeJS.ProcessEnv, logFile: string): Record<string, string> {
+  const env: Record<string, string> = {}
+  for (const [key, value] of Object.entries(baseEnv)) {
+    if (value !== undefined && (ENV_ALLOWLIST.has(key) || key.startsWith(ENV_ALLOWED_PREFIX))) env[key] = value
+  }
+  return { ...env, [HOOK_LOG_ENV]: logFile, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' }
+}
+
+/**
+ * Sandbox for the `claude` processes of the app. `--setting-sources user` keeps project and local settings of the
+ * untrusted clone (`.claude/settings*.json`, including their hooks) from being loaded.
+ */
+export function createAgentSandbox(options: { hooksDir: string }): AgentSandbox {
+  const args = Object.freeze([
+    '--setting-sources', 'user',
+    '--settings', hookSettings(options.hooksDir),
+    '--allowedTools', ALLOWED_TOOLS,
+  ])
+  return { args, env: (logFile) => sandboxEnv(process.env, logFile) }
+}

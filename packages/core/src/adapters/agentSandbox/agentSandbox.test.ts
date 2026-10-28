@@ -1,0 +1,89 @@
+import { describe, it, expect, afterEach } from 'vitest'
+import { spawnSync } from 'child_process'
+import fs from 'fs'
+import os from 'os'
+import path from 'path'
+import { createAgentSandbox, hookSettings, sandboxEnv } from './agentSandbox'
+
+const HOOKS_DIR = path.resolve(__dirname, '../../../hooks')
+const BLOCKED_CALL = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'git push' }, cwd: '/repo' })
+
+const tempDirs: string[] = []
+afterEach(() => {
+  for (const dir of tempDirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true })
+})
+
+/** Runs a hook command the way Claude Code does: `/bin/sh -c <command>` with the hook input on stdin. */
+function runThroughShell(command: string, input = BLOCKED_CALL) {
+  return spawnSync('/bin/sh', ['-c', command], { input, env: { PATH: process.env.PATH }, encoding: 'utf-8' })
+}
+
+const guardCommand = (hooksDir: string) => JSON.parse(hookSettings(hooksDir)).hooks.PreToolUse[0].hooks[0].command as string
+
+describe('createAgentSandbox', () => {
+  it('lädt nur die Nutzer-Einstellungen, setzt die Hooks und erlaubt nur lesende Werkzeuge', () => {
+    const { args } = createAgentSandbox({ hooksDir: HOOKS_DIR })
+    const after = (flag: string) => args[args.indexOf(flag) + 1]
+    expect(after('--setting-sources')).toBe('user')
+    expect(after('--allowedTools')).toBe('Read,Glob,Grep,Bash')
+    const settings = JSON.parse(after('--settings')!)
+    expect(settings.hooks.PreToolUse).toEqual([{ matcher: '', hooks: [{ type: 'command', timeout: 10, command: expect.stringContaining(path.join(HOOKS_DIR, 'guard.mjs')) }] }])
+    expect(settings.hooks.PostToolUse).toEqual([{ matcher: '', hooks: [{ type: 'command', timeout: 10, command: expect.stringContaining(path.join(HOOKS_DIR, 'audit.mjs')) }] }])
+  })
+})
+
+describe('sandboxEnv', () => {
+  it('gibt nur freigegebene Variablen weiter, keine Secrets der App', () => {
+    const env = sandboxEnv({
+      PATH: '/bin', HOME: '/home/u', USER: 'u', LANG: 'de_DE.UTF-8', TMPDIR: '/tmp', SHELL: '/bin/zsh',
+      ANTHROPIC_API_KEY: 'sk', CLAUDE_CONFIG_DIR: '/c', CLAUDE_CODE_USE_BEDROCK: '1', HTTPS_PROXY: 'http://proxy',
+      GITHUB_TOKEN: 'ghp_secret', DB_PATH: '/db', TARGET_REPO: 'x', AWS_SECRET_ACCESS_KEY: 'a', GIT_PAGER: 'sh', NODE_OPTIONS: '--require x',
+    }, '/tmp/log.jsonl')
+    expect(env).toEqual({
+      PATH: '/bin', HOME: '/home/u', USER: 'u', LANG: 'de_DE.UTF-8', TMPDIR: '/tmp', SHELL: '/bin/zsh',
+      ANTHROPIC_API_KEY: 'sk', CLAUDE_CONFIG_DIR: '/c', CLAUDE_CODE_USE_BEDROCK: '1', HTTPS_PROXY: 'http://proxy',
+      REFINEMENT_HOOK_LOG: '/tmp/log.jsonl', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null',
+    })
+  })
+
+  it('liest die Umgebung des Prozesses, wenn keine übergeben wird', () => {
+    const sandbox = createAgentSandbox({ hooksDir: HOOKS_DIR })
+    const env = sandbox.env('/tmp/x.jsonl')
+    expect(env.PATH).toBe(process.env.PATH)
+    expect(env).not.toHaveProperty('GITHUB_TOKEN')
+  })
+})
+
+describe('Guard-Befehl über /bin/sh (fail closed)', () => {
+  it('lehnt mit dem echten Guard ab', () => {
+    const result = runThroughShell(guardCommand(HOOKS_DIR))
+    expect(result.status).toBe(0)
+    expect(JSON.parse(result.stdout).hookSpecificOutput.permissionDecision).toBe('deny')
+  })
+
+  it('endet mit Exit-Code 2 (blockierend), wenn das Skript fehlt', () => {
+    const result = runThroughShell(guardCommand(path.join(os.tmpdir(), 'gibt-es-nicht')))
+    expect(result.status).toBe(2)
+    expect(result.stderr).toContain('Guard nicht ausführbar')
+  })
+
+  it('lehnt ab, wenn die Regel nicht geladen werden kann', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'broken-hooks-'))
+    tempDirs.push(dir)
+    for (const file of ['guard.mjs', 'hookIo.mjs']) fs.copyFileSync(path.join(HOOKS_DIR, file), path.join(dir, file))
+    fs.writeFileSync(path.join(dir, 'guardPolicy.mjs'), 'export const = kaputt')
+    const allowedCall = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Read', tool_input: { file_path: 'a' }, cwd: dir })
+    const result = runThroughShell(guardCommand(dir), allowedCall)
+    expect(result.status).toBe(0)
+    expect(JSON.parse(result.stdout).hookSpecificOutput).toMatchObject({ permissionDecision: 'deny', permissionDecisionReason: expect.stringContaining('Guard-Fehler') })
+  })
+
+  it('lehnt ab, wenn hookIo fehlt', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'broken-hooks-'))
+    tempDirs.push(dir)
+    fs.copyFileSync(path.join(HOOKS_DIR, 'guard.mjs'), path.join(dir, 'guard.mjs'))
+    const result = runThroughShell(guardCommand(dir))
+    expect(result.status).toBe(0)
+    expect(JSON.parse(result.stdout).hookSpecificOutput).toMatchObject({ permissionDecision: 'deny', permissionDecisionReason: expect.stringContaining('Guard-Fehler') })
+  })
+})

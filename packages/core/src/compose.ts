@@ -10,6 +10,7 @@ import { createGitHubCodeHost, parseGitHubRepoUrl } from './adapters/github/gith
 import { createClaudeCliAgentRunner } from './adapters/claudeCli'
 import { createGitRepoProvider } from './adapters/git/repoCache'
 import { createNodeEventPublisher } from './adapters/nodeEvents/nodeEventPublisher'
+import { createAgentSandbox } from './adapters/agentSandbox/agentSandbox'
 
 export interface EngineConfig {
   /** SQLite file; parent directories are created. */
@@ -59,6 +60,8 @@ export function createRefinementEngine(config: EngineConfig): UseCases {
   // Fail at start with the clear message, with or without token.
   parseGitHubRepoUrl(config.targetRepo)
   const { baseBranch = SHOWCASE_BRANCH, baselineTag = BASELINE_TAG } = config
+  // One sandbox for every `claude` process: user settings only, guard/audit hooks, read tools, clean env (spec §13).
+  const sandbox = createAgentSandbox({ hooksDir: config.hooksDir })
   const db = createSqliteDatabase({ path: config.dbPath, migrationsFolder: config.migrationsFolder })
   return createUseCases({
     tickets: createSqliteTicketRepository(db),
@@ -69,8 +72,8 @@ export function createRefinementEngine(config: EngineConfig): UseCases {
     codeHost: config.githubToken
       ? createGitHubCodeHost({ repoUrl: config.targetRepo, token: config.githubToken, baseBranch, baselineTag })
       : null,
-    agent: createClaudeCliAgentRunner({ skillsDir: config.skillsDir, hooksDir: config.hooksDir }),
-    repos: createGitRepoProvider({ hooksDir: config.hooksDir }),
+    agent: createClaudeCliAgentRunner({ skillsDir: config.skillsDir, sandbox }),
+    repos: createGitRepoProvider({ sandbox }),
     events: createNodeEventPublisher(),
     repoUrl: config.targetRepo,
     baseBranch,

@@ -12,6 +12,7 @@ vi.mock('child_process', async (importOriginal) => {
 
 import { spawn } from 'child_process'
 import { ensureRepoSummary } from './repoCache'
+import { createAgentSandbox } from '../agentSandbox/agentSandbox'
 
 const mockSpawn = vi.mocked(spawn)
 const HOOKS_DIR = path.resolve(__dirname, '../../../hooks')
@@ -25,10 +26,12 @@ function makeTempRepo(): string {
 
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.unstubAllEnvs()
 })
 
 describe('ensureRepoSummary — summary run with guard and audit hooks', () => {
-  it('runs claude with the hooks and reports blocked calls only as server warnings', async () => {
+  it('runs claude in the sandbox and reports blocked calls only as server warnings', async () => {
+    vi.stubEnv('GITHUB_TOKEN', 'ghp_secret')
     const repo = makeTempRepo()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     let logFile = ''
@@ -48,11 +51,15 @@ describe('ensureRepoSummary — summary run with guard and audit hooks', () => {
     }) as never)
 
     try {
-      const summary = await ensureRepoSummary(repo, 'test-model', () => {}, { hooksDir: HOOKS_DIR })
+      const summary = await ensureRepoSummary(repo, 'test-model', () => {}, { sandbox: createAgentSandbox({ hooksDir: HOOKS_DIR }) })
 
       expect(summary).toBe('## Stack')
       const args = mockSpawn.mock.calls[0]![1] as string[]
       expect(args[args.indexOf('--allowedTools') + 1]).toBe('Read,Glob,Grep,Bash')
+      expect(args[args.indexOf('--setting-sources') + 1]).toBe('user')
+      const env = (mockSpawn.mock.calls[0]![2] as { env: Record<string, string> }).env
+      expect(env).not.toHaveProperty('GITHUB_TOKEN')
+      expect(env.GIT_CONFIG_GLOBAL).toBe('/dev/null')
       const settings = JSON.parse(args[args.indexOf('--settings') + 1]!)
       expect(settings.hooks.PreToolUse[0].hooks[0].command).toContain(path.join(HOOKS_DIR, 'guard.mjs'))
       expect(settings.hooks.PostToolUse[0].hooks[0].command).toContain(path.join(HOOKS_DIR, 'audit.mjs'))

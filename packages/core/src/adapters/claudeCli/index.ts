@@ -8,13 +8,11 @@ import { AgentRunTerminatedError, AgentRunTimeoutError } from '../../ports'
 import type { AgentRunner, AgentRunnerInput, AgentRunMeta, AgentRunResult, AgentRunCallbacks } from '../../ports'
 import type { ArtifactStage } from '../../domain/types'
 import { buildPrompt } from './prompt'
-import { HOOK_LOG_ENV, hookSettings, openHookLog } from './hookLog'
+import { openHookLog } from './hookLog'
 import type { ClaudeStreamMessage, ClaudeTokenUsage, ExtractedResult, AttemptResult } from './types'
 
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000
 const SIGTERM_EXIT_CODE = 143
-/** Read-only tools; the guard hook additionally restricts Bash to reading commands (spec §13). */
-const ALLOWED_TOOLS = 'Read,Glob,Grep,Bash'
 const MS_PER_SECOND = 1000
 const UTF8 = 'utf-8' as const
 const SCHEMA_ERROR_PREVIEW_CHARS = 120
@@ -83,9 +81,17 @@ export function stopAgent(ticketKey: string): boolean {
   return true
 }
 
-/** Guard/audit hooks of one Claude process: `--settings` JSON and the log file the hooks write to. */
-interface HookConfig {
-  settings: string
+/** Sandbox of the `claude` processes (built in compose.ts by `adapters/agentSandbox`, spec §13). */
+export interface ClaudeSandbox {
+  /** Flags for settings sources, hooks and allowed tools. */
+  readonly args: readonly string[]
+  /** Environment of one process whose hooks write to `logFile`. */
+  env(logFile: string): Record<string, string>
+}
+
+/** Sandbox plus the hook log file of one Claude process. */
+interface SandboxRun {
+  sandbox: ClaudeSandbox
   logFile: string
 }
 
@@ -99,7 +105,7 @@ async function spawnClaude(
   cwd: string,
   model: string,
   onProgress: (msg: string) => void,
-  hooks: HookConfig,
+  { sandbox, logFile }: SandboxRun,
 ): Promise<ExtractedResult> {
   const parsedTimeout = parseInt(process.env['REFINEMENT_TIMEOUT_MS'] ?? '', 10)
   const timeoutMs = Number.isFinite(parsedTimeout) && parsedTimeout > 0 ? parsedTimeout : DEFAULT_TIMEOUT_MS
@@ -113,9 +119,8 @@ async function spawnClaude(
       '--output-format', 'stream-json',
       '--verbose',
       '--model', model,
-      '--allowedTools', ALLOWED_TOOLS,
-      '--settings', hooks.settings,
-    ], { cwd, env: { ...process.env, [HOOK_LOG_ENV]: hooks.logFile }, stdio: ['pipe', 'pipe', 'pipe'] })
+      ...sandbox.args,
+    ], { cwd, env: sandbox.env(logFile), stdio: ['pipe', 'pipe', 'pipe'] })
 
     runningProcesses.set(ticketKey, proc)
     const cleanup = () => { if (runningProcesses.get(ticketKey) === proc) runningProcesses.delete(ticketKey) }
@@ -210,7 +215,7 @@ function parseAndValidate(raw: string, schema: ZodType<StageOutput>): StageOutpu
  * Tool events are reported while the process runs; the rest is drained before the attempt returns.
  */
 async function runAttempt(
-  agent: { skill: string; schema: ZodType<StageOutput>; hooksDir: string },
+  agent: { skill: string; schema: ZodType<StageOutput>; sandbox: ClaudeSandbox },
   input: AgentRunnerInput,
   callbacks: AgentRunCallbacks,
   retryContext?: { previousOutput: string; schemaError: string },
@@ -229,7 +234,7 @@ async function runAttempt(
   let cliResult: ExtractedResult
   try {
     cliResult = await spawnClaude(input.ticketKey, prompt, input.repoPath, input.model, callbacks.onProgress, {
-      settings: hookSettings(agent.hooksDir),
+      sandbox: agent.sandbox,
       logFile: hookLog.file,
     })
   } finally {
@@ -277,15 +282,15 @@ function buildMeta(model: string, startedAt: number, cliResult: ExtractedResult)
 export interface ClaudeCliOptions {
   /** Absolute path to `packages/core/skills`. */
   skillsDir: string
-  /** Absolute path to `packages/core/hooks` (guard and audit scripts, spec §13). */
-  hooksDir: string
+  /** Settings sources, guard/audit hooks, allowed tools and environment of the `claude` process (spec §13). */
+  sandbox: ClaudeSandbox
 }
 
 /**
  * Runs the agent of `input.stage` and returns its validated output.
  * One automatic retry on a SchemaValidationError (the retry prompt quotes the malformed output);
  * terminate, timeout and CLI errors propagate immediately. Tokens and cost cover both attempts.
- * Every attempt runs with the guard and audit hooks (`--settings`); their tool calls reach `callbacks.onToolEvent`.
+ * Every attempt runs in the sandbox (guard and audit hooks, clean env); its tool calls reach `callbacks.onToolEvent`.
  * @throws {Error} if the stage has no agent yet.
  * @throws {AgentRunTerminatedError} if the process is killed via `stopAgent`.
  * @throws {AgentRunTimeoutError} if the run exceeds `REFINEMENT_TIMEOUT_MS`.
@@ -302,7 +307,7 @@ export async function runAgent(
   const agent = {
     skill: await fs.readFile(path.join(/*turbopackIgnore: true*/ options.skillsDir, stageAgent.skillFile), UTF8),
     schema: stageAgent.schema,
-    hooksDir: options.hooksDir,
+    sandbox: options.sandbox,
   }
   const startedAt = Date.now()
 

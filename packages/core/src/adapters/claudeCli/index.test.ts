@@ -3,9 +3,10 @@ import { EventEmitter } from 'events'
 import fs from 'fs'
 import path from 'path'
 import type { AgentRunnerInput } from '../../ports'
+import { createAgentSandbox } from '../agentSandbox/agentSandbox'
 
 const HOOKS_DIR = path.resolve(__dirname, '../../../hooks')
-const OPTIONS = { skillsDir: path.resolve(__dirname, '../../../skills'), hooksDir: HOOKS_DIR }
+const OPTIONS = { skillsDir: path.resolve(__dirname, '../../../skills'), sandbox: createAgentSandbox({ hooksDir: HOOKS_DIR }) }
 
 const callbacks = () => ({ onProgress: vi.fn(), onToolEvent: vi.fn() })
 
@@ -129,13 +130,18 @@ describe('runAgent — guard and audit hooks (spec §13)', () => {
   }
   const argAfter = (args: string[], flag: string) => args[args.indexOf(flag) + 1]
 
-  it('passes guard and audit as hooks for all tools and only read tools', async () => {
+  it('runs claude in the sandbox: user settings only, guard and audit hooks, read tools, clean env', async () => {
+    vi.stubEnv('GITHUB_TOKEN', 'ghp_secret')
     mockSpawn.mockImplementation(() => makeFakeProcess(resultLine(INTENT_OUTPUT), 0))
     const { runAgent } = await import('./index')
     await runAgent(INPUT, callbacks(), OPTIONS)
 
-    const { args, logFile } = spawnCall()
+    const { args, options, logFile } = spawnCall()
+    expect(argAfter(args, '--setting-sources')).toBe('user')
     expect(argAfter(args, '--allowedTools')).toBe('Read,Glob,Grep,Bash')
+    expect(options.env).toEqual(OPTIONS.sandbox.env(logFile))
+    expect(options.env).not.toHaveProperty('GITHUB_TOKEN')
+    expect(options.env).toMatchObject({ GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' })
     const settings = JSON.parse(argAfter(args, '--settings'))
     expect(settings.hooks.PreToolUse).toEqual([{ matcher: '', hooks: [{ type: 'command', timeout: 10, command: expect.stringContaining(path.join(HOOKS_DIR, 'guard.mjs')) }] }])
     expect(settings.hooks.PostToolUse).toEqual([{ matcher: '', hooks: [{ type: 'command', timeout: 10, command: expect.stringContaining(path.join(HOOKS_DIR, 'audit.mjs')) }] }])

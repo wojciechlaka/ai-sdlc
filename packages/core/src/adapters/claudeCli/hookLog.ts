@@ -5,32 +5,11 @@ import { StringDecoder } from 'string_decoder'
 import type { ToolEvent } from '../../ports'
 
 // Guard and audit hooks of the agent (spec §13). The hook scripts (`packages/core/hooks`) append one JSON line
-// per tool call to the file in REFINEMENT_HOOK_LOG; this module creates that file per run, follows it while the
-// run lasts and turns the lines into ToolEvents.
+// per tool call to the file in REFINEMENT_HOOK_LOG (set by the sandbox); this module creates that file per run,
+// follows it while the run lasts and turns the lines into ToolEvents.
 
-/** Environment variable the hook scripts write to (see `hooks/hookIo.mjs`). */
-export const HOOK_LOG_ENV = 'REFINEMENT_HOOK_LOG'
-/** Seconds Claude Code waits for a hook; the scripts need milliseconds. */
-const HOOK_TIMEOUT_SECONDS = 10
 const POLL_INTERVAL_MS = 200
 const READ_CHUNK_BYTES = 64 * 1024
-
-/** Quotes a value for `/bin/sh -c` (Claude Code runs hook commands through the shell). */
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`
-}
-
-/**
- * The `--settings` JSON for one Claude run: guard before and audit after every tool call (empty matcher = all tools).
- * Merged by Claude Code with user and project settings, which stay untouched.
- * @param hooksDir - Absolute path to `packages/core/hooks`.
- */
-export function hookSettings(hooksDir: string): string {
-  const command = (script: string) =>
-    `${shellQuote(process.execPath)} ${shellQuote(path.join(/*turbopackIgnore: true*/ hooksDir, script))}`
-  const hook = (script: string) => [{ matcher: '', hooks: [{ type: 'command', command: command(script), timeout: HOOK_TIMEOUT_SECONDS }] }]
-  return JSON.stringify({ hooks: { PreToolUse: hook('guard.mjs'), PostToolUse: hook('audit.mjs') } })
-}
 
 /** Parses one log line of the hook scripts; null for anything that is not a tool event. */
 export function parseToolEvent(line: string): ToolEvent | null {
@@ -55,7 +34,7 @@ export function parseToolEvent(line: string): ToolEvent | null {
 }
 
 export interface HookLog {
-  /** Path for REFINEMENT_HOOK_LOG. */
+  /** Path the hooks write to (`sandbox.env(file)`). */
   file: string
   /** Stops following, reports the remaining lines and deletes the file. */
   close(): Promise<void>
