@@ -22,7 +22,7 @@ describe('in-memory ticket repository', () => {
 })
 
 describe('FakeCodeHost', () => {
-  it('merges a PR like GitHub: the branch files land on the default branch', async () => {
+  it('merges a PR like GitHub: the branch files land on the base branch', async () => {
     const { codeHost } = createTestContext()
     await codeHost.createBranch('CB-1/intent')
     await codeHost.commitFile({ branch: 'CB-1/intent', path: 'docs/work/CB-1/intent.md', content: 'x', message: 'm' })
@@ -32,6 +32,48 @@ describe('FakeCodeHost', () => {
 
     expect(await codeHost.readFile('docs/work/CB-1/intent.md')).toBe('x')
     expect((await codeHost.getPullRequest(pr.number)).state).toBe('merged')
+  })
+
+  it('creates tag and base branch only when they are missing', async () => {
+    const { codeHost } = createTestContext()
+    codeHost.baseBranchExists = false
+    codeHost.defaultBranchFiles.set('README.md', 'master')
+
+    expect(await codeHost.prepareBaseBranch()).toEqual({ createdTag: true, createdBranch: true })
+    expect(await codeHost.readFile('README.md')).toBe('master')
+
+    codeHost.defaultBranchFiles.set('README.md', 'master v2')
+    codeHost.files.set('docs/work/CB-1/intent.md', 'x')
+    expect(await codeHost.prepareBaseBranch()).toEqual({ createdTag: false, createdBranch: false })
+    expect(codeHost.baselineFiles?.get('README.md')).toBe('master')
+    expect(await codeHost.readFile('docs/work/CB-1/intent.md')).toBe('x')
+    expect(codeHost.calls.filter((c) => c === 'prepareBaseBranch')).toHaveLength(2)
+  })
+
+  it('resets the base branch to the tag: a merge after the tag is gone, the default branch untouched', async () => {
+    const { codeHost } = createTestContext()
+    codeHost.baselineFiles = new Map([['README.md', 'base']])
+    codeHost.defaultBranchFiles.set('README.md', 'master')
+    const pr = codeHost.seedPullRequest('CB-1/intent')
+    await codeHost.commitFile({ branch: 'CB-1/intent', path: 'docs/work/CB-1/intent.md', content: 'x', message: 'm' })
+    codeHost.merge(pr.number)
+    expect(await codeHost.readFile('docs/work/CB-1/intent.md')).toBe('x')
+    expect(codeHost.defaultBranchFiles.has('docs/work/CB-1/intent.md')).toBe(false)
+
+    await codeHost.resetBaseBranch()
+
+    expect(await codeHost.readFile('docs/work/CB-1/intent.md')).toBeNull()
+    expect(await codeHost.readFile('README.md')).toBe('base')
+    codeHost.files.set('a', 'b')
+    expect(codeHost.baselineFiles.has('a')).toBe(false)
+  })
+
+  it('refuses a reset without tag and reports injected failures for the new methods', async () => {
+    const { codeHost } = createTestContext()
+    await expect(codeHost.resetBaseBranch()).rejects.toMatchObject({ status: 422 })
+    codeHost.failures.prepareBaseBranch = new CodeHostError(403, 'verboten')
+    await expect(codeHost.prepareBaseBranch()).rejects.toThrow('verboten')
+    expect(await codeHost.baseBranch()).toBe('showcase')
   })
 
   it('reports unknown PRs as 404 and injected failures as given', async () => {

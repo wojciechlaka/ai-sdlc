@@ -8,16 +8,28 @@ export interface PullRequest {
   mergedAt: Date | null
 }
 
-/** The target repository on its Git host (GitHub). All writes need a token. */
+/**
+ * The target repository on its Git host (GitHub). All writes need a token.
+ * The app works against a configured base branch (`showcase`), not the repository's default branch;
+ * a baseline tag (`showcase-base`) marks the state the base branch is reset to.
+ */
 export interface CodeHost {
-  defaultBranch(): Promise<string>
-  /** Content of a file on the default branch; null if it does not exist. */
+  /** Name of the base branch. */
+  baseBranch(): Promise<string>
+  /**
+   * Creates what is missing: the baseline tag on the head of the repository's default branch,
+   * then the base branch on the tag. Reports what was created.
+   */
+  prepareBaseBranch(): Promise<{ createdTag: boolean; createdBranch: boolean }>
+  /** Force-moves the base branch to the commit of the baseline tag. Other branches stay untouched. */
+  resetBaseBranch(): Promise<void>
+  /** Content of a file on the base branch; null if it does not exist. */
   readFile(path: string): Promise<string | null>
-  /** Creates `name` from the head of the default branch. */
+  /** Creates `name` from the head of the base branch. */
   createBranch(name: string): Promise<void>
   /** Creates or overwrites one file on `branch` in a single commit. */
   commitFile(input: { branch: string; path: string; content: string; message: string }): Promise<void>
-  /** Opens a PR from `branch` against the default branch. */
+  /** Opens a PR from `branch` against the base branch. */
   openPullRequest(input: { branch: string; title: string; body: string }): Promise<PullRequest>
   getPullRequest(number: number): Promise<PullRequest>
   /** Open PRs of the repository. */

@@ -272,10 +272,19 @@ export interface FakePullRequest extends PullRequest {
   body: string
 }
 
-/** In-memory GitHub: files of the default branch, branches with their files, PRs. */
+/**
+ * In-memory GitHub: the default branch, the baseline tag, the base branch the app works on,
+ * app branches with their files, PRs.
+ */
 export class FakeCodeHost implements CodeHost {
-  defaultBranchName = 'master'
-  /** Files on the default branch. */
+  baseBranchName = 'showcase'
+  /** Files on the repository's default branch (`master`); the app never writes there. */
+  readonly defaultBranchFiles = new Map<string, string>()
+  /** Files of the commit the baseline tag points to; null while the tag does not exist. */
+  baselineFiles: Map<string, string> | null = null
+  /** false simulates a repository without the base branch (first start). */
+  baseBranchExists = true
+  /** Files on the base branch. */
   readonly files = new Map<string, string>()
   /** Branch name → files committed on that branch. */
   readonly branches = new Map<string, Map<string, string>>()
@@ -305,9 +314,32 @@ export class FakeCodeHost implements CodeHost {
     return pr
   }
 
-  async defaultBranch(): Promise<string> {
-    this.enter('defaultBranch')
-    return this.defaultBranchName
+  async baseBranch(): Promise<string> {
+    this.enter('baseBranch')
+    return this.baseBranchName
+  }
+
+  async prepareBaseBranch(): Promise<{ createdTag: boolean; createdBranch: boolean }> {
+    this.enter('prepareBaseBranch')
+    const createdTag = this.baselineFiles === null
+    this.baselineFiles ??= new Map(this.defaultBranchFiles)
+    const createdBranch = !this.baseBranchExists
+    if (createdBranch) {
+      this.replaceFiles(this.baselineFiles)
+      this.baseBranchExists = true
+    }
+    return { createdTag, createdBranch }
+  }
+
+  async resetBaseBranch(): Promise<void> {
+    this.enter('resetBaseBranch')
+    if (!this.baselineFiles) throw new CodeHostError(422, 'Tag showcase-base fehlt')
+    this.replaceFiles(this.baselineFiles)
+  }
+
+  private replaceFiles(source: Map<string, string>): void {
+    this.files.clear()
+    for (const [path, content] of source) this.files.set(path, content)
   }
 
   async readFile(path: string): Promise<string | null> {
@@ -367,7 +399,7 @@ export class FakeCodeHost implements CodeHost {
     return this.addPull(branch, branch, '')
   }
 
-  /** Test helper: merges like GitHub — the files of the head branch land on the default branch. */
+  /** Test helper: merges like GitHub — the files of the head branch land on the base branch. */
   merge(number: number, at = new Date('2026-10-28T12:00:00Z')): void {
     const pr = this.requirePull(number)
     if (pr.state !== 'open') throw new CodeHostError(422, `PR #${number} ist nicht offen`)

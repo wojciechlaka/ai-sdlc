@@ -41,7 +41,7 @@ const pr = (patch: Record<string, unknown> = {}) => ({
 describe('request timeout', () => {
   it('passes an abort signal with every request', async () => {
     const { gh, codeHost } = setup()
-    await codeHost.defaultBranch()
+    await codeHost.baseBranch()
     expect(gh.inits.length).toBeGreaterThan(0)
     expect(gh.inits.every((init) => init?.signal instanceof AbortSignal)).toBe(true)
   })

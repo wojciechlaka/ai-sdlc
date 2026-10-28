@@ -23,7 +23,7 @@ export async function startup(deps: UseCaseDeps): Promise<void> {
   try {
     await syncReviews(deps)
     await closeOpenPullRequests(deps, host)
-    await host.defaultBranch() // guard: a repo-level failure must not reset tickets to plan
+    await host.baseBranch() // guard: a repo-level failure must not reset tickets to plan
     await deriveStages(deps, host)
   } catch (err) {
     console.warn(`[startup] GitHub-Abgleich fehlgeschlagen, weiter mit DB-Stand: ${describeError(err)}`)

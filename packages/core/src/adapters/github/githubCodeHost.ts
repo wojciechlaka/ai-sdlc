@@ -100,7 +100,16 @@ export function createGitHubCodeHost(options: GitHubCodeHostOptions): CodeHost {
   }
 
   return {
-    defaultBranch,
+    // Interim: still the default branch until the adapter gets its configured base branch.
+    baseBranch: defaultBranch,
+
+    prepareBaseBranch: async () => {
+      throw new CodeHostError(0, 'Basis-Branch vorbereiten: noch nicht unterstützt')
+    },
+
+    resetBaseBranch: async () => {
+      throw new CodeHostError(0, 'Basis-Branch zurücksetzen: noch nicht unterstützt')
+    },
 
     async readFile(path) {
       const ref = await defaultBranch()
