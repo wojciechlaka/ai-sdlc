@@ -78,6 +78,12 @@ describe('Architektur (packages/core)', () => {
 
   // hooks/ enthält eigenständige Node-Skripte (Guard/Audit, spec §13): Claude Code startet sie als Prozess,
   // die Adapter kennen nur ihren Pfad (`hooksDir` aus compose). Sie dürfen nichts aus src laden und umgekehrt.
+  it('die Hook-Skripte liegen dort, wo die Regeln sie suchen', () => {
+    // Sonst würden die beiden folgenden Regeln leer und damit immer grün.
+    const hooks = readdirSync(path.resolve(__dirname, '../hooks'))
+    expect(hooks).toEqual(expect.arrayContaining(['guard.mjs', 'audit.mjs', 'guardPolicy.mjs', 'hookIo.mjs']))
+  })
+
   it('die Hook-Skripte hängen nicht von src ab', async () => {
     const rule = projectFiles(TSCONFIG)
       .inFolder('hooks/**', { except: { withName: '*.test.ts' } })

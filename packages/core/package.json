@@ -7,7 +7,7 @@
     "build": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "eslint src"
+    "lint": "eslint src 'hooks/**/*.mjs'"
   },
   "dependencies": {
     "@anthropic-ai/claude-code": "^2.1.175",
