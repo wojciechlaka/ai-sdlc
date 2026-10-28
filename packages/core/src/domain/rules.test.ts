@@ -58,6 +58,8 @@ describe('canAnswer / canStop', () => {
     expect(canStop(ticket({ state: 'running' }))).toBe(true)
     expect(canStop(ticket({ state: 'awaiting_answer' }))).toBe(true)
     expect(canStop(ticket({ state: 'in_review' }))).toBe(false)
+    expect(canStop(ticket({ state: 'ready' }))).toBe(false)
+    expect(canStop(ticket({ state: 'failed' }))).toBe(false)
   })
 })
 
@@ -93,6 +95,11 @@ describe('reconcile', () => {
 
   it('turns in_review into ready because the start-up closed all app PRs', () => {
     expect(reconcile(ticket({ state: 'in_review' }), 'plan')).toEqual({ stage: 'plan', state: 'ready' })
+  })
+
+  it('keeps running and failed when the stage is unchanged', () => {
+    expect(reconcile(ticket({ state: 'running' }), 'plan')).toEqual({ stage: 'plan', state: 'running' })
+    expect(reconcile(ticket({ state: 'failed' }), 'plan')).toEqual({ stage: 'plan', state: 'failed' })
   })
 
   it('keeps a pending question across restarts', () => {

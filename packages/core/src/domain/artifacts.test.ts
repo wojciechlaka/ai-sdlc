@@ -11,6 +11,7 @@ describe('ticket keys', () => {
 
   it('sorts by prefix, then numerically', () => {
     expect(['CB-10', 'AB-1', 'CB-2'].sort(compareTicketKeys)).toEqual(['AB-1', 'CB-2', 'CB-10'])
+    expect(['CBA-1', 'CB-1'].sort(compareTicketKeys)).toEqual(['CB-1', 'CBA-1'])
   })
 })
 
@@ -43,5 +44,6 @@ describe('parseAppBranch', () => {
     expect(parseAppBranch('CB-9/intent', known)).toBeNull()
     expect(parseAppBranch('feature/CB-3', known)).toBeNull()
     expect(parseAppBranch('CB-3/intent-old', known)).toBeNull()
+    expect(parseAppBranch('cb-3/intent', known)).toBeNull()
   })
 })

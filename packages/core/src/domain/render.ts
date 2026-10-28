@@ -4,12 +4,15 @@ import { artifactTitle } from './artifacts'
 
 const NONE = 'Keine.'
 
+/** Collapses whitespace so a single-line field cannot break Markdown structure. */
+const oneLine = (s: string) => s.replace(/\s+/g, ' ').trim()
+
 function bulletList(items: string[]): string {
-  return items.length ? items.map((item) => `- ${item}`).join('\n') : NONE
+  return items.length ? items.map((item) => `- ${oneLine(item)}`).join('\n') : NONE
 }
 
 function answeredQuestions(pairs: QAPair[]): string {
-  return pairs.length ? pairs.map((p) => `**F:** ${p.question}\n**A:** ${p.answer}`).join('\n\n') : NONE
+  return pairs.length ? pairs.map((p) => `**F:** ${oneLine(p.question)}\\\n**A:** ${oneLine(p.answer)}`).join('\n\n') : NONE
 }
 
 /**
@@ -24,7 +27,7 @@ export function renderIntent(ticket: Pick<Ticket, 'key' | 'sourcePath'>, intent:
     `source: ${ticket.sourcePath}`,
     '---',
     '',
-    `# ${ticket.key}: ${intent.title}`,
+    `# ${ticket.key}: ${oneLine(intent.title)}`,
     '',
     '## Problem',
     '',
