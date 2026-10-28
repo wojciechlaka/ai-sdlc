@@ -204,3 +204,49 @@ solange `showcase` nicht geschützt ist).
 GitHub-Adapter mit gemocktem `fetch` (Ref-Aufrufe inkl. `force: true`); Web: Reset-Text, Hinweis auf `showcase`.
 
 Offen für Teil B: Der Klon des Agents steht auf dem Default-Branch; Stufe 2 braucht `showcase` (fetch + checkout -B showcase), nach einem Force-Reset scheitert `git pull`.
+
+## 13. Nachtrag: Guard- und Audit-Hooks für den Agent
+
+Stand 2026-10-28. Ziel: Der Agent darf im Klon nur lesen — das steht heute nur im Prompt. Ein Hook setzt es
+durch, und jeder Werkzeugaufruf des Agents wird nachvollziehbar (Playbook: „Governance als Code“).
+
+**Entscheidung: kein MCP für Schreibzugriffe auf die DB.** Der Agent schreibt nie in die DB; Zustände ändern nur
+die Use Cases nach den Regeln der Domäne. Ein DB-Werkzeug für den Agent würde diese Regeln umgehen. Der Hook
+sitzt deshalb dort, wo das Risiko liegt: an den Werkzeugen des Agents.
+
+**Hooks (pro Aufruf über `--settings`, Nutzer- und Projekt-Einstellungen bleiben unberührt).**
+- `PreToolUse` (Matcher: alle Werkzeuge) → `packages/core/hooks/guard.mjs`: erlaubt `Read`, `Glob`, `Grep` und
+  lesende `Bash`-Befehle; alles andere wird mit `permissionDecision: "deny"` und Begründung abgelehnt. Der Agent
+  sieht die Begründung und arbeitet ohne den Befehl weiter.
+- `PostToolUse` (alle Werkzeuge) → `packages/core/hooks/audit.mjs`: hält jeden ausgeführten Aufruf kurz fest
+  (Werkzeug, Datei bzw. Befehl, bei Bash der Exit-Code).
+- Beide Skripte sind reines Node (`.mjs`), schreiben je eine JSON-Zeile in die Datei aus der Umgebungsvariable
+  `REFINEMENT_HOOK_LOG` (pro Lauf eine Datei) und scheitern nie hart: Fehler im Audit-Skript ändern nichts am Lauf,
+  ein Fehler im Guard lehnt im Zweifel ab.
+- `--allowedTools` wird `Read,Glob,Grep,Bash` (`LS` ist kein Werkzeug mehr).
+
+**Regel für Bash (Positivliste).** Der Befehl wird an `|`, `;`, `&&`, `||` in Teile zerlegt; jeder Teil muss mit
+einem erlaubten Befehl beginnen: `ls`, `cat`, `head`, `tail`, `wc`, `grep`, `rg`, `find`, `tree`, `pwd`, `file`,
+`stat`, `du`, `sort`, `uniq`, `cut`, `awk` (ohne `system`), `sed` (ohne `-i`), `jq`, `git` mit `log`, `show`, `diff`,
+`status`, `ls-files`, `blame`, `grep`, `branch`, `rev-parse`, `cat-file`. Abgelehnt werden immer: Ausgabeumleitung
+(`>`, `>>`, `tee`), Befehlsersetzung (`$(…)`, Backticks), `find` mit `-delete`/`-exec`/`-ok`, Netzwerk
+(`curl`, `wget`, `nc`, `ssh`), Paketmanager und Interpreter (`npm`, `npx`, `node`, `python`, `sh`, `bash`, `eval`),
+alle übrigen `git`-Befehle. Die Regel ist eine reine Funktion (`hooks/guardPolicy.mjs`) mit eigenen Tests.
+
+**Rückweg in die App.** Der Claude-CLI-Adapter legt pro Lauf die Log-Datei an, liest neue Zeilen während des Laufs
+mit und meldet sie über einen neuen Rückkanal am Port: `AgentRunner.run(input, { onProgress, onToolEvent })` mit
+`ToolEvent = { kind: 'blocked' | 'used', tool, target, reason?, exitCode? }`. Der Kern schreibt daraus
+Log-Einträge `guard_blocked` (Akteur `system`, mit Begründung) und `tool_used` (Akteur `agent`) — nur solange der
+Versuch aktuell ist — und sendet `progress` für blockierte Aufrufe. Die Ticketseite zeigt blockierte Aufrufe
+hervorgehoben; `tool_used`-Einträge eines Laufs werden zusammengefasst angezeigt (aufklappbar), damit das Log
+lesbar bleibt.
+
+**Codebase-Analyse.** Der Lauf, der die Übersicht erzeugt (`adapters/git/repoCache.ts`), bekommt denselben Guard
+(ohne Rückweg ins Ticket-Log; blockierte Aufrufe nur im Server-Log). Pfad der Skripte kommt aus der Komposition
+(`resolveCorePaths` → `hooksDir`), damit kein Adapter einen anderen importiert.
+
+**Tests.** `guardPolicy` mit vielen erlaubten und verbotenen Befehlen; `guard.mjs`/`audit.mjs` als echte
+Prozesse (stdin-JSON → stdout/Log-Datei); Adapter: `--settings` und Umgebung im Aufruf, Mitlesen der Log-Datei;
+Kern: `guard_blocked`/`tool_used` im Log, nicht bei veraltetem Versuch; Web: Darstellung im Log. Optional, nur nach
+Zustimmung: ein kleiner Eval mit echtem `claude` (Haiku) in einem Temp-Ordner, der einen verbotenen Befehl
+provoziert und prüft, dass er blockiert wird.
