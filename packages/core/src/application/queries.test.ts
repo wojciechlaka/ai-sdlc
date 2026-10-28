@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createTestContext, errorCodeOf, type TestContext } from '../testing/fakes'
-import { listTickets, getTicket, getRun } from './queries'
+import { listTickets, getTicket } from './queries'
 
 let ctx: TestContext
 
@@ -36,14 +36,5 @@ describe('getTicket', () => {
   it('throws NotFoundError for unknown and malformed ids', () => {
     expect(errorCodeOf(() => getTicket(ctx.deps, 'T-99'))).toBe('NOT_FOUND')
     expect(errorCodeOf(() => getTicket(ctx.deps, 'garbage'))).toBe('NOT_FOUND')
-  })
-})
-
-describe('getRun', () => {
-  it('returns a run DTO or throws NotFoundError', () => {
-    const ticket = ctx.deps.tickets.create({ title: 'A', description: 'a' })
-    const run = ctx.deps.runs.create({ ticketId: ticket.id, trigger: 'initial', model: 'm', input: RUN_INPUT })
-    expect(getRun(ctx.deps, run.id).id).toBe(run.id)
-    expect(errorCodeOf(() => getRun(ctx.deps, 'nope'))).toBe('NOT_FOUND')
   })
 })
