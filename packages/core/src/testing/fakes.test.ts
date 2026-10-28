@@ -42,6 +42,43 @@ describe('FakeCodeHost', () => {
   })
 })
 
+describe('stricter fakes', () => {
+  it('rejects PRs for missing, empty or already opened branches', async () => {
+    const { codeHost } = createTestContext()
+    await expect(codeHost.openPullRequest({ branch: 'x', title: 't', body: 'b' })).rejects.toMatchObject({ status: 422 })
+    await codeHost.createBranch('x')
+    await expect(codeHost.openPullRequest({ branch: 'x', title: 't', body: 'b' })).rejects.toMatchObject({ status: 422 })
+    await codeHost.commitFile({ branch: 'x', path: 'a', content: 'c', message: 'm' })
+    const pr = await codeHost.openPullRequest({ branch: 'x', title: 't', body: 'b' })
+    expect(pr).not.toHaveProperty('title')
+    await expect(codeHost.openPullRequest({ branch: 'x', title: 't', body: 'b' })).rejects.toMatchObject({ status: 422 })
+  })
+
+  it('closes open PRs when their branch is deleted and keeps merged ones merged', async () => {
+    const { codeHost } = createTestContext()
+    const open = codeHost.seedPullRequest('a')
+    await codeHost.deleteBranch('a')
+    expect(codeHost.pulls[0].state).toBe('closed')
+
+    const merged = codeHost.seedPullRequest('b')
+    codeHost.merge(merged.number)
+    await codeHost.closePullRequest(merged.number)
+    expect(codeHost.pulls[1].state).toBe('merged')
+    expect(() => codeHost.merge(open.number)).toThrow(CodeHostError)
+  })
+
+  it('rejects artifacts and log entries for unknown tickets and returns deep copies', () => {
+    const ctx = createTestContext()
+    expect(() => ctx.deps.audit.append({ ticketKey: 'CB-9', actor: 'system', type: 'error' })).toThrow('Ticket CB-9 not found')
+    expect(() => ctx.deps.artifacts.create({ ticketKey: 'CB-9', stage: 'plan', path: 'p', branch: 'b', prNumber: 1, prUrl: 'u' })).toThrow('Ticket CB-9 not found')
+
+    seedTicket(ctx, 'CB-1')
+    ctx.deps.audit.append({ ticketKey: 'CB-1', actor: 'system', type: 'error', payload: { a: { b: 1 } } })
+    ;(ctx.deps.audit.listForTicket('CB-1')[0].payload as { a: { b: number } }).a.b = 2
+    expect(ctx.deps.audit.listForTicket('CB-1')[0].payload).toEqual({ a: { b: 1 } })
+  })
+})
+
 describe('FakeAgentRunner', () => {
   it('terminates a held run when it is stopped', async () => {
     const { agent } = createTestContext()

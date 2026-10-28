@@ -71,10 +71,10 @@ export function createInMemoryTicketRepository(store: InMemoryStore): TicketRepo
   const find = (key: string) => store.tickets.find((t) => t.key === key)
 
   return {
-    list: () => [...store.tickets].sort((a, b) => compareTicketKeys(a.key, b.key)).map((t) => ({ ...t })),
+    list: () => [...store.tickets].sort((a, b) => compareTicketKeys(a.key, b.key)).map((t) => structuredClone(t)),
     findByKey: (key) => {
       const ticket = find(key)
-      return ticket ? { ...ticket } : null
+      return ticket ? structuredClone(ticket) : null
     },
     upsertFromSource(items) {
       const created: string[] = []
@@ -97,7 +97,7 @@ export function createInMemoryTicketRepository(store: InMemoryStore): TicketRepo
       if (patch.stage) ticket.stage = patch.stage
       if (patch.state) ticket.state = patch.state
       ticket.updatedAt = new Date()
-      return { ...ticket }
+      return structuredClone(ticket)
     },
     clear() {
       store.tickets = []
@@ -122,19 +122,19 @@ export function createInMemoryAgentRunRepository(store: InMemoryStore): AgentRun
       const run: AgentRun = {
         id: `run-${nextId++}`, ticketKey: input.ticketKey, stage: input.stage,
         seq: store.runs.filter((r) => r.ticketKey === input.ticketKey).length + 1,
-        trigger: input.trigger, input: input.input, output: null, status: 'running', model: input.model,
+        trigger: input.trigger, input: structuredClone(input.input), output: null, status: 'running', model: input.model,
         costUsd: null, inputTokens: null, cacheCreationTokens: null, cacheReadTokens: null, outputTokens: null,
         startedAt: new Date(), finishedAt: null,
       }
       store.runs.push(run)
-      return { ...run }
+      return structuredClone(run)
     },
     findById: (id) => {
       const run = store.runs.find((r) => r.id === id)
-      return run ? { ...run } : null
+      return run ? structuredClone(run) : null
     },
     complete(id, result) {
-      Object.assign(requireRun(id), { status: 'succeeded', ...result, finishedAt: new Date() })
+      Object.assign(requireRun(id), { status: 'succeeded', ...structuredClone(result), finishedAt: new Date() })
     },
     fail(id, status) {
       Object.assign(requireRun(id), { status, finishedAt: new Date() })
@@ -143,8 +143,8 @@ export function createInMemoryAgentRunRepository(store: InMemoryStore): AgentRun
       store.runs
         .filter((r) => r.ticketKey === ticketKey && (!stage || r.stage === stage))
         .sort((a, b) => a.seq - b.seq)
-        .map((r) => ({ ...r })),
-    findStuck: () => store.runs.filter((r) => r.status === 'running').map((r) => ({ ...r })),
+        .map((r) => structuredClone(r)),
+    findStuck: () => store.runs.filter((r) => r.status === 'running').map((r) => structuredClone(r)),
   }
 }
 
@@ -158,15 +158,16 @@ export function createInMemoryArtifactRepository(store: InMemoryStore): Artifact
 
   return {
     create(input) {
+      if (!store.tickets.some((t) => t.key === input.ticketKey)) throw new Error(`Ticket ${input.ticketKey} not found`)
       const artifact: Artifact = { id: `artifact-${nextId++}`, ...input, prState: 'open', mergedAt: null, createdAt: new Date() }
       store.artifacts.push(artifact)
-      return { ...artifact }
+      return structuredClone(artifact)
     },
-    listForTicket: (ticketKey) => store.artifacts.filter((a) => a.ticketKey === ticketKey).map((a) => ({ ...a })),
+    listForTicket: (ticketKey) => store.artifacts.filter((a) => a.ticketKey === ticketKey).map((a) => structuredClone(a)),
     findOpen(ticketKey, stage) {
       const open = store.artifacts.filter((a) => a.ticketKey === ticketKey && a.stage === stage && a.prState === 'open')
       const latest = open[open.length - 1]
-      return latest ? { ...latest } : null
+      return latest ? structuredClone(latest) : null
     },
     markMerged(id, mergedAt) {
       Object.assign(requireArtifact(id), { prState: 'merged', mergedAt })
@@ -180,9 +181,10 @@ export function createInMemoryArtifactRepository(store: InMemoryStore): Artifact
 export function createInMemoryAuditLog(store: InMemoryStore): AuditLog {
   return {
     append: (event) => {
-      store.audit.push({ ...event, payload: event.payload ?? null, createdAt: new Date() })
+      if (!store.tickets.some((t) => t.key === event.ticketKey)) throw new Error(`Ticket ${event.ticketKey} not found`)
+      store.audit.push({ ...event, payload: structuredClone(event.payload ?? null), createdAt: new Date() })
     },
-    listForTicket: (ticketKey) => store.audit.filter((e) => e.ticketKey === ticketKey).map((e) => ({ ...e })),
+    listForTicket: (ticketKey) => store.audit.filter((e) => e.ticketKey === ticketKey).map((e) => structuredClone(e)),
   }
 }
 
@@ -190,7 +192,7 @@ export class FakeTicketSource implements TicketSource {
   tickets: SourceTicket[] = []
 
   list(): SourceTicket[] {
-    return this.tickets.map((t) => ({ ...t }))
+    return this.tickets.map((t) => ({ ...t })).sort((a, b) => compareTicketKeys(a.key, b.key))
   }
 }
 
@@ -210,11 +212,12 @@ export class FakeAgentRunner implements AgentRunner {
   /** Holds every following run until the returned function is called. */
   hold(): () => void {
     let release = () => {}
-    this.gate = new Promise<void>((resolve) => {
+    const gate = new Promise<void>((resolve) => {
       release = resolve
     })
+    this.gate = gate
     return () => {
-      this.gate = null
+      if (this.gate === gate) this.gate = null
       release()
     }
   }
@@ -259,6 +262,10 @@ export class FakeRepoProvider implements RepoProvider {
 }
 
 type CodeHostMethod = keyof CodeHost
+
+function toPullRequest(pr: PullRequest): PullRequest {
+  return { number: pr.number, url: pr.url, state: pr.state, headBranch: pr.headBranch, mergedAt: pr.mergedAt }
+}
 
 export interface FakePullRequest extends PullRequest {
   title: string
@@ -323,27 +330,35 @@ export class FakeCodeHost implements CodeHost {
 
   async openPullRequest(input: { branch: string; title: string; body: string }): Promise<PullRequest> {
     this.enter('openPullRequest')
-    return { ...this.addPull(input.branch, input.title, input.body) }
+    const files = this.branches.get(input.branch)
+    if (!files) throw new CodeHostError(422, `Branch ${input.branch} nicht gefunden`)
+    if (files.size === 0) throw new CodeHostError(422, `Branch ${input.branch} hat keine Commits`)
+    if (this.pulls.some((p) => p.headBranch === input.branch && p.state === 'open')) {
+      throw new CodeHostError(422, `Für ${input.branch} existiert bereits ein offener PR`)
+    }
+    return toPullRequest(this.addPull(input.branch, input.title, input.body))
   }
 
   async getPullRequest(number: number): Promise<PullRequest> {
     this.enter('getPullRequest')
-    return { ...this.requirePull(number) }
+    return toPullRequest(this.requirePull(number))
   }
 
   async listOpenPullRequests(): Promise<PullRequest[]> {
     this.enter('listOpenPullRequests')
-    return this.pulls.filter((p) => p.state === 'open').map((p) => ({ ...p }))
+    return this.pulls.filter((p) => p.state === 'open').map(toPullRequest)
   }
 
   async closePullRequest(number: number): Promise<void> {
     this.enter('closePullRequest')
-    this.requirePull(number).state = 'closed'
+    const pr = this.requirePull(number)
+    if (pr.state === 'open') pr.state = 'closed'
   }
 
   async deleteBranch(name: string): Promise<void> {
     this.enter('deleteBranch')
     this.branches.delete(name)
+    for (const pr of this.pulls) if (pr.headBranch === name && pr.state === 'open') pr.state = 'closed'
   }
 
   /** Test helper: an open PR from `branch` (created if missing), e.g. left over from an earlier start. */
@@ -355,6 +370,7 @@ export class FakeCodeHost implements CodeHost {
   /** Test helper: merges like GitHub — the files of the head branch land on the default branch. */
   merge(number: number, at = new Date('2026-10-28T12:00:00Z')): void {
     const pr = this.requirePull(number)
+    if (pr.state !== 'open') throw new CodeHostError(422, `PR #${number} ist nicht offen`)
     pr.state = 'merged'
     pr.mergedAt = at
     for (const [path, content] of this.branches.get(pr.headBranch) ?? []) this.files.set(path, content)
@@ -420,7 +436,11 @@ export function createTestContext(options: { token?: boolean } = {}): TestContex
   return {
     deps, store, agent, repos, codeHost, source, events,
     settle: async () => {
-      await Promise.all(tasks)
+      let count = 0
+      while (count < tasks.length) {
+        count = tasks.length
+        await Promise.all(tasks)
+      }
     },
   }
 }
