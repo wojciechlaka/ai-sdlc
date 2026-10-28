@@ -1,29 +1,36 @@
 import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core'
 import { randomBytes } from 'crypto'
-import type { AgentOutput } from '@refinement/shared'
+import type { StageOutput } from '@refinement/shared'
 import type { AgentRunInput } from '../../domain/types'
+import type { AuditEventType } from '../../ports'
 
-const createdAt = () =>
-  integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date())
+const id = () => text('id').primaryKey().$defaultFn(() => randomBytes(8).toString('hex'))
+const timestamp = (name: string) => integer(name, { mode: 'timestamp' })
+const createdAt = () => timestamp('created_at').notNull().$defaultFn(() => new Date())
+const ticketKey = () => text('ticket_key').notNull().references(() => tickets.key, { onDelete: 'cascade' })
+const artifactStage = () => text('stage', { enum: ['plan', 'design'] }).notNull()
 
 export const tickets = sqliteTable('tickets', {
-  id:          integer('id').primaryKey({ autoIncrement: true }),
+  key:         text('key').primaryKey(),
   title:       text('title').notNull(),
   description: text('description').notNull().default(''),
-  status:      text('status', { enum: ['backlog', 'refining', 'review', 'ready', 'failed'] })
-                 .notNull().default('backlog'),
-  iteration:   integer('iteration').notNull().default(0),
+  priority:    text('priority'),
+  sourcePath:  text('source_path').notNull(),
+  stage:       text('stage', { enum: ['plan', 'design', 'done'] }).notNull().default('plan'),
+  state:       text('state', { enum: ['ready', 'running', 'awaiting_answer', 'in_review', 'failed'] })
+                 .notNull().default('ready'),
   createdAt:   createdAt(),
-  updatedAt:   integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date()),
+  updatedAt:   timestamp('updated_at').notNull().$defaultFn(() => new Date()),
 })
 
 export const agentRuns = sqliteTable('agent_runs', {
-  id:                  text('id').primaryKey().$defaultFn(() => randomBytes(8).toString('hex')),
-  ticketId:            integer('ticket_id').notNull().references(() => tickets.id, { onDelete: 'cascade' }),
-  iteration:           integer('iteration').notNull(),
-  trigger:             text('trigger', { enum: ['initial', 'answer', 'rework'] }).notNull(),
+  id:                  id(),
+  ticketKey:           ticketKey(),
+  stage:               artifactStage(),
+  seq:                 integer('seq').notNull(),
+  trigger:             text('trigger', { enum: ['initial', 'answer'] }).notNull(),
   input:               text('input', { mode: 'json' }).$type<AgentRunInput>().notNull(),
-  output:              text('output', { mode: 'json' }).$type<AgentOutput | null>(),
+  output:              text('output', { mode: 'json' }).$type<StageOutput | null>(),
   status:              text('status', { enum: ['running', 'succeeded', 'failed', 'timeout'] }).notNull(),
   model:               text('model').notNull(),
   costUsd:             real('cost_usd'),
@@ -31,24 +38,28 @@ export const agentRuns = sqliteTable('agent_runs', {
   cacheCreationTokens: integer('cache_creation_tokens'),
   cacheReadTokens:     integer('cache_read_tokens'),
   outputTokens:        integer('output_tokens'),
-  startedAt:           integer('started_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
-  finishedAt:          integer('finished_at', { mode: 'timestamp' }),
+  startedAt:           timestamp('started_at').notNull().$defaultFn(() => new Date()),
+  finishedAt:          timestamp('finished_at'),
 })
 
-export const reviewDecisions = sqliteTable('review_decisions', {
-  id:         text('id').primaryKey().$defaultFn(() => randomBytes(8).toString('hex')),
-  ticketId:   integer('ticket_id').notNull().references(() => tickets.id, { onDelete: 'cascade' }),
-  agentRunId: text('agent_run_id').notNull().references(() => agentRuns.id, { onDelete: 'cascade' }),
-  decision:   text('decision', { enum: ['approve', 'request_changes'] }).notNull(),
-  feedback:   text('feedback'),
-  createdAt:  createdAt(),
+export const artifacts = sqliteTable('artifacts', {
+  id:        id(),
+  ticketKey: ticketKey(),
+  stage:     artifactStage(),
+  path:      text('path').notNull(),
+  branch:    text('branch').notNull(),
+  prNumber:  integer('pr_number').notNull(),
+  prUrl:     text('pr_url').notNull(),
+  prState:   text('pr_state', { enum: ['open', 'merged', 'closed'] }).notNull().default('open'),
+  mergedAt:  timestamp('merged_at'),
+  createdAt: createdAt(),
 })
 
 export const auditEvents = sqliteTable('audit_events', {
-  id:        text('id').primaryKey().$defaultFn(() => randomBytes(8).toString('hex')),
-  ticketId:  integer('ticket_id').notNull().references(() => tickets.id, { onDelete: 'cascade' }),
+  id:        id(),
+  ticketKey: ticketKey(),
   actor:     text('actor', { enum: ['human', 'agent', 'system'] }).notNull(),
-  type:      text('type').notNull(),
+  type:      text('type').$type<AuditEventType>().notNull(),
   payload:   text('payload', { mode: 'json' }),
   createdAt: createdAt(),
 })
