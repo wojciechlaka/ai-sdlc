@@ -6,6 +6,9 @@ ins Backlog werfen würde. Sie sind der Input für den Refinement Agent, der sie
 schärft (Fork von [gothinkster/node-express-realworld-example-app](https://github.com/gothinkster/node-express-realworld-example-app)).
 Eine Datei pro Ticket; die Dateien simulieren Jira-Tickets und sind die Vorlage für den Ticket-Eingang.
 
+Die App-Seeds in `packages/core/src/domain/seeds.ts` spiegeln diese Dateien derzeit von Hand; das Einlesen
+der Dateien folgt mit dem Umbau auf das Arbeitsmodell.
+
 Kontext zum Repo: Backend des Blogs „Conduit“ (Medium-Klon aus dem RealWorld-Projekt) —
 TypeScript, Express, Prisma; REST-API für Artikel, Kommentare, Tags, Favoriten, Follow und Auth.
 

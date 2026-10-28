@@ -26,7 +26,7 @@ npx drizzle-kit generate   # generate a migration after schema changes
 
 ## Architecture
 
-**Refinement Engine** — an AI-powered tool that analyzes tickets against a codebase and produces structured implementation plans. npm workspaces monorepo, Ports & Adapters (hexagonal).
+**Refinement Engine** — an AI-powered tool that analyzes tickets against a codebase and produces structured refinements (specs). npm workspaces monorepo, Ports & Adapters (hexagonal).
 
 ```
 apps/web/         Next.js App Router — driving adapter: Server Components (read), Server Actions (write),
