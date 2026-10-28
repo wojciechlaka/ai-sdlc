@@ -1,16 +1,11 @@
 import { serve } from '@hono/node-server'
+import { engine } from './engine'
 import { createApp } from './restApi'
 import { initSSE } from './sseLayer'
-import { recoverStuckRuns, seedIfEmpty } from './db/startup'
 
-async function main() {
-  seedIfEmpty()
-  recoverStuckRuns()
-  const app = createApp()
-  initSSE(app)
-  serve({ fetch: app.fetch, port: 3000 }, () => {
-    console.log('Backend on :3000')
-  })
-}
-
-main()
+engine.startup()
+const app = createApp(engine)
+initSSE(app, engine)
+serve({ fetch: app.fetch, port: 3000 }, () => {
+  console.log('Backend on :3000')
+})
