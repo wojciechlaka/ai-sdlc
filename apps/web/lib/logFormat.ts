@@ -44,10 +44,13 @@ export function describeLogEvent(event: AuditEventDto): string {
     case 'run_started':
       return `Agent gestartet (${stageLabel(text(p, 'stage'))}, ${modelLabel(text(p, 'model'))}${p.trigger === 'answer' ? ', mit Antwort' : ''})`
     case 'run_finished': {
-      if (p.status === 'timeout') return 'Agent-Zeitlimit überschritten'
-      if (p.status !== 'succeeded') return 'Agent-Lauf abgebrochen'
       const tokensIn = count(p, 'inputTokens') + count(p, 'cacheCreationTokens')
-      return `Agent fertig in ${formatElapsed(count(p, 'durationSeconds'))} · ${formatTokens(tokensIn)}↑ ${formatTokens(count(p, 'outputTokens'))}↓ · ${formatCost(runCostUsd(p))}`
+      const usage = count(p, 'inputTokens') > 0
+        ? ` · ${formatTokens(tokensIn)}↑ ${formatTokens(count(p, 'outputTokens'))}↓ · ${formatCost(runCostUsd(p))}`
+        : ''
+      if (p.status === 'timeout') return `Agent-Zeitlimit überschritten${usage}`
+      if (p.status !== 'succeeded') return `Agent-Lauf fehlgeschlagen${p.reason ? ` (${text(p, 'reason')})` : ''}${usage}`
+      return `Agent fertig in ${formatElapsed(count(p, 'durationSeconds'))}${usage}`
     }
     case 'question_asked':
       return `Rückfrage: ${text(p, 'question')}`

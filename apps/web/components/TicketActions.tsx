@@ -26,7 +26,7 @@ interface Props {
  */
 export function TicketActions({ ticket, tokenConfigured }: Props) {
   const router = useRouter()
-  const { progressLogs, appendProgress } = useAppState()
+  const { progressLogs, appendProgress, clearProgress } = useAppState()
   const [model, setModel] = useState(DEFAULT_MODEL)
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
@@ -43,11 +43,12 @@ export function TicketActions({ ticket, tokenConfigured }: Props) {
   const startable = ticket.state === 'ready' || ticket.state === 'failed'
   const elapsed = useElapsedSeconds(running, !running)
 
-  const run = (action: () => Promise<ActionResult<unknown>>) =>
+  const run = (action: () => Promise<ActionResult<unknown>>, onSuccess?: () => void) =>
     startTransition(async () => {
       setError(null)
       const result = await action()
-      if (!result.ok) setError(result.error)
+      if (result.ok) onSuccess?.()
+      else setError(result.error)
     })
 
   return (
@@ -59,12 +60,12 @@ export function TicketActions({ ticket, tokenConfigured }: Props) {
           {ticket.state === 'failed' && <p className="text-sm text-red-600">Letzter Versuch fehlgeschlagen — Details im Log.</p>}
           <div className="flex items-center gap-2">
             <ModelSelect value={model} onChange={setModel} disabled={pending} size="sm" />
-            <Button disabled={!tokenConfigured || pending} onClick={() => run(() => startStageAction(ticket.key, { model }))}>
+            <Button disabled={!tokenConfigured || pending} aria-describedby={tokenConfigured ? undefined : 'token-hint'} onClick={() => run(() => startStageAction(ticket.key, { model }), () => clearProgress(ticket.key))}>
               Plan starten
             </Button>
           </div>
           {!tokenConfigured && (
-            <p className="text-xs text-amber-700">
+            <p id="token-hint" className="text-xs text-amber-700">
               GITHUB_TOKEN fehlt — ohne Token kann die App keinen Branch und PR anlegen (siehe README).
             </p>
           )}
@@ -94,6 +95,10 @@ export function TicketActions({ ticket, tokenConfigured }: Props) {
 
       {ticket.state === 'awaiting_answer' && ticket.pendingQuestion && (
         <QuestionPanel ticketKey={ticket.key} question={ticket.pendingQuestion} onAnswered={() => router.refresh()} />
+      )}
+
+      {((ticket.state === 'awaiting_answer' && !ticket.pendingQuestion) || (ticket.state === 'in_review' && !ticket.openPr)) && (
+        <p className="text-sm text-slate-500">Zustand wird abgeglichen …</p>
       )}
 
       {ticket.state === 'in_review' && ticket.openPr && (

@@ -1,6 +1,6 @@
 'use client'
 
-import { useTransition } from 'react'
+import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { resetSystemAction } from '@/app/actions'
 import { useAppState } from './AppStateProvider'
@@ -11,21 +11,37 @@ export function ResetButton() {
   const { clearProgress } = useAppState()
   const [pending, startTransition] = useTransition()
 
-  const handleReset = () =>
+  const [error, setError] = useState<string | null>(null)
+
+  const handleReset = () => {
+    if (!window.confirm('Datenbank leeren, Tickets neu einlesen und offene PRs der App schließen?')) return
     startTransition(async () => {
-      await resetSystemAction()
+      setError(null)
+      const result = await resetSystemAction()
+      if (!result.ok) {
+        setError(result.error)
+        return
+      }
       clearProgress()
       router.push('/')
     })
+  }
 
   return (
-    <button
-      onClick={handleReset}
-      disabled={pending}
-      className="btn-ghost-xs"
-      title="Datenbank leeren und Tickets aus examples/tickets neu einlesen"
-    >
-      {pending ? 'Setze zurück...' : 'Reset'}
-    </button>
+    <div className="space-y-1">
+      <button
+        onClick={handleReset}
+        disabled={pending}
+        className="btn-ghost-xs"
+        title="Datenbank leeren und Tickets aus examples/tickets neu einlesen"
+      >
+        {pending ? 'Setze zurück...' : 'Reset'}
+      </button>
+      {error && (
+        <p role="alert" className="text-xs text-red-600">
+          {error}
+        </p>
+      )}
+    </div>
   )
 }

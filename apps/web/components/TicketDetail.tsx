@@ -16,7 +16,7 @@ export function TicketDetail({ ticket, tokenConfigured }: { ticket: TicketDetail
           <span className="font-mono">{ticket.key}</span>
           {ticket.priority && <span>· Priorität {ticket.priority}</span>}
         </div>
-        <h2 className="text-xl font-semibold">{ticket.title}</h2>
+        <h1 className="text-xl font-semibold">{ticket.title}</h1>
         <div className="flex gap-2">
           <Badge variant="outline">{STAGE_LABEL[ticket.stage]}</Badge>
           {ticket.stage !== 'done' && <Badge variant={STATE_VARIANT[ticket.state]}>{stateText(ticket)}</Badge>}

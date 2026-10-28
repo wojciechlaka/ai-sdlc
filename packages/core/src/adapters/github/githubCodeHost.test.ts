@@ -7,11 +7,13 @@ interface Call { method: string; path: string; rawPath: string; query: string; b
 /** Minimal GitHub REST stand-in for Octokit's injectable fetch. Unknown routes answer 404. */
 function fakeGitHub(routes: Record<string, Route>) {
   const calls: Call[] = []
+  const inits: (RequestInit | undefined)[] = []
   const fetchFn = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const url = new URL(input instanceof Request ? input.url : String(input))
     const method = (init?.method ?? 'GET').toUpperCase()
     const path = decodeURIComponent(url.pathname)
     const body = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined
+    inits.push(init)
     calls.push({ method, path, rawPath: url.pathname, query: url.search, body })
     const route = routes[`${method} ${path}`] ?? { status: 404, body: { message: 'Not Found' } }
     return new Response(route.body === undefined ? null : JSON.stringify(route.body), {
@@ -19,7 +21,7 @@ function fakeGitHub(routes: Record<string, Route>) {
       headers: { 'content-type': 'application/json; charset=utf-8' },
     })
   }
-  return { fetch: fetchFn as typeof fetch, calls }
+  return { fetch: fetchFn as typeof fetch, calls, inits }
 }
 
 const REPO_ROUTE = { 'GET /repos/o/r': { status: 200, body: { default_branch: 'master' } } }
@@ -34,6 +36,15 @@ const base64 = (text: string) => Buffer.from(text, 'utf-8').toString('base64')
 const INTENT_PATH = 'docs/work/CB-1/intent.md'
 const pr = (patch: Record<string, unknown> = {}) => ({
   number: 7, html_url: 'https://github.com/o/r/pull/7', state: 'open', merged_at: null, head: { ref: 'CB-1/intent' }, ...patch,
+})
+
+describe('request timeout', () => {
+  it('passes an abort signal with every request', async () => {
+    const { gh, codeHost } = setup()
+    await codeHost.defaultBranch()
+    expect(gh.inits.length).toBeGreaterThan(0)
+    expect(gh.inits.every((init) => init?.signal instanceof AbortSignal)).toBe(true)
+  })
 })
 
 describe('parseGitHubRepoUrl', () => {

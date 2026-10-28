@@ -10,7 +10,7 @@ describe('describeLogEvent', () => {
     [event('ticket_imported', { sourcePath: 'examples/tickets/cb-2-lesezeit.md' }), 'Ticket übernommen aus examples/tickets/cb-2-lesezeit.md'],
     [event('run_started', { stage: 'plan', trigger: 'initial', model: 'claude-sonnet-4-6' }), 'Agent gestartet (1 Plan, Sonnet 4.6)'],
     [event('run_started', { stage: 'plan', trigger: 'answer', model: 'x' }), 'Agent gestartet (1 Plan, x, mit Antwort)'],
-    [event('run_finished', { status: 'failed' }), 'Agent-Lauf abgebrochen'],
+    [event('run_finished', { status: 'failed' }), 'Agent-Lauf fehlgeschlagen'],
     [event('run_finished', { status: 'timeout' }), 'Agent-Zeitlimit überschritten'],
     [event('question_asked', { question: 'Wer?' }, 'agent'), 'Rückfrage: Wer?'],
     [event('answer_given', { answer: 'Alle' }, 'human'), 'Antwort: Alle'],
@@ -23,6 +23,12 @@ describe('describeLogEvent', () => {
     [event('something_new', null), 'something_new'],
   ])('describes %#', (input, text) => {
     expect(describeLogEvent(input)).toBe(text)
+  })
+
+  it('names the reason and keeps the usage of a discarded run', () => {
+    expect(describeLogEvent(event('run_finished', {
+      status: 'failed', reason: 'verworfen', inputTokens: 1000, cacheCreationTokens: 0, outputTokens: 500, costUsd: 0.1,
+    }))).toBe('Agent-Lauf fehlgeschlagen (verworfen) · 1K↑ 500↓ · $0.10')
   })
 
   it('summarises a finished run with duration, tokens and cost', () => {

@@ -5,7 +5,8 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 export interface AppState {
   progressLogs: Record<string, string[]>
   appendProgress(ticketKey: string, message: string): void
-  clearProgress(): void
+  /** Without a key all live logs are cleared, with a key only that ticket's. */
+  clearProgress(ticketKey?: string): void
 }
 
 const AppStateContext = createContext<AppState | null>(null)
@@ -21,7 +22,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setProgressLogs((prev) => ({ ...prev, [ticketKey]: [...(prev[ticketKey] ?? []), message] }))
   }, [])
 
-  const clearProgress = useCallback(() => setProgressLogs({}), [])
+  const clearProgress = useCallback((ticketKey?: string) => {
+    if (ticketKey === undefined) setProgressLogs({})
+    else setProgressLogs(({ [ticketKey]: _dropped, ...rest }) => rest)
+  }, [])
 
   const value = useMemo(() => ({ progressLogs, appendProgress, clearProgress }), [progressLogs, appendProgress, clearProgress])
 

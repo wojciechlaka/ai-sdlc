@@ -2,7 +2,7 @@ import type { AuditEventDto } from '@refinement/shared'
 import { describeLogEvent } from '@/lib/logFormat'
 
 const ACTOR_LABEL: Record<AuditEventDto['actor'], string> = { human: 'Mensch', agent: 'Agent', system: 'System' }
-const TIME = new Intl.DateTimeFormat('de-DE', { dateStyle: 'short', timeStyle: 'medium' })
+const TIME = new Intl.DateTimeFormat('de-DE', { dateStyle: 'short', timeStyle: 'medium', timeZone: 'Europe/Berlin' })
 
 /** Persistent log of the ticket, oldest first. */
 export function LogList({ log }: { log: AuditEventDto[] }) {

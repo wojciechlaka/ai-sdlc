@@ -10,6 +10,8 @@ export interface GitHubCodeHostOptions {
   fetch?: typeof fetch
 }
 
+const REQUEST_TIMEOUT_MS = 15_000
+
 const REPO_URL_RE = /^https:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/
 
 export function parseGitHubRepoUrl(url: string): { owner: string; repo: string } {
@@ -60,7 +62,11 @@ export function createGitHubCodeHost(options: GitHubCodeHostOptions): CodeHost {
   const { owner, repo } = parseGitHubRepoUrl(options.repoUrl)
   const octokit = new Octokit({
     auth: options.token,
-    request: options.fetch ? { fetch: options.fetch } : undefined,
+    // A hung connection must not block the start or a sync forever.
+    request: {
+      fetch: (url: string | URL | Request, init?: RequestInit) =>
+        (options.fetch ?? fetch)(url, { ...init, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }),
+    },
     // Every error becomes a CodeHostError; Octokit's own request logging would only duplicate it.
     log: { debug() {}, info() {}, warn: console.warn, error() {} },
   })

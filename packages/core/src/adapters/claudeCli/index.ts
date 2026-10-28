@@ -274,7 +274,7 @@ export async function runAgent(
   const stageAgent = STAGE_AGENTS[input.stage]
   if (!stageAgent) throw new Error(`Für die Stufe ${input.stage} gibt es noch keinen Agent`)
   const agent = {
-    skill: await fs.readFile(path.join(options.skillsDir, stageAgent.skillFile), UTF8),
+    skill: await fs.readFile(path.join(/*turbopackIgnore: true*/ options.skillsDir, stageAgent.skillFile), UTF8),
     schema: stageAgent.schema,
   }
   const startedAt = Date.now()
