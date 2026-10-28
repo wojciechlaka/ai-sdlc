@@ -26,16 +26,13 @@ export async function executeRun(deps: UseCaseDeps, ticket: Ticket, request: Exe
   const isCurrent = () => isCurrentRun(deps, ticket.key, runId)
 
   // Tool calls seen by the guard/audit hooks (spec §13); a stale attempt no longer writes to the log.
-  const onToolEvent = ({ kind, tool, target, reason, exitCode }: ToolEvent) => {
+  const onToolEvent = ({ kind, tool, target, reason }: ToolEvent) => {
     if (!isCurrent()) return
     if (kind === 'blocked') {
       deps.audit.append({ ticketKey: ticket.key, actor: 'system', type: 'guard_blocked', payload: { tool, target, reason } })
       reporter.report(`Blockiert: ${tool} ${target}`)
     } else {
-      deps.audit.append({
-        ticketKey: ticket.key, actor: 'agent', type: 'tool_used',
-        payload: exitCode === undefined ? { tool, target } : { tool, target, exitCode },
-      })
+      deps.audit.append({ ticketKey: ticket.key, actor: 'agent', type: 'tool_used', payload: { tool, target } })
     }
   }
 

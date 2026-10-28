@@ -33,7 +33,7 @@ export interface AgentRunResult {
 
 /**
  * One tool call of the agent, reported by the guard and audit hooks (spec §13).
- * `blocked`: the guard denied the call (`reason`); `used`: the call ran (`exitCode` for Bash, if known).
+ * `blocked`: the guard denied the call (`reason`); `used`: the call ran.
  */
 export interface ToolEvent {
   kind: 'blocked' | 'used'
@@ -42,7 +42,6 @@ export interface ToolEvent {
   /** Command, file or pattern of the call (shortened). */
   target: string
   reason?: string
-  exitCode?: number
 }
 
 /** Callbacks the agent reports through while it runs. */

@@ -75,16 +75,16 @@ describe('guard.mjs (PreToolUse)', () => {
 })
 
 describe('audit.mjs (PostToolUse)', () => {
-  it('hält Werkzeug, Ziel und den Exit-Code von Bash fest', () => {
-    runHook('audit.mjs', hookInput('PostToolUse', 'Bash', { command: 'git log -5' }, { tool_response: { stdout: 'x', exitCode: 0 } }))
+  it('hält Werkzeug und Ziel fest', () => {
+    runHook('audit.mjs', hookInput('PostToolUse', 'Bash', { command: 'git log -5' }, { tool_response: { stdout: 'x', stderr: '', interrupted: false } }))
     runHook('audit.mjs', hookInput('PostToolUse', 'Read', { file_path: '/repo/src/app.ts' }, { tool_response: { type: 'text' } }))
     expect(logLines()).toEqual([
-      { kind: 'used', tool: 'Bash', target: 'git log -5', exitCode: 0, at: expect.any(String) },
+      { kind: 'used', tool: 'Bash', target: 'git log -5', at: expect.any(String) },
       { kind: 'used', tool: 'Read', target: 'src/app.ts', at: expect.any(String) },
     ])
   })
 
-  it('lässt den Exit-Code weg, wenn die Antwort keinen enthält', () => {
+  it('kommt mit beliebigen Antworten zurecht', () => {
     runHook('audit.mjs', hookInput('PostToolUse', 'Bash', { command: 'ls' }, { tool_response: 'nur Text' }))
     expect(logLines()).toEqual([{ kind: 'used', tool: 'Bash', target: 'ls', at: expect.any(String) }])
   })

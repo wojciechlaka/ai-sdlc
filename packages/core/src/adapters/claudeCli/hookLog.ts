@@ -22,14 +22,13 @@ export function parseToolEvent(line: string): ToolEvent | null {
     return null
   }
   if (!raw || typeof raw !== 'object') return null
-  const { kind, tool, target, reason, exitCode } = raw as Record<string, unknown>
+  const { kind, tool, target, reason } = raw as Record<string, unknown>
   if ((kind !== 'blocked' && kind !== 'used') || typeof tool !== 'string') return null
   return {
     kind,
     tool,
     target: typeof target === 'string' ? target : '',
     ...(typeof reason === 'string' ? { reason } : {}),
-    ...(typeof exitCode === 'number' ? { exitCode } : {}),
   }
 }
 

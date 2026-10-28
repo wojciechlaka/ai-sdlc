@@ -8,7 +8,7 @@ const entry = (type: string, payload: unknown, actor: AuditEventDto['actor'] = '
 
 const LOG = [
   entry('run_started', { stage: 'plan', trigger: 'initial', model: 'x' }),
-  entry('tool_used', { tool: 'Bash', target: 'git log -5', exitCode: 0 }, 'agent'),
+  entry('tool_used', { tool: 'Bash', target: 'git log -5' }, 'agent'),
   entry('tool_used', { tool: 'Read', target: 'src/app.ts' }, 'agent'),
   entry('tool_used', { tool: 'Grep', target: 'router' }, 'agent'),
   entry('guard_blocked', { tool: 'Bash', target: 'rm -rf docs', reason: 'Befehl rm ist nicht erlaubt' }),

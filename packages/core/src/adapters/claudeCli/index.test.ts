@@ -168,12 +168,12 @@ describe('runAgent — guard and audit hooks (spec §13)', () => {
     await vi.waitFor(() => expect(cb.onToolEvent).toHaveBeenCalledTimes(1))
     expect(cb.onToolEvent).toHaveBeenCalledWith({ kind: 'blocked', tool: 'Bash', target: 'rm -rf docs', reason: 'nein' })
 
-    fs.appendFileSync(logFile, JSON.stringify({ kind: 'used', tool: 'Bash', target: 'git log -5', exitCode: 0 }) + '\n')
+    fs.appendFileSync(logFile, JSON.stringify({ kind: 'used', tool: 'Bash', target: 'git log -5' }) + '\n')
     proc.stdout.emit('data', Buffer.from(resultLine(INTENT_OUTPUT) + '\n'))
     proc.emit('close', 0)
     await run
 
-    expect(cb.onToolEvent).toHaveBeenLastCalledWith({ kind: 'used', tool: 'Bash', target: 'git log -5', exitCode: 0 })
+    expect(cb.onToolEvent).toHaveBeenLastCalledWith({ kind: 'used', tool: 'Bash', target: 'git log -5' })
     expect(cb.onToolEvent).toHaveBeenCalledTimes(2)
     expect(fs.existsSync(logFile)).toBe(false)
   })

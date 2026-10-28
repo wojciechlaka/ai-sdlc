@@ -79,7 +79,7 @@ export function describeLogEvent(event: AuditEventDto): string {
     case 'guard_blocked':
       return `Blockiert: ${toolCall(p)}${p.reason ? ` — ${text(p, 'reason')}` : ''}`
     case 'tool_used':
-      return `${toolCall(p)}${typeof p.exitCode === 'number' && p.exitCode !== 0 ? ` (Exit-Code ${p.exitCode})` : ''}`
+      return toolCall(p)
     default:
       return event.type
   }

@@ -14,7 +14,7 @@ export type AuditEventType =
   | 'error'
   /** The guard hook denied a tool call of the agent; payload `{ tool, target, reason }`. */
   | 'guard_blocked'
-  /** The agent ran a tool call; payload `{ tool, target, exitCode? }`. */
+  /** The agent ran a tool call; payload `{ tool, target }`. */
   | 'tool_used'
 
 export interface AuditEvent {

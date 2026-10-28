@@ -211,7 +211,7 @@ describe('startStage — tool calls of the agent', () => {
   it('logs blocked and used tool calls and reports blocked ones as progress', async () => {
     const ctx = setup()
     ctx.agent.toolEvents = [
-      { kind: 'used', tool: 'Bash', target: 'git log -5', exitCode: 0 },
+      { kind: 'used', tool: 'Bash', target: 'git log -5' },
       { kind: 'blocked', tool: 'Bash', target: 'rm -rf docs', reason: 'Befehl rm ist nicht erlaubt' },
       { kind: 'used', tool: 'Read', target: 'src/app.ts' },
     ]
@@ -219,7 +219,7 @@ describe('startStage — tool calls of the agent', () => {
 
     const toolEntries = ctx.store.audit.filter((e) => e.type === 'tool_used' || e.type === 'guard_blocked')
     expect(toolEntries.map(({ actor, type, payload }) => ({ actor, type, payload }))).toEqual([
-      { actor: 'agent', type: 'tool_used', payload: { tool: 'Bash', target: 'git log -5', exitCode: 0 } },
+      { actor: 'agent', type: 'tool_used', payload: { tool: 'Bash', target: 'git log -5' } },
       { actor: 'system', type: 'guard_blocked', payload: { tool: 'Bash', target: 'rm -rf docs', reason: 'Befehl rm ist nicht erlaubt' } },
       { actor: 'agent', type: 'tool_used', payload: { tool: 'Read', target: 'src/app.ts' } },
     ])

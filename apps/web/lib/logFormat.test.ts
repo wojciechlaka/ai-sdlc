@@ -24,8 +24,7 @@ describe('describeLogEvent', () => {
       'Blockiert: Bash `rm -rf docs` — Befehl rm ist nicht erlaubt (nur lesende Befehle)'],
     [event('guard_blocked', { tool: 'Write', target: 'src/app.ts', reason: 'Werkzeug Write ist nicht erlaubt' }), 'Blockiert: Write src/app.ts — Werkzeug Write ist nicht erlaubt'],
     [event('guard_blocked', { tool: 'Write', target: 'src/app.ts' }), 'Blockiert: Write src/app.ts'],
-    [event('tool_used', { tool: 'Bash', target: 'git log -5', exitCode: 0 }, 'agent'), 'Bash `git log -5`'],
-    [event('tool_used', { tool: 'Bash', target: 'grep foo x', exitCode: 1 }, 'agent'), 'Bash `grep foo x` (Exit-Code 1)'],
+    [event('tool_used', { tool: 'Bash', target: 'git log -5' }, 'agent'), 'Bash `git log -5`'],
     [event('tool_used', { tool: 'Read', target: 'src/app.ts' }, 'agent'), 'Read src/app.ts'],
     [event('something_new', null), 'something_new'],
   ])('describes %#', (input, text) => {
