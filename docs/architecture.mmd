@@ -1,9 +1,11 @@
 flowchart LR
     subgraph Browser["Browser"]
+        direction TB
         UI["UI\nReact 19 Client Components\nlocalhost:3000"]
     end
 
     subgraph Web["apps/web — Next.js 16, ein Prozess"]
+        direction TB
         RSC["Server Components\nlayout.tsx, tickets/[id]"]
         ACT["Server Actions\nactions.ts"]
         SSE["SSE-Route\n/api/events"]
@@ -11,25 +13,30 @@ flowchart LR
     end
 
     subgraph Core["packages/core — Hexagon"]
+        direction TB
         UC["Use Cases\napplication/"]
         DOM["Domäne\nRegeln, Fehler"]
         PORTS["Ports\nRepositories, AuditLog,\nAgentRunner, RepoProvider,\nEventPublisher"]
-        subgraph Adapters["Adapter"]
-            SQL["sqlite\nDrizzle ORM"]
-            GIT["git\nRepo-Cache + Summary"]
-            CLI["claudeCli\nAgentRunner"]
-            BUS["nodeEvents\nEvent-Bus"]
-        end
     end
 
-    subgraph Shared["packages/shared"]
-        ZOD["Zod-Verträge\nDTOs, Inputs, Events,\nAgent-Ausgabe"]
+    subgraph Adapters["packages/core — Adapter"]
+        direction TB
+        SQL["sqlite\nDrizzle ORM"]
+        GIT["git\nRepo-Cache + Summary"]
+        CLI["claudeCli\nAgentRunner"]
+        BUS["nodeEvents\nEvent-Bus"]
     end
 
     subgraph External["Extern"]
+        direction TB
         DB[("SQLite-Datei\napps/web/data")]
         REPO["Git-Repository\nz. B. Conduit-Fork"]
         CLAUDE["claude CLI\nSubprocess"]
+    end
+
+    subgraph Shared["packages/shared"]
+        direction TB
+        ZOD["Zod-Verträge\nDTOs, Inputs, Events,\nAgent-Ausgabe"]
     end
 
     UI -->|"Seiten laden"| RSC
@@ -42,6 +49,10 @@ flowchart LR
     UC --> DOM
     UC --> PORTS
     PORTS -.->|"implementiert von"| Adapters
+    PORTS ~~~ SQL
+    PORTS ~~~ GIT
+    PORTS ~~~ CLI
+    PORTS ~~~ BUS
 
     SQL --> DB
     GIT -->|"git clone / pull"| REPO
@@ -49,7 +60,7 @@ flowchart LR
     CLI -->|"claude --print\nstream-json"| CLAUDE
     BUS -->|"progress / question / status"| SSE
 
-    UC --> ZOD
+    UC -.-> ZOD
     UI -.->|"Typen"| ZOD
 
     style Browser fill:#dbeafe,stroke:#3b82f6
