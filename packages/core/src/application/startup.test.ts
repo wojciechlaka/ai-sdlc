@@ -114,6 +114,48 @@ describe('startup — GitHub', () => {
   })
 })
 
+describe('startup — isolation', () => {
+  it('derives the other ticket when readFile fails for one', async () => {
+    const ctx = withSource(createTestContext(), 'CB-1', 'CB-2')
+    ctx.codeHost.files.set('docs/work/CB-2/intent.md', 'x')
+    const read = ctx.codeHost.readFile.bind(ctx.codeHost)
+    ctx.codeHost.readFile = async (path: string) => {
+      if (path.includes('CB-1')) throw new CodeHostError(500, 'boom')
+      return read(path)
+    }
+    await startup(ctx.deps)
+    expect(ctx.deps.tickets.findByKey('CB-2')?.stage).toBe('design')
+    expect(ctx.deps.tickets.findByKey('CB-1')?.stage).toBe('plan')
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('CB-1'))
+  })
+
+  it('still closes the other app PR when closing one fails', async () => {
+    const ctx = withSource(createTestContext(), 'CB-1', 'CB-2')
+    const pr1 = ctx.codeHost.seedPullRequest('CB-1/intent')
+    const pr2 = ctx.codeHost.seedPullRequest('CB-2/intent')
+    const close = ctx.codeHost.closePullRequest.bind(ctx.codeHost)
+    ctx.codeHost.closePullRequest = async (n: number) => {
+      if (n === pr1.number) throw new CodeHostError(500, 'boom')
+      return close(n)
+    }
+    await startup(ctx.deps)
+    expect(pr1.state).toBe('open')
+    expect(pr2.state).toBe('closed')
+  })
+
+  it('skips a ticket that became running while GitHub was read', async () => {
+    const ctx = withSource(createTestContext(), 'CB-1')
+    ctx.codeHost.files.set('docs/work/CB-1/intent.md', 'x')
+    const read = ctx.codeHost.readFile.bind(ctx.codeHost)
+    ctx.codeHost.readFile = async (path: string) => {
+      ctx.deps.tickets.update('CB-1', { state: 'running' })
+      return read(path)
+    }
+    await startup(ctx.deps)
+    expect(ctx.deps.tickets.findByKey('CB-1')).toMatchObject({ stage: 'plan', state: 'running' })
+  })
+})
+
 describe('resetSystem', () => {
   it('stops running agents, empties the database and starts again', async () => {
     const ctx = withSource(createTestContext(), 'CB-1', 'CB-2')

@@ -24,6 +24,7 @@ export async function syncReviews(deps: UseCaseDeps, key?: string): Promise<void
     if (ticket.state !== 'in_review' || !stage) continue
     const artifact = deps.artifacts.findOpen(ticket.key, stage)
     if (!artifact) {
+      deps.audit.append({ ticketKey: ticket.key, actor: 'system', type: 'error', payload: { message: 'Kein offener PR zur Stufe gefunden' } })
       createReporter(deps, ticket.key).setState('ready')
       continue
     }
@@ -33,22 +34,28 @@ export async function syncReviews(deps: UseCaseDeps, key?: string): Promise<void
 
 async function syncOne(deps: UseCaseDeps, host: CodeHost, ticket: Ticket, stage: ArtifactStage, artifact: Artifact): Promise<void> {
   const reporter = createReporter(deps, ticket.key)
-  let pr: PullRequest
+  let pr: PullRequest | null = null
+  let failure: unknown = null
   try {
     pr = await host.getPullRequest(artifact.prNumber)
   } catch (err) {
-    if (err instanceof CodeHostError && err.status === NOT_FOUND) {
-      deps.artifacts.markClosed(artifact.id)
-      deps.audit.append({ ticketKey: ticket.key, actor: 'system', type: 'error', payload: { message: `PR #${artifact.prNumber} gibt es nicht mehr` } })
-      reporter.setState('ready')
-    } else {
-      console.warn(`[syncReviews] ${ticket.key}: ${describeError(err)}`)
-    }
-    return
+    failure = err
   }
 
   // A concurrent sync (timer and page) may have handled the ticket while we waited.
   if (deps.tickets.findByKey(ticket.key)?.state !== 'in_review') return
+  if (deps.artifacts.findOpen(ticket.key, stage)?.id !== artifact.id) return
+
+  if (!pr) {
+    if (failure instanceof CodeHostError && failure.status === NOT_FOUND) {
+      deps.artifacts.markClosed(artifact.id)
+      deps.audit.append({ ticketKey: ticket.key, actor: 'system', type: 'error', payload: { message: `PR #${artifact.prNumber} gibt es nicht mehr` } })
+      reporter.setState('ready')
+    } else {
+      console.warn(`[syncReviews] ${ticket.key}: ${describeError(failure)}`)
+    }
+    return
+  }
 
   if (pr.state === 'merged') {
     deps.artifacts.markMerged(artifact.id, pr.mergedAt ?? new Date())
@@ -57,13 +64,13 @@ async function syncOne(deps: UseCaseDeps, host: CodeHost, ticket: Ticket, stage:
     deps.audit.append({ ticketKey: ticket.key, actor: 'system', type: 'stage_changed', payload: { from: stage, to: next } })
     reporter.setState('ready', next)
   } else if (pr.state === 'closed') {
+    deps.artifacts.markClosed(artifact.id)
+    deps.audit.append({ ticketKey: ticket.key, actor: 'human', type: 'pr_closed', payload: { prNumber: pr.number } })
+    reporter.setState('ready')
     try {
       await host.deleteBranch(artifact.branch)
     } catch (err) {
       console.warn(`[syncReviews] ${ticket.key}: Branch ${artifact.branch} nicht gelöscht: ${describeError(err)}`)
     }
-    deps.artifacts.markClosed(artifact.id)
-    deps.audit.append({ ticketKey: ticket.key, actor: 'human', type: 'pr_closed', payload: { prNumber: pr.number } })
-    reporter.setState('ready')
   }
 }

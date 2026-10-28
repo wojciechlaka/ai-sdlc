@@ -51,6 +51,17 @@ describe('syncReviews', () => {
     expect(ctx.store.audit.at(-1)).toMatchObject({ type: 'pr_closed', payload: { prNumber: pr } })
   })
 
+  it('handles a PR closed twice concurrently only once', async () => {
+    const ctx = createTestContext()
+    await inReview(ctx, 'CB-1')
+    ctx.codeHost.pulls[0]!.state = 'closed'
+
+    await Promise.all([syncReviews(ctx.deps), syncReviews(ctx.deps)])
+
+    expect(ctx.store.audit.filter((e) => e.type === 'pr_closed')).toHaveLength(1)
+    expect(ctx.deps.tickets.findByKey('CB-1')?.state).toBe('ready')
+  })
+
   it('leaves open PRs untouched', async () => {
     const ctx = createTestContext()
     await inReview(ctx, 'CB-1')

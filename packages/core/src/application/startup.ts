@@ -3,6 +3,7 @@ import { reconcile, stageFromRepo } from '../domain/rules'
 import type { CodeHost } from '../ports'
 import type { UseCaseDeps } from './deps'
 import { describeError } from './describeError'
+import { createReporter } from './reporter'
 import { sleep } from './sleep'
 import { syncReviews } from './syncReviews'
 
@@ -22,6 +23,7 @@ export async function startup(deps: UseCaseDeps): Promise<void> {
   try {
     await syncReviews(deps)
     await closeOpenPullRequests(deps, host)
+    await host.defaultBranch() // guard: a repo-level failure must not reset tickets to plan
     await deriveStages(deps, host)
   } catch (err) {
     console.warn(`[startup] GitHub-Abgleich fehlgeschlagen, weiter mit DB-Stand: ${describeError(err)}`)
@@ -30,10 +32,14 @@ export async function startup(deps: UseCaseDeps): Promise<void> {
 
 /** Stops running agents, empties the database and runs the start again. */
 export async function resetSystem(deps: UseCaseDeps): Promise<void> {
+  let stopped = 0
   for (const ticket of deps.tickets.list()) {
-    if (ticket.state === 'running') deps.agent.stop(ticket.key)
+    if (ticket.state === 'running') {
+      deps.agent.stop(ticket.key)
+      stopped++
+    }
   }
-  await sleep(deps.stopSettleMs)
+  if (stopped > 0) await sleep(deps.stopSettleMs)
   deps.tickets.clear()
   await startup(deps)
 }
@@ -66,25 +72,37 @@ async function closeOpenPullRequests(deps: UseCaseDeps, host: CodeHost): Promise
   for (const pr of await host.listOpenPullRequests()) {
     const owner = parseAppBranch(pr.headBranch, keys)
     if (!owner) continue
-    await host.closePullRequest(pr.number)
-    await host.deleteBranch(pr.headBranch)
-    const artifact = deps.artifacts.findOpen(owner.key, owner.stage)
-    if (artifact) deps.artifacts.markClosed(artifact.id)
-    deps.audit.append({ ticketKey: owner.key, actor: 'system', type: 'cleanup', payload: { prNumber: pr.number, branch: pr.headBranch } })
+    try {
+      await host.closePullRequest(pr.number)
+      await host.deleteBranch(pr.headBranch)
+      const artifact = deps.artifacts.findOpen(owner.key, owner.stage)
+      if (artifact) deps.artifacts.markClosed(artifact.id)
+      deps.audit.append({ ticketKey: owner.key, actor: 'system', type: 'cleanup', payload: { prNumber: pr.number, branch: pr.headBranch } })
+    } catch (err) {
+      console.warn(`[startup] PR #${pr.number} (${pr.headBranch}) nicht aufgeräumt: ${describeError(err)}`)
+    }
   }
 }
 
 /** Sets each ticket to the stage its merged artifacts on the default branch imply. */
 async function deriveStages(deps: UseCaseDeps, host: CodeHost): Promise<void> {
-  for (const ticket of deps.tickets.list()) {
-    const [intent, spec] = await Promise.all([
-      host.readFile(artifactPath(ticket.key, 'plan')),
-      host.readFile(artifactPath(ticket.key, 'design')),
-    ])
-    const next = reconcile(ticket, stageFromRepo({ hasIntent: intent !== null, hasSpec: spec !== null }))
-    if (next.stage !== ticket.stage) {
-      deps.audit.append({ ticketKey: ticket.key, actor: 'system', type: 'stage_changed', payload: { from: ticket.stage, to: next.stage } })
+  for (const { key } of deps.tickets.list()) {
+    try {
+      const [intent, spec] = await Promise.all([
+        host.readFile(artifactPath(key, 'plan')),
+        host.readFile(artifactPath(key, 'design')),
+      ])
+      // A run may have started while we waited for GitHub.
+      const current = deps.tickets.findByKey(key)
+      if (!current || current.state === 'running') continue
+      const next = reconcile(current, stageFromRepo({ hasIntent: intent !== null, hasSpec: spec !== null }))
+      if (next.stage === current.stage && next.state === current.state) continue
+      if (next.stage !== current.stage) {
+        deps.audit.append({ ticketKey: key, actor: 'system', type: 'stage_changed', payload: { from: current.stage, to: next.stage } })
+      }
+      createReporter(deps, key).setState(next.state, next.stage)
+    } catch (err) {
+      console.warn(`[startup] ${key}: Stufe nicht abgeleitet: ${describeError(err)}`)
     }
-    if (next.stage !== ticket.stage || next.state !== ticket.state) deps.tickets.update(ticket.key, next)
   }
 }
