@@ -16,7 +16,7 @@ const sse = vi.hoisted(() => ({
   handlers: null as null | { onMessage: (e: RefinementEvent) => void; onReconnect?: () => void },
 }))
 vi.mock('@/hooks/useSSE', () => ({
-  useSSE: (_ticketId: string, handlers: { onMessage: (e: RefinementEvent) => void }) => {
+  useSSE: (_ticketId: string, handlers: { onMessage: (e: RefinementEvent) => void; onReconnect?: () => void }) => {
     sse.handlers = handlers
     return { connected: true, everConnected: true }
   },
@@ -125,6 +125,25 @@ describe('TicketLive', () => {
     act(() => sse.handlers!.onMessage({ type: 'status', ticketId: 'T-1', status: 'review' }))
     act(() => sse.handlers!.onMessage({ type: 'question', ticketId: 'T-1', question: 'Q?' }))
     expect(router.refresh).toHaveBeenCalledTimes(2)
+  })
+
+  it('refreshes the page when the SSE connection reconnects', () => {
+    renderLive(BACKLOG)
+    act(() => sse.handlers!.onReconnect!())
+    expect(router.refresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps Refine disabled while refining, even with a repository', async () => {
+    localStorage.setItem('repoUrl', 'https://github.com/x/y')
+    renderLive({ ...WAITING_FOR_ANSWER, latestRun: { ...WAITING_FOR_ANSWER.latestRun!, status: 'running', output: null } })
+
+    expect(screen.getByRole('button', { name: 'Stoppen' })).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Refine' })).toBeDisabled())
+  })
+
+  it('does not show the persisted question when the ticket is not refining', () => {
+    renderLive({ ...WAITING_FOR_ANSWER, status: 'review' })
+    expect(screen.queryByText('Welche DB?')).not.toBeInTheDocument()
   })
 
   it('renders the server-rendered children', () => {
