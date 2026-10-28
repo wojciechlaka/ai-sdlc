@@ -87,7 +87,10 @@ das Ticket fertig ist — den Zustand als Badge (`bereit`, `Agent läuft`, `Rüc
   `showcase` (erst nach dem Merge), Link auf den PR mit Status (`offen`, `gemergt`, `geschlossen`) und dem
   aufklappbaren Inhalt „Inhalt anzeigen“.
 - **Log:** Zeit, Akteur (`Mensch`, `Agent`, `System`) und eine Zeile pro Eintrag; Agent-Läufe mit Dauer,
-  Tokens und Kosten.
+  Tokens und Kosten. Vom Guard blockierte Werkzeugaufrufe stehen rot hervorgehoben als eigene Zeile
+  („Blockiert: Bash \`rm -rf docs\` — Begründung“). Aufeinanderfolgende ausgeführte Werkzeugaufrufe werden zu
+  einer Zeile „N Werkzeugaufrufe“ zusammengefasst, die sich aufklappen lässt (`<details>`, ohne Client-Zustand;
+  z. B. „Bash \`git log -5\`“, „Read src/app.ts“).
 
 **Aktionsbereich je Zustand:**
 

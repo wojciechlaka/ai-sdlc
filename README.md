@@ -112,6 +112,25 @@ Datenbank leert, offene PRs der App schließt und `showcase` zurücksetzt.
 
 Ein Lauf nutzt den eigenen Claude-Login und verbraucht Tokens; Kosten und Tokens stehen im Log des Tickets.
 
+## Leitplanken für den Agent
+
+Der Agent darf im Klon des Ziel-Repos nur **lesen**. Das steht nicht nur im Prompt, sondern wird durch Hooks
+von Claude Code durchgesetzt (pro Lauf über `--settings`, eigene Claude-Einstellungen bleiben unberührt):
+
+- **Erlaubt:** die Werkzeuge `Read`, `Glob`, `Grep` und lesende `Bash`-Befehle — `ls`, `cat`, `head`, `tail`,
+  `wc`, `grep`, `rg`, `find`, `tree`, `pwd`, `file`, `stat`, `du`, `sort`, `uniq`, `cut`, `awk`, `sed`, `jq` und
+  `git log|show|diff|status|ls-files|blame|grep|branch|rev-parse|cat-file`, auch verkettet mit `|`, `;`, `&&`, `||`.
+- **Blockiert:** alle anderen Werkzeuge (`Write`, `Edit`, `WebFetch`, …) und Befehle, außerdem Umleitungen
+  (`>`, `>>`, `tee`), Befehlsersetzung (`$(…)`, Backticks), `find -delete/-exec`, `sed -i`, `awk` mit `system`,
+  Netzwerk (`curl`, `wget`, `ssh`, …), Interpreter und Paketmanager (`node`, `npm`, `python`, `sh`, …) und
+  schreibende `git`-Befehle.
+
+Der Agent sieht die Begründung und arbeitet ohne den Befehl weiter. Im **Log des Tickets** steht ein blockierter
+Aufruf rot hervorgehoben (z. B. „Blockiert: Bash \`rm -rf docs\` — Befehl rm ist nicht erlaubt (nur lesende
+Befehle)“), während des Laufs auch als Fortschrittszeile. Alle ausgeführten Aufrufe eines Laufs erscheinen
+zusammengefasst als „N Werkzeugaufrufe“ und lassen sich aufklappen. Bei der Codebase-Analyse (ohne Ticket)
+landen blockierte Aufrufe nur im Server-Log. Die Regeln stehen in `packages/core/hooks/guardPolicy.mjs`.
+
 ## Neues Ticket
 
 Eine Datei `examples/tickets/cb-4-<kurzname>.md` anlegen (Format in

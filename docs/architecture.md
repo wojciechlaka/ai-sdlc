@@ -109,6 +109,15 @@ Token aus; geschrieben wird nur über `CodeHost` mit `GITHUB_TOKEN`.
 6. Jeder Schritt meldet `progress`-, `state`- und `question`-Events über den `EventPublisher` an die SSE-Route;
    der Browser zeigt den Fortschritt und lädt bei Zustand oder Rückfrage die Seite neu.
 
+**Leitplanken für den Agent.** Dass der Agent im Klon nur liest, setzen Hooks von Claude Code durch, nicht nur der
+Prompt: Jeder `claude`-Aufruf (Agent und Codebase-Summary) bekommt per `--settings` einen `PreToolUse`-Hook
+(`packages/core/hooks/guard.mjs`, Positivliste für Werkzeuge und Bash-Befehle, lehnt im Zweifel ab) und einen
+`PostToolUse`-Hook (`hooks/audit.mjs`). Beide schreiben JSON-Zeilen in eine Datei pro Versuch, die der
+Claude-CLI-Adapter während des Laufs mitliest und als `ToolEvent` über `AgentRunner.run(input, { onProgress,
+onToolEvent })` meldet; der Kern schreibt daraus `guard_blocked`/`tool_used` ins Log, solange der Versuch aktuell
+ist. Die Skripte sind reines Node ohne Abhängigkeit zu `src`; den Pfad (`hooksDir`) reicht die Komposition an die
+Adapter. Der Agent schreibt nie in die DB — Zustände ändern nur die Use Cases.
+
 Jeder Hintergrundschritt prüft, ob sein Lauf noch der aktuelle ist. Stop, Neustart und Reset lassen so keinen
 veralteten Lauf Zustand schreiben; ein PR aus einem veralteten Lauf wird wieder geschlossen.
 

@@ -57,7 +57,8 @@ Architecture tests (ArchUnitTS, run by `npm test`; `globals: true` in the Vitest
 `toPassAsync()`):
 - `packages/core/src/architecture.test.ts` — domain depends only on itself; ports only on domain; application not
   on adapters/testing/compose; each adapter folder only on itself + domain + ports (only `compose.ts` wires
-  adapters); no production file imports `src/testing`; no import cycles in production code
+  adapters); no production file imports `src/testing`; `hooks/` and `src/` do not import each other; no import
+  cycles in production code
 - `apps/web/architecture.test.ts` — web reaches core only via `@refinement/core` (no deep or relative paths)
 - `packages/shared/src/architecture.test.ts` — shared depends on no other workspace package
 ArchUnitTS only sees `import` declarations (not `export … from` re-exports or dynamic `import()`).
@@ -73,7 +74,8 @@ changing Next-specific code.
 - **AgentRun** — per ticket and stage; `seq`, trigger `initial | answer`, input (model + Q&A history), output, cost/tokens
 - **Artifact** — stage, path `docs/work/<KEY>/intent.md|spec.md`, branch `<KEY>/intent|spec`, PR number/url/state, mergedAt
 - **AuditEvent** — the per-ticket log shown on the ticket page (`ticket_imported`, `run_started`, `run_finished`,
-  `question_asked`, `answer_given`, `pr_opened`, `pr_merged`, `pr_closed`, `stage_changed`, `cleanup`, `error`).
+  `question_asked`, `answer_given`, `pr_opened`, `pr_merged`, `pr_closed`, `stage_changed`, `cleanup`, `error`,
+  `guard_blocked`, `tool_used`).
   `apps/web/lib/logFormat.ts` reads these payload keys — keep both in sync.
 
 ### Transitions (`domain/rules.ts`)
@@ -103,6 +105,16 @@ running|awaiting_answer --stop--> ready
 5. `syncReviews` (timer every 60 s, and on every ticket page view) reads PR state: merged → next stage; closed → ready
 6. Events reach the browser via `GET /api/events?ticketKey=` (ticket page) or `GET /api/events` (board);
    clients call `router.refresh()` on state/question events
+
+**Guard and audit hooks (spec §13):** every `claude` run (agent and codebase summary) gets
+`--allowedTools Read,Glob,Grep,Bash` and `--settings` with a `PreToolUse` hook (`packages/core/hooks/guard.mjs`,
+fails closed: denies with a reason) and a `PostToolUse` hook (`hooks/audit.mjs`, fails open). Both append JSON lines
+to `$REFINEMENT_HOOK_LOG`, a temp file per attempt that `adapters/claudeCli/hookLog.ts` follows during the run and
+reports as `ToolEvent` (`{ kind: 'blocked' | 'used', tool, target, reason?, exitCode? }`) via
+`AgentRunner.run(input, { onProgress, onToolEvent })`. `executeRun` turns them into `guard_blocked` (system, plus a
+progress event) / `tool_used` (agent) log entries while the attempt is current. The summary run (`adapters/git`)
+only warns about blocked calls in the server log. `hooks/` holds plain Node ESM scripts (no imports from `src`,
+type-checked via `checkJs`); adapters get the path as `hooksDir` from `resolveCorePaths`.
 
 **Attempt identity:** every background step checks `isCurrentRun` (`application/beginRun.ts`: ticket still
 `running` and this run is its latest). Stop, restart and reset therefore never let a stale job write state;
@@ -135,7 +147,9 @@ makes `startStage`/`answerQuestion` throw a `ConflictError`.
   `CodeHostError` with user-facing German messages); base branch, `prepareBaseBranch`, `resetBaseBranch`
 - `packages/core/src/adapters/sqlite/schema.ts` — Drizzle schema: `tickets`, `agent_runs`, `artifacts`, `audit_events`
 - `packages/core/src/testing/fakes.ts` — in-memory repositories, `FakeCodeHost` (GitHub-like semantics),
-  `FakeTicketSource`, `FakeAgentRunner` (`hold()`/`stop()`), `createTestContext({ token })`, `seedTicket`
+  `FakeTicketSource`, `FakeAgentRunner` (`hold()`/`stop()`, scripted `progress`/`toolEvents`, recorded `callbacks`),
+  `createTestContext({ token })`, `seedTicket`
+- `packages/core/hooks/{guardPolicy,guard,audit,hookIo}.mjs` — guard/audit hook scripts for the agent (spec §13)
 - `packages/core/skills/intent-agent.md` — stage 1 skill, included verbatim in the prompt
   (`refinement-agent.md` is kept for stage 2)
 
@@ -147,6 +161,8 @@ makes `startStage`/`answerQuestion` throw a `ConflictError`.
   port + both implementations (SQLite and in-memory fake)
 - **New stage agent**: skill file in `packages/core/skills/`, output schema in `packages/shared`, entry in
   `STAGE_AGENTS` (`adapters/claudeCli/index.ts`), add the stage to `STARTABLE_STAGES`
+- **Change what the agent may do**: edit the lists in `packages/core/hooks/guardPolicy.mjs` (pure `decide()`), extend
+  the table tests in `hooks/guardPolicy.test.ts`; the scripts run per tool call, so no restart is needed
 - **New log event**: add the type to `AuditEventType` (`ports/auditLog.ts`) and a line to `apps/web/lib/logFormat.ts`
 - **New UI**: `apps/web/components/`; mutations as Server Actions in `apps/web/app/actions.ts` using `runAction`;
   UI primitives in `apps/web/components/ui/` (shadcn/Base UI)
