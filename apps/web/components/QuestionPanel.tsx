@@ -7,7 +7,7 @@ import { Textarea } from './ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 
 interface Props {
-  ticketId: string
+  ticketKey: string
   /** Question asked by the agent. */
   question: string
   /** Called after the answer was accepted. */
@@ -15,7 +15,7 @@ interface Props {
 }
 
 /** Amber card shown while the agent waits for a human answer. */
-export function QuestionPanel({ ticketId, question, onAnswered }: Props) {
+export function QuestionPanel({ ticketKey, question, onAnswered }: Props) {
   const [answer, setAnswer] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [sending, startTransition] = useTransition()
@@ -24,7 +24,7 @@ export function QuestionPanel({ ticketId, question, onAnswered }: Props) {
     if (!answer.trim()) return
     startTransition(async () => {
       setError(null)
-      const result = await answerQuestionAction(ticketId, { answer })
+      const result = await answerQuestionAction(ticketKey, { answer })
       if (!result.ok) {
         setError(result.error)
         return
