@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@anthropic-ai/claude-code": "^2.1.175",
+    "@octokit/rest": "^22.0.1",
     "@refinement/shared": "*",
     "better-sqlite3": "^12.11.1",
     "drizzle-orm": "^0.45.2",
