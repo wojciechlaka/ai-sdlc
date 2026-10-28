@@ -75,5 +75,6 @@ export function createRefinementEngine(config: EngineConfig): UseCases {
       task.catch((err) => console.error('[background] unhandled error in agent run', err))
     },
     stopSettleMs: STOP_SETTLE_MS,
+    resetState: { resetting: false },
   })
 }

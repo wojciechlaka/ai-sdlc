@@ -8,6 +8,14 @@ export interface PullRequest {
   mergedAt: Date | null
 }
 
+/** What `prepareBaseBranch` created. */
+export interface BaseBranchPreparation {
+  createdTag: boolean
+  createdBranch: boolean
+  /** Only for a just created tag: its state already contains `docs/work/` (artifacts merged into the default branch). */
+  baselineHasWork: boolean
+}
+
 /**
  * The target repository on its Git host (GitHub). All writes need a token.
  * The app works against a configured base branch (`showcase`), not the repository's default branch;
@@ -20,7 +28,7 @@ export interface CodeHost {
    * Creates what is missing: the baseline tag on the head of the repository's default branch,
    * then the base branch on the tag. Reports what was created.
    */
-  prepareBaseBranch(): Promise<{ createdTag: boolean; createdBranch: boolean }>
+  prepareBaseBranch(): Promise<BaseBranchPreparation>
   /** Force-moves the base branch to the commit of the baseline tag. Other branches stay untouched. */
   resetBaseBranch(): Promise<void>
   /** Content of a file on the base branch; null if it does not exist. */

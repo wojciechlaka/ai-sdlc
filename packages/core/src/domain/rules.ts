@@ -34,7 +34,7 @@ export function isStageCompleted(ticket: Pick<Ticket, 'stage'>, stage: ArtifactS
   return STAGE_ORDER.indexOf(ticket.stage) > STAGE_ORDER.indexOf(stage)
 }
 
-/** Stage implied by the artifacts found on the default branch. */
+/** Stage implied by the artifacts found on the base branch (showcase). */
 export function stageFromRepo(files: { hasIntent: boolean; hasSpec: boolean }): Stage {
   if (files.hasSpec) return 'done'
   if (files.hasIntent) return 'design'
@@ -42,7 +42,7 @@ export function stageFromRepo(files: { hasIntent: boolean; hasSpec: boolean }): 
 }
 
 /**
- * Applies the stage found on the default branch after the start-up cleanup.
+ * Applies the stage found on the base branch (showcase) after the start-up cleanup.
  * A changed stage starts over as `ready`; `in_review` becomes `ready` because the start-up closed
  * every open PR of the app; other states (e.g. `awaiting_answer`) survive a restart.
  */

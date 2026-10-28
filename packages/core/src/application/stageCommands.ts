@@ -3,15 +3,21 @@ import { ConflictError, errorCode } from '../domain/errors'
 import { canAnswer, canStartStage, canStop, currentArtifactStage, planAnswerRun } from '../domain/rules'
 import type { Ticket } from '../domain/types'
 import type { UseCaseDeps } from './deps'
-import { TOKEN_MISSING } from './messages'
+import { RESET_RUNNING, TOKEN_MISSING } from './messages'
 import { parseInput } from './validation'
 import { requireTicket } from './requireTicket'
 import { createReporter } from './reporter'
 import { beginRun, type RunRequest } from './beginRun'
 import { runStage } from './runStage'
 
+/** The reset empties the database and rewrites the repo; a run started meanwhile would act on stale state. */
+function rejectDuringReset(deps: UseCaseDeps): void {
+  if (deps.resetState.resetting) throw new ConflictError(RESET_RUNNING)
+}
+
 /** Validates, sets `running` and hands the stage to the background. Returns immediately. */
 export function startStage(deps: UseCaseDeps, key: string, raw: unknown): void {
+  rejectDuringReset(deps)
   const ticket = requireTicket(deps.tickets, key)
   if (!deps.codeHost) throw new ConflictError(TOKEN_MISSING)
   const stage = currentArtifactStage(ticket)
@@ -30,6 +36,7 @@ export function startStage(deps: UseCaseDeps, key: string, raw: unknown): void {
  * The ticket is `running` right away, so a second answer is rejected.
  */
 export function answerQuestion(deps: UseCaseDeps, key: string, raw: unknown): void {
+  rejectDuringReset(deps)
   const ticket = requireTicket(deps.tickets, key)
   const stage = currentArtifactStage(ticket)
   if (!stage || !canAnswer(ticket)) throw new ConflictError('Ticket wartet nicht auf eine Antwort')

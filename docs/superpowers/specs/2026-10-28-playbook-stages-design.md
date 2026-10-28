@@ -202,3 +202,5 @@ solange `showcase` nicht geschützt ist).
 
 **Tests.** Kern mit `FakeCodeHost` (Tag/Branch anlegen, Force-Reset, Reste-Branches löschen, Auslöser);
 GitHub-Adapter mit gemocktem `fetch` (Ref-Aufrufe inkl. `force: true`); Web: Reset-Text, Hinweis auf `showcase`.
+
+Offen für Teil B: Der Klon des Agents steht auf dem Default-Branch; Stufe 2 braucht `showcase` (fetch + checkout -B showcase), nach einem Force-Reset scheitert `git pull`.

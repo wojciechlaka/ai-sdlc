@@ -39,15 +39,22 @@ describe('FakeCodeHost', () => {
     codeHost.baseBranchExists = false
     codeHost.defaultBranchFiles.set('README.md', 'master')
 
-    expect(await codeHost.prepareBaseBranch()).toEqual({ createdTag: true, createdBranch: true })
+    expect(await codeHost.prepareBaseBranch()).toEqual({ createdTag: true, createdBranch: true, baselineHasWork: false })
     expect(await codeHost.readFile('README.md')).toBe('master')
 
     codeHost.defaultBranchFiles.set('README.md', 'master v2')
     codeHost.files.set('docs/work/CB-1/intent.md', 'x')
-    expect(await codeHost.prepareBaseBranch()).toEqual({ createdTag: false, createdBranch: false })
+    expect(await codeHost.prepareBaseBranch()).toEqual({ createdTag: false, createdBranch: false, baselineHasWork: false })
     expect(codeHost.baselineFiles?.get('README.md')).toBe('master')
     expect(await codeHost.readFile('docs/work/CB-1/intent.md')).toBe('x')
     expect(codeHost.calls.filter((c) => c === 'prepareBaseBranch')).toHaveLength(2)
+  })
+
+  it('reports a new baseline that already contains docs/work', async () => {
+    const { codeHost } = createTestContext()
+    codeHost.defaultBranchFiles.set('docs/work/CB-1/intent.md', 'x')
+    expect(await codeHost.prepareBaseBranch()).toMatchObject({ createdTag: true, baselineHasWork: true })
+    expect(await codeHost.prepareBaseBranch()).toMatchObject({ createdTag: false, baselineHasWork: false })
   })
 
   it('resets the base branch to the tag: a merge after the tag is gone, the default branch untouched', async () => {

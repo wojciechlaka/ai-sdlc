@@ -27,6 +27,8 @@ export interface UseCaseDeps {
   baseBranch: string
   /** Receives fire-and-forget work (agent runs). The production implementation logs rejections. */
   runInBackground: (task: Promise<void>) => void
+  /** In-process state shared by all use cases; `resetting` is set while `resetSystem` runs. */
+  resetState: { resetting: boolean }
   /** Pause after stopping an agent before the ticket state is read again (process needs time to exit). */
   stopSettleMs: number
 }

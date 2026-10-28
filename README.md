@@ -73,7 +73,9 @@ Für Vorführungen lässt sich das Ziel-Repo auf seinen Ausgangsstand zurückset
   Ohne die Variable lässt ein Neustart `showcase` in Ruhe — praktisch beim Entwickeln.
 - **Rechte:** das Token braucht keine weiteren Rechte (Contents: Read and write deckt Tag und Force-Update ab).
   **Ein Branch-Schutz auf `showcase` verhindert den Reset;** die App läuft dann mit dem bisherigen Stand weiter
-  und zeigt die Meldung unter dem Reset-Button.
+  und zeigt die Meldung unter dem Reset-Button. Das gilt ebenso für Rulesets auf `showcase` oder auf Tags
+  `showcase*` — sie blockieren den Reset bzw. das Anlegen des Tags.
+- **Während des Resets** lehnt die App das Starten einer Stufe und Antworten ab („Repo wird gerade zurückgesetzt“).
 
 ## Verhalten beim Start
 
@@ -83,7 +85,7 @@ Bei jedem Start (und beim **Reset**-Button, der vorher die Datenbank leert):
    [`examples/tickets/README.md`](examples/tickets/README.md)). Geänderter Text wird übernommen, Stufe und Zustand bleiben.
 2. **Showcase vorbereiten:** Tag `showcase-base` und Branch `showcase` anlegen, falls sie fehlen.
 3. **Merges nachziehen:** PRs, die gemergt wurden, während die App aus war, schieben ihr Ticket weiter
-   (entfällt beim Repo-Reset).
+   Das gilt auch vor einem Repo-Reset, damit kein Artefakt als offen stehen bleibt.
 4. **Aufräumen:** **alle offenen PRs der App werden geschlossen und ihre Branches gelöscht** — erkannt am
    Branch-Namen `<TICKET>/intent` bzw. `<TICKET>/spec` eines bekannten Tickets. PRs anderer Branches bleiben
    unberührt. GitHub kann PRs nicht löschen; geschlossene PRs bleiben in der Historie des Repos.

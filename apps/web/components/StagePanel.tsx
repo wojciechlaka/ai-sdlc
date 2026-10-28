@@ -11,7 +11,7 @@ export function stripFrontMatter(markdown: string): string {
   return markdown.replace(/^---\n[\s\S]*?\n---\n+/, '')
 }
 
-/** One artifact stage: done mark, links to file and PR, content (live from the default branch) in a collapsible block. */
+/** One artifact stage: done mark, links to file and PR, content (live from the base branch showcase) in a collapsible block. */
 export function StagePanel({ view }: { view: StageViewDto }) {
   return (
     <Card>

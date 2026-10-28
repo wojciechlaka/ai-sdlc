@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { CodeHostError } from '../ports'
-import { createTestContext, seedTicket, sourceTicket, type TestContext } from '../testing/fakes'
+import { createTestContext, errorCodeOf, seedTicket, sourceTicket, type TestContext } from '../testing/fakes'
+import { answerQuestion, startStage } from './stageCommands'
 import { resetSystem, startup } from './startup'
 
 let warn: ReturnType<typeof vi.spyOn>
@@ -249,7 +250,7 @@ describe('resetSystem', () => {
     expect(ctx.store.audit.filter((e) => e.type === 'cleanup')).toMatchObject([{ ticketKey: 'CB-2', payload: { prNumber: open.number } }])
   })
 
-  it('skips the review sync with resetRepo and resets after closing the PRs', async () => {
+  it('resets after closing the PRs', async () => {
     const ctx = withSource(createTestContext(), 'CB-1')
     seedTicket(ctx, 'CB-1', { state: 'in_review' })
     const pr = ctx.codeHost.seedPullRequest('CB-1/intent')
@@ -257,9 +258,55 @@ describe('resetSystem', () => {
 
     await startup(ctx.deps, { resetRepo: true })
 
-    expect(ctx.codeHost.calls).not.toContain('getPullRequest')
     expect(pr.state).toBe('closed')
     expect(ctx.codeHost.calls.indexOf('resetBaseBranch')).toBeGreaterThan(ctx.codeHost.calls.indexOf('closePullRequest'))
+  })
+
+  it('settles merged PRs before the reset, so no artifact stays open', async () => {
+    const ctx = withSource(createTestContext(), 'CB-1')
+    seedTicket(ctx, 'CB-1', { state: 'in_review' })
+    const pr = ctx.codeHost.seedPullRequest('CB-1/intent')
+    ctx.deps.artifacts.create({ ticketKey: 'CB-1', stage: 'plan', path: 'docs/work/CB-1/intent.md', branch: 'CB-1/intent', prNumber: pr.number, prUrl: pr.url })
+    ctx.codeHost.merge(pr.number)
+
+    await startup(ctx.deps, { resetRepo: true })
+
+    expect(ctx.deps.artifacts.findOpen('CB-1', 'plan')).toBeNull()
+    expect(ctx.deps.artifacts.listForTicket('CB-1')[0]?.prState).toBe('merged')
+    expect(ctx.deps.tickets.findByKey('CB-1')).toMatchObject({ stage: 'plan', state: 'ready' })
+  })
+
+  it('warns when a new baseline already contains docs/work', async () => {
+    const ctx = withSource(createTestContext(), 'CB-1')
+    ctx.codeHost.defaultBranchFiles.set('docs/work/CB-1/intent.md', 'x')
+    ctx.codeHost.baseBranchExists = false
+    const { warnings } = await startup(ctx.deps)
+    expect(warnings).toEqual(['Ausgangsstand showcase-base enthält bereits docs/work — diese Tickets starten nicht in Stufe 1'])
+  })
+
+  it('blocks starting and answering while the reset runs', async () => {
+    const ctx = withSource(createTestContext(), 'CB-1')
+    let release = () => {}
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const prepare = ctx.codeHost.prepareBaseBranch.bind(ctx.codeHost)
+    ctx.codeHost.prepareBaseBranch = async () => {
+      await gate
+      return prepare()
+    }
+
+    const reset = resetSystem(ctx.deps)
+    await Promise.resolve()
+    expect(errorCodeOf(() => startStage(ctx.deps, 'CB-1', { model: 'm' }))).toBe('CONFLICT')
+    expect(() => answerQuestion(ctx.deps, 'CB-1', { answer: 'a' })).toThrow('Repo wird gerade zurückgesetzt')
+    await expect(resetSystem(ctx.deps)).rejects.toThrow('Repo wird gerade zurückgesetzt')
+    release()
+    await reset
+
+    startStage(ctx.deps, 'CB-1', { model: 'm' })
+    expect(ctx.deps.tickets.findByKey('CB-1')?.state).toBe('running')
+    await ctx.settle()
   })
 
   it('keeps running and reports a failed repo reset', async () => {

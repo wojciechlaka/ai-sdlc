@@ -107,12 +107,13 @@ stages and content are read from it, links point to `blob/showcase/…`. Tag `sh
 
 `startup(deps, { resetRepo })`: end interrupted runs → import `examples/tickets/*.md` (upsert by key) → without
 token: warn and stop. With token: `prepareBaseBranch` (missing tag → head of the default branch; missing
-`showcase` → the tag) → `syncReviews` (merges during downtime; skipped with `resetRepo`) → close open PRs of the
+`showcase` → the tag) → `syncReviews` (merges during downtime, also before a reset) → close open PRs of the
 app (head branch `<KEY>/intent|spec` of a known ticket, own repo only) and delete their branches → with
 `resetRepo` only: delete `<KEY>/intent|spec` of all known tickets, force `showcase` back to `showcase-base` →
 derive stage from files on `showcase`. GitHub errors are logged and returned as `{ warnings }`; the app continues
 with the DB state. `resetSystem` (reset button) always runs with `resetRepo: true` and shows the warnings;
-a restart resets the repo only with `RESET_ON_START=true`.
+a restart resets the repo only with `RESET_ON_START=true`. While `resetSystem` runs, `deps.resetState.resetting`
+makes `startStage`/`answerQuestion` throw a `ConflictError`.
 
 ### Key modules
 

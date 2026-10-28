@@ -12,6 +12,7 @@ import {
   type ArtifactRepository,
   type AuditEvent,
   type AuditLog,
+  type BaseBranchPreparation,
   type CodeHost,
   type EventPublisher,
   type PullRequest,
@@ -319,16 +320,17 @@ export class FakeCodeHost implements CodeHost {
     return this.baseBranchName
   }
 
-  async prepareBaseBranch(): Promise<{ createdTag: boolean; createdBranch: boolean }> {
+  async prepareBaseBranch(): Promise<BaseBranchPreparation> {
     this.enter('prepareBaseBranch')
     const createdTag = this.baselineFiles === null
     this.baselineFiles ??= new Map(this.defaultBranchFiles)
+    const baselineHasWork = createdTag && [...this.baselineFiles.keys()].some((path) => path.startsWith('docs/work/'))
     const createdBranch = !this.baseBranchExists
     if (createdBranch) {
       this.replaceFiles(this.baselineFiles)
       this.baseBranchExists = true
     }
-    return { createdTag, createdBranch }
+    return { createdTag, createdBranch, baselineHasWork }
   }
 
   async resetBaseBranch(): Promise<void> {
@@ -464,6 +466,7 @@ export function createTestContext(options: { token?: boolean } = {}): TestContex
       tasks.push(task)
     },
     stopSettleMs: 0,
+    resetState: { resetting: false },
   }
 
   return {

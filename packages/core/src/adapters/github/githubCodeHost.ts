@@ -15,6 +15,10 @@ export interface GitHubCodeHostOptions {
 }
 
 const REQUEST_TIMEOUT_MS = 15_000
+/** Annotated tags may point to further tags; deeper chains are treated as broken. */
+const MAX_TAG_DEPTH = 5
+/** Messages of a rejected force-update: classic branch protection or a ruleset. */
+const PROTECTED_RE = /protected|rule violation|force-push/i
 
 const REPO_URL_RE = /^https:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/
 
@@ -95,12 +99,43 @@ export function createGitHubCodeHost(options: GitHubCodeHostOptions): CodeHost {
 
   /** Commit sha a ref points to; null if the ref does not exist. Annotated tags are resolved to their commit. */
   const commitOf = async (ref: string): Promise<string | null> => {
+    let object: { sha: string; type: string }
     try {
-      const { object } = (await octokit.rest.git.getRef({ owner, repo, ref })).data
-      if (object.type !== 'tag') return object.sha
-      return (await octokit.rest.git.getTag({ owner, repo, tag_sha: object.sha })).data.object.sha
+      object = (await octokit.rest.git.getRef({ owner, repo, ref })).data.object
     } catch (err) {
       if (statusOf(err) === 404) return null
+      throw err
+    }
+    for (let depth = 0; object.type === 'tag'; depth++) {
+      if (depth === MAX_TAG_DEPTH) throw new Error(`${ref} zeigt auf eine zu lange Kette von Tags`)
+      object = (await octokit.rest.git.getTag({ owner, repo, tag_sha: object.sha })).data.object
+    }
+    return object.sha
+  }
+
+  /**
+   * Creates `ref` on `sha` unless it exists. A 422 means someone created it meanwhile (e.g. a second start);
+   * then the existing ref wins. Returns the commit of the ref and whether this call created it.
+   */
+  const ensureRef = async (ref: string, sha: string): Promise<{ sha: string; created: boolean }> => {
+    try {
+      await octokit.rest.git.createRef({ owner, repo, ref: `refs/${ref}`, sha })
+      return { sha, created: true }
+    } catch (err) {
+      if (statusOf(err) !== 422) throw err
+      const existing = await commitOf(ref)
+      if (existing === null) throw err
+      return { sha: existing, created: false }
+    }
+  }
+
+  /** True if `docs/work` exists on `ref`. */
+  const hasWorkDir = async (ref: string): Promise<boolean> => {
+    try {
+      await octokit.rest.repos.getContent({ owner, repo, path: 'docs/work', ref })
+      return true
+    } catch (err) {
+      if (statusOf(err) === 404) return false
       throw err
     }
   }
@@ -123,16 +158,18 @@ export function createGitHubCodeHost(options: GitHubCodeHostOptions): CodeHost {
     prepareBaseBranch: () =>
       step(`Branch ${baseBranch} vorbereiten`, async () => {
         let tagSha = await commitOf(`tags/${baselineTag}`)
-        const createdTag = tagSha === null
+        let createdTag = false
         if (tagSha === null) {
           const head = (await octokit.rest.git.getRef({ owner, repo, ref: `heads/${await defaultBranch()}` })).data.object.sha
           // Lightweight tag: a plain ref to the commit.
-          await octokit.rest.git.createRef({ owner, repo, ref: `refs/tags/${baselineTag}`, sha: head })
-          tagSha = head
+          ;({ sha: tagSha, created: createdTag } = await ensureRef(`tags/${baselineTag}`, head))
         }
-        const createdBranch = (await commitOf(`heads/${baseBranch}`)) === null
-        if (createdBranch) await octokit.rest.git.createRef({ owner, repo, ref: `refs/heads/${baseBranch}`, sha: tagSha })
-        return { createdTag, createdBranch }
+        let createdBranch = false
+        if ((await commitOf(`heads/${baseBranch}`)) === null) {
+          createdBranch = (await ensureRef(`heads/${baseBranch}`, tagSha)).created
+        }
+        const baselineHasWork = createdTag && (await hasWorkDir(baselineTag))
+        return { createdTag, createdBranch, baselineHasWork }
       }),
 
     async resetBaseBranch() {
@@ -142,7 +179,7 @@ export function createGitHubCodeHost(options: GitHubCodeHostOptions): CodeHost {
       try {
         await octokit.rest.git.updateRef({ owner, repo, ref: `heads/${baseBranch}`, sha, force: true })
       } catch (err) {
-        if (statusOf(err) === 422 && /protected/i.test(err instanceof Error ? err.message : '')) {
+        if (statusOf(err) === 422 && PROTECTED_RE.test(err instanceof Error ? err.message : '')) {
           throw new CodeHostError(422, `${action}: Branch-Schutz auf ${baseBranch} verhindert den Reset — Schutzregel in GitHub entfernen.`)
         }
         throw toCodeHostError(err, action)

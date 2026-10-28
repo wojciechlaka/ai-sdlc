@@ -2,10 +2,12 @@ import { describe, it, expect } from 'vitest'
 import { createGitHubCodeHost, parseGitHubRepoUrl } from './githubCodeHost'
 
 interface Route { status: number; body?: unknown }
+/** A list answers its routes in turn; the last one repeats. */
+type Routes = Record<string, Route | Route[]>
 interface Call { method: string; path: string; rawPath: string; query: string; body: unknown }
 
 /** Minimal GitHub REST stand-in for Octokit's injectable fetch. Unknown routes answer 404. */
-function fakeGitHub(routes: Record<string, Route>) {
+function fakeGitHub(routes: Routes) {
   const calls: Call[] = []
   const inits: (RequestInit | undefined)[] = []
   const fetchFn = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
@@ -15,7 +17,8 @@ function fakeGitHub(routes: Record<string, Route>) {
     const body = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined
     inits.push(init)
     calls.push({ method, path, rawPath: url.pathname, query: url.search, body })
-    const route = routes[`${method} ${path}`] ?? { status: 404, body: { message: 'Not Found' } }
+    const entry = routes[`${method} ${path}`]
+    const route = (Array.isArray(entry) ? (entry.length > 1 ? entry.shift() : entry[0]) : entry) ?? { status: 404, body: { message: 'Not Found' } }
     return new Response(route.body === undefined ? null : JSON.stringify(route.body), {
       status: route.status,
       headers: { 'content-type': 'application/json; charset=utf-8' },
@@ -26,7 +29,7 @@ function fakeGitHub(routes: Record<string, Route>) {
 
 const REPO_ROUTE = { 'GET /repos/o/r': { status: 200, body: { default_branch: 'master' } } }
 
-function setup(routes: Record<string, Route> = {}) {
+function setup(routes: Routes = {}) {
   const gh = fakeGitHub({ ...REPO_ROUTE, ...routes })
   const codeHost = createGitHubCodeHost({ repoUrl: 'https://github.com/o/r', token: 't', baseBranch: 'showcase', baselineTag: 'showcase-base', fetch: gh.fetch })
   return { gh, codeHost }
@@ -131,8 +134,9 @@ const ref = (sha: string, type = 'commit') => ({ status: 200, body: { object: { 
 describe('base branch', () => {
   it('creates nothing when tag and base branch exist', async () => {
     const { gh, codeHost } = setup({ [TAG_REF]: ref('base1'), [BRANCH_REF]: ref('head1') })
-    expect(await codeHost.prepareBaseBranch()).toEqual({ createdTag: false, createdBranch: false })
+    expect(await codeHost.prepareBaseBranch()).toEqual({ createdTag: false, createdBranch: false, baselineHasWork: false })
     expect(gh.calls.filter((c) => c.method !== 'GET')).toEqual([])
+    expect(gh.calls.some((c) => c.path.includes('/contents/'))).toBe(false)
     expect(gh.calls.filter((c) => c.path === '/repos/o/r')).toHaveLength(0)
   })
 
@@ -141,11 +145,45 @@ describe('base branch', () => {
       'GET /repos/o/r/git/ref/heads/master': ref('m1'),
       'POST /repos/o/r/git/refs': { status: 201, body: {} },
     })
-    expect(await codeHost.prepareBaseBranch()).toEqual({ createdTag: true, createdBranch: true })
+    expect(await codeHost.prepareBaseBranch()).toEqual({ createdTag: true, createdBranch: true, baselineHasWork: false })
     expect(gh.calls.filter((c) => c.method === 'POST').map((c) => c.body)).toEqual([
       { ref: 'refs/tags/showcase-base', sha: 'm1' },
       { ref: 'refs/heads/showcase', sha: 'm1' },
     ])
+    expect(gh.calls.find((c) => c.path === '/repos/o/r/contents/docs/work')?.query).toBe('?ref=showcase-base')
+  })
+
+  it('reports a new tag whose state already contains docs/work', async () => {
+    const { codeHost } = setup({
+      'GET /repos/o/r/git/ref/heads/master': ref('m1'),
+      [BRANCH_REF]: ref('h1'),
+      'POST /repos/o/r/git/refs': { status: 201, body: {} },
+      'GET /repos/o/r/contents/docs/work': { status: 200, body: [{ type: 'dir', name: 'CB-1' }] },
+    })
+    expect(await codeHost.prepareBaseBranch()).toEqual({ createdTag: true, createdBranch: false, baselineHasWork: true })
+  })
+
+  it('treats a 422 on creating tag or branch as created by someone else and reads the ref again', async () => {
+    const tagRace = setup({
+      [TAG_REF]: [{ status: 404 }, ref('t1')],
+      'GET /repos/o/r/git/ref/heads/master': ref('m1'),
+      'POST /repos/o/r/git/refs': { status: 422, body: { message: 'Reference already exists' } },
+      [BRANCH_REF]: ref('h1'),
+    })
+    expect(await tagRace.codeHost.prepareBaseBranch()).toEqual({ createdTag: false, createdBranch: false, baselineHasWork: false })
+
+    const branchRace = setup({
+      [TAG_REF]: ref('t1'),
+      [BRANCH_REF]: [{ status: 404 }, ref('h1')],
+      'POST /repos/o/r/git/refs': { status: 422, body: { message: 'Reference already exists' } },
+    })
+    expect(await branchRace.codeHost.prepareBaseBranch()).toEqual({ createdTag: false, createdBranch: false, baselineHasWork: false })
+
+    const realFailure = setup({
+      [TAG_REF]: ref('t1'),
+      'POST /repos/o/r/git/refs': { status: 422, body: { message: 'Invalid request' } },
+    })
+    await expect(realFailure.codeHost.prepareBaseBranch()).rejects.toMatchObject({ status: 422 })
   })
 
   it('creates only the missing base branch, on the commit of an annotated tag', async () => {
@@ -154,8 +192,19 @@ describe('base branch', () => {
       'GET /repos/o/r/git/tags/tagobj': { status: 200, body: { object: { sha: 'c1', type: 'commit' } } },
       'POST /repos/o/r/git/refs': { status: 201, body: {} },
     })
-    expect(await codeHost.prepareBaseBranch()).toEqual({ createdTag: false, createdBranch: true })
+    expect(await codeHost.prepareBaseBranch()).toEqual({ createdTag: false, createdBranch: true, baselineHasWork: false })
     expect(gh.calls.filter((c) => c.method === 'POST').map((c) => c.body)).toEqual([{ ref: 'refs/heads/showcase', sha: 'c1' }])
+  })
+
+  it('follows a tag that points to another annotated tag', async () => {
+    const { gh, codeHost } = setup({
+      [TAG_REF]: ref('tag1', 'tag'),
+      'GET /repos/o/r/git/tags/tag1': { status: 200, body: { object: { sha: 'tag2', type: 'tag' } } },
+      'GET /repos/o/r/git/tags/tag2': { status: 200, body: { object: { sha: 'c2', type: 'commit' } } },
+      'PATCH /repos/o/r/git/refs/heads/showcase': { status: 200, body: {} },
+    })
+    await codeHost.resetBaseBranch()
+    expect(gh.calls.find((c) => c.method === 'PATCH')?.body).toEqual({ sha: 'c2', force: true })
   })
 
   it('force-moves the base branch to the tag', async () => {
@@ -178,6 +227,12 @@ describe('base branch', () => {
       'PATCH /repos/o/r/git/refs/heads/showcase': { status: 422, body: { message: 'Cannot force-update a protected branch' } },
     })
     await expect(prot.codeHost.resetBaseBranch()).rejects.toMatchObject({ status: 422, message: expect.stringContaining('Branch-Schutz') })
+
+    const ruleset = setup({
+      [TAG_REF]: ref('base1'),
+      'PATCH /repos/o/r/git/refs/heads/showcase': { status: 422, body: { message: 'Repository rule violations found' } },
+    })
+    await expect(ruleset.codeHost.resetBaseBranch()).rejects.toMatchObject({ status: 422, message: expect.stringContaining('Branch-Schutz') })
   })
 })
 

@@ -2,7 +2,9 @@ import { ARTIFACT_STAGES, artifactPath, branchName, parseAppBranch } from '../do
 import { reconcile, stageFromRepo } from '../domain/rules'
 import type { CodeHost } from '../ports'
 import type { UseCaseDeps } from './deps'
+import { ConflictError } from '../domain/errors'
 import { describeError } from './describeError'
+import { RESET_RUNNING } from './messages'
 import { createReporter } from './reporter'
 import { sleep } from './sleep'
 import { syncReviews } from './syncReviews'
@@ -41,9 +43,9 @@ export async function startup(deps: UseCaseDeps, { resetRepo = false }: StartupO
   try {
     // Also the guard for deriveStages: it reads tag and base branch, so a repo-level failure
     // (wrong repo, no access) stops here instead of resetting tickets to plan.
-    await prepareBaseBranch(deps, host)
-    // After a reset the database is empty, so there is nothing to sync; merges are undone anyway.
-    if (!resetRepo) await syncReviews(deps)
+    await prepareBaseBranch(deps, host, warn)
+    // Settles PRs merged or closed since the last start, so no artifact stays open (also before a reset).
+    await syncReviews(deps)
     await closeOpenPullRequests(deps, host, warn)
     if (resetRepo) await resetRepository(deps, host, warn)
     await deriveStages(deps, host, warn)
@@ -53,25 +55,36 @@ export async function startup(deps: UseCaseDeps, { resetRepo = false }: StartupO
   return { warnings }
 }
 
-/** Stops running agents, empties the database and runs the start again, including the repo reset. */
+/**
+ * Stops running agents, empties the database and runs the start again, including the repo reset.
+ * Until it finishes, starting or answering a stage (and a second reset) is rejected.
+ * @throws {ConflictError} while another reset runs.
+ */
 export async function resetSystem(deps: UseCaseDeps): Promise<StartupReport> {
-  let stopped = 0
-  for (const ticket of deps.tickets.list()) {
-    if (ticket.state === 'running') {
-      deps.agent.stop(ticket.key)
-      stopped++
+  if (deps.resetState.resetting) throw new ConflictError(RESET_RUNNING)
+  deps.resetState.resetting = true
+  try {
+    let stopped = 0
+    for (const ticket of deps.tickets.list()) {
+      if (ticket.state === 'running') {
+        deps.agent.stop(ticket.key)
+        stopped++
+      }
     }
+    if (stopped > 0) await sleep(deps.stopSettleMs)
+    deps.tickets.clear()
+    return await startup(deps, { resetRepo: true })
+  } finally {
+    deps.resetState.resetting = false
   }
-  if (stopped > 0) await sleep(deps.stopSettleMs)
-  deps.tickets.clear()
-  return startup(deps, { resetRepo: true })
 }
 
 /** Creates the baseline tag and the base branch if they are missing. */
-async function prepareBaseBranch(deps: UseCaseDeps, host: CodeHost): Promise<void> {
-  const { createdTag, createdBranch } = await host.prepareBaseBranch()
+async function prepareBaseBranch(deps: UseCaseDeps, host: CodeHost, warn: Warn): Promise<void> {
+  const { createdTag, createdBranch, baselineHasWork } = await host.prepareBaseBranch()
   if (createdTag) console.log('[startup] Ausgangs-Tag auf den Default-Branch gelegt')
   if (createdBranch) console.log(`[startup] Branch ${deps.baseBranch} auf den Ausgangs-Tag gelegt`)
+  if (baselineHasWork) warn('Ausgangsstand showcase-base enthält bereits docs/work — diese Tickets starten nicht in Stufe 1')
 }
 
 /**
