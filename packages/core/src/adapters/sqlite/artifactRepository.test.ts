@@ -36,7 +36,7 @@ describe('artifacts', () => {
 
   it('marks merges with their time', () => {
     const artifact = open(3)
-    const at = new Date('2026-10-28T12:00:00Z')
+    const at = new Date('2026-10-28T12:00:00.123Z')
     artifacts.markMerged(artifact.id, at)
     expect(artifacts.listForTicket('CB-1')[0]).toMatchObject({ prState: 'merged', mergedAt: at })
     expect(artifacts.findOpen('CB-1', 'plan')).toBeNull()

@@ -1,4 +1,4 @@
-import { and, count, eq } from 'drizzle-orm'
+import { and, count, eq, sql } from 'drizzle-orm'
 import type { AgentRunRepository } from '../../ports'
 import type { SqliteDb } from './database'
 import { agentRuns } from './schema'
@@ -48,6 +48,6 @@ export function createSqliteAgentRunRepository(db: SqliteDb): AgentRunRepository
         .orderBy(agentRuns.seq)
         .all(),
 
-    findStuck: () => db.select().from(agentRuns).where(eq(agentRuns.status, 'running')).all(),
+    findStuck: () => db.select().from(agentRuns).where(eq(agentRuns.status, 'running')).orderBy(sql`rowid`).all(),
   }
 }

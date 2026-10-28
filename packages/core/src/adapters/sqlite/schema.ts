@@ -5,7 +5,7 @@ import type { AgentRunInput } from '../../domain/types'
 import type { AuditEventType } from '../../ports'
 
 const id = () => text('id').primaryKey().$defaultFn(() => randomBytes(8).toString('hex'))
-const timestamp = (name: string) => integer(name, { mode: 'timestamp' })
+const timestamp = (name: string) => integer(name, { mode: 'timestamp_ms' })
 const createdAt = () => timestamp('created_at').notNull().$defaultFn(() => new Date())
 const ticketKey = () => text('ticket_key').notNull().references(() => tickets.key, { onDelete: 'cascade' })
 const artifactStage = () => text('stage', { enum: ['plan', 'design'] }).notNull()
