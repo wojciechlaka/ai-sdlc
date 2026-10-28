@@ -45,12 +45,23 @@ describe('startRefinement', () => {
     useCases.startRefinement('T-1', START)
     expect(errorCodeOf(() => useCases.startRefinement('T-1', START))).toBe('CONFLICT')
   })
+
+  it('checks the ticket state before validating the input', () => {
+    useCases.createTicket({ title: 'T', description: 'D' })
+    useCases.startRefinement('T-1', START)
+    expect(errorCodeOf(() => useCases.startRefinement('T-1', { model: 'm' }))).toBe('CONFLICT')
+  })
 })
 
 describe('answerQuestion', () => {
   it('rejects answers when the ticket is not refining', () => {
     useCases.createTicket({ title: 'T', description: 'D' })
     expect(errorCodeOf(() => useCases.answerQuestion('T-1', { answer: 'x' }))).toBe('CONFLICT')
+  })
+
+  it('checks the ticket state before validating the answer', () => {
+    useCases.createTicket({ title: 'T', description: 'D' })
+    expect(errorCodeOf(() => useCases.answerQuestion('T-1', { answer: '' }))).toBe('CONFLICT')
   })
 
   it('rejects a second answer while the first is still running', () => {
@@ -90,8 +101,15 @@ describe('stopRefinement', () => {
     expect(ctx.events.published.at(-1)).toEqual({ type: 'status', ticketId: 'T-1', status: 'backlog' })
   })
 
-  it('ignores unknown tickets', async () => {
+  it('normalizes the ticket id before stopping the agent', async () => {
+    useCases.createTicket({ title: 'T', description: 'D' })
+    await useCases.stopRefinement('T-01')
+    expect(ctx.agent.stopped).toEqual(['T-1'])
+  })
+
+  it('ignores unknown tickets without stopping an agent', async () => {
     await expect(useCases.stopRefinement('T-404')).resolves.toBeUndefined()
+    expect(ctx.agent.stopped).toEqual([])
   })
 })
 

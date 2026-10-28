@@ -1,5 +1,5 @@
 import { AnswerInput, CreateTicketInput, StartRefinementInput, type TicketDto } from '@refinement/shared'
-import { ConflictError } from '../domain/errors'
+import { ConflictError, errorCode } from '../domain/errors'
 import { canDelete, canStartRefinement, isAnswerInProgress } from '../domain/rules'
 import { formatTicketId } from '../domain/ticketId'
 import { SEED_TICKETS } from '../domain/seeds'
@@ -41,19 +41,19 @@ export function answerQuestion(deps: UseCaseDeps, ticketId: string, raw: unknown
 
 /**
  * Stops the agent and, once it had time to exit, returns a still-refining ticket to backlog.
- * Unknown tickets are ignored (stop is idempotent).
+ * Unknown tickets are ignored (stop is idempotent); the ticket id is normalized before reaching the agent.
  */
 export async function stopRefinement(deps: UseCaseDeps, ticketId: string): Promise<void> {
-  deps.agent.stop(ticketId)
-  await sleep(deps.stopSettleMs)
-
   let ticket: Ticket
   try {
     ticket = requireTicket(deps.tickets, ticketId)
-  } catch {
-    return
+  } catch (err) {
+    if (errorCode(err) === 'NOT_FOUND') return // stop is idempotent for unknown tickets
+    throw err
   }
-  if (ticket.status === 'refining') createReporter(deps, ticket.id).setStatus('backlog')
+  deps.agent.stop(formatTicketId(ticket.id))
+  await sleep(deps.stopSettleMs)
+  if (deps.tickets.findById(ticket.id)?.status === 'refining') createReporter(deps, ticket.id).setStatus('backlog')
 }
 
 export function deleteTicket(deps: UseCaseDeps, ticketId: string): void {
