@@ -1,6 +1,12 @@
 # Refinement Engine
 
-AI-gestützte Ticket-Verfeinerung: Ein Agent analysiert Tickets gegen die Codebase, stellt Rückfragen und liefert strukturierte Refinement-Ergebnisse.
+Führt Tickets durch die ersten beiden Stufen des [AI-Native SDLC Playbook](https://claude.com/resources/articles/the-ai-native-sdlc-playbook):
+**Plan** (Ticket → `intent.md`) und **Design** (Intent → `spec.md`). Ein Agent schreibt das Artefakt, die App legt
+es auf einem eigenen Branch im Ziel-Repo ab und öffnet einen Pull Request. **Der Merge ist die Freigabe** und
+schiebt das Ticket in die nächste Stufe. Die App hält nur Stufe, Zustand, Verweise und ein Log pro Ticket;
+die Inhalte liegen in Git.
+
+Stand: Stufe 1 (Plan) läuft Ende zu Ende. Stufe 2 (Design) folgt.
 
 ## Starten
 
@@ -9,29 +15,95 @@ npm install
 npm run dev
 ```
 
-Startet die Next.js-App unter http://localhost:3000. Beim ersten Start mit leerer Datenbank werden drei Beispiel-Tickets eingefügt.
+Startet die Next.js-App unter http://localhost:3000. Ohne Token läuft die App, kann aber keine Stufe starten
+(Hinweis in der Seitenleiste).
 
-## Ausprobieren
+## Annahmen
 
-1. App starten (`npm run dev`) und http://localhost:3000 öffnen.
-2. In der linken Spalte unter **Repository** eintragen:
-   ```
-   https://github.com/wojciechlaka/node-express-realworld-example-app
-   ```
-   (eigener Fork der Blog-API „Conduit“, siehe [`examples/tickets/`](examples/tickets/README.md))
-3. Ein Beispiel-Ticket öffnen (CB-2 ist der schnellste Lauf) und **Refine** klicken.
+- **Das Ziel-Repo ist öffentlich.** Lesen und Klonen gehen ohne Token. Private Repos sind noch nicht vorgesehen.
+- **Schreiben braucht trotzdem ein Token** (GitHub-Vorgabe): Branch anlegen, Datei committen, PR öffnen.
+- Ablage im Ziel-Repo: `docs/work/<TICKET>/intent.md` (später `spec.md`) auf dem Branch `<TICKET>/intent`
+  (später `<TICKET>/spec`), PR gegen den Default-Branch (beim Beispiel-Repo `master`).
 
-Ein Lauf nutzt den eigenen Claude-Login und verbraucht Tokens. Eine bestehende lokale Datenbank
-zeigt die neuen Beispiel-Tickets erst nach **Reset**.
+## Einrichten
+
+### 1. Ziel-Repo
+
+Vorgabe ist [wojciechlaka/node-express-realworld-example-app](https://github.com/wojciechlaka/node-express-realworld-example-app),
+ein Fork des RealWorld-Backends „Conduit“. In dieses Repo kann nur dessen Besitzer schreiben — wer die App
+selbst ausprobiert, forkt es (oder nimmt ein eigenes öffentliches Repo) und trägt den Fork als `TARGET_REPO` ein.
+
+### 2. GitHub-Token anlegen (Fine-grained Personal Access Token)
+
+1. GitHub öffnen → Profilbild → **Settings** → **Developer settings** → **Personal access tokens** →
+   **Fine-grained tokens** → **Generate new token**
+   (direkt: https://github.com/settings/personal-access-tokens/new).
+2. **Token name:** z. B. `refinement-engine`; **Expiration:** kurz wählen (z. B. 30 Tage).
+3. **Resource owner:** das Konto, dem das Ziel-Repo gehört.
+4. **Repository access:** **Only select repositories** → nur das Ziel-Repo auswählen.
+5. **Permissions → Repository permissions:**
+   - **Contents:** Read and write (Branch anlegen, Datei committen, Branch löschen)
+   - **Pull requests:** Read and write (PR öffnen, Status lesen, PR schließen)
+   - **Metadata:** Read-only (setzt GitHub automatisch)
+6. **Generate token** und den Wert (`github_pat_…`) kopieren — GitHub zeigt ihn nur einmal.
+
+### 3. `apps/web/.env.local`
+
+```bash
+GITHUB_TOKEN=github_pat_...
+TARGET_REPO=https://github.com/<dein-konto>/node-express-realworld-example-app
+```
+
+Die Datei ist in Git ignoriert. Nach einer Änderung die App neu starten.
+
+## Verhalten beim Start
+
+Bei jedem Start (und beim **Reset**-Button, der vorher die Datenbank leert):
+
+1. **Tickets einlesen:** jede Datei `examples/tickets/*.md` wird ein Ticket (siehe
+   [`examples/tickets/README.md`](examples/tickets/README.md)). Geänderter Text wird übernommen, Stufe und Zustand bleiben.
+2. **Merges nachziehen:** PRs, die gemergt wurden, während die App aus war, schieben ihr Ticket weiter.
+3. **Aufräumen:** **alle offenen PRs der App werden geschlossen und ihre Branches gelöscht** — erkannt am
+   Branch-Namen `<TICKET>/intent` bzw. `<TICKET>/spec` eines bekannten Tickets. PRs anderer Branches bleiben
+   unberührt. GitHub kann PRs nicht löschen; geschlossene PRs bleiben in der Historie des Repos.
+4. **Stufe ableiten:** liegt `docs/work/<TICKET>/spec.md` auf dem Default-Branch → Fertig; liegt dort
+   `intent.md` → Stufe 2 Design; sonst Stufe 1 Plan. Gemergte Artefakte bleiben also erhalten.
+
+Ohne Token oder wenn GitHub nicht erreichbar ist, startet die App mit dem Stand der Datenbank und schreibt eine
+Warnung ins Server-Log.
+Jede GitHub-Anfrage bricht nach 15 Sekunden ab. Fehlt der Ordner `examples/tickets`, startet die App nicht
+(Meldung `[startup] App konnte nicht starten` im Server-Log). Der **Reset**-Button fragt vorher nach, weil er die
+Datenbank leert und offene PRs der App schließt.
+
+## Ablauf (Stufe 1)
+
+1. Ticket auf dem Board öffnen (CB-2 ist der kleinste Lauf), Modell wählen, **Plan starten**.
+2. Der Agent liest das Ticket und den Klon des Ziel-Repos. Bei einer blockierenden Unklarheit stellt er eine
+   **Rückfrage** in der App; die Antwort fließt in den nächsten Lauf und landet unter „Geklärte Rückfragen“.
+3. Die App legt `docs/work/<TICKET>/intent.md` auf dem Branch `<TICKET>/intent` an und öffnet den PR
+   `<TICKET>: Intent`.
+4. Auf GitHub prüfen und **mergen** — innerhalb von 60 Sekunden (sofort beim Öffnen der Ticketseite) steht das
+   Ticket in Stufe 2 Design, der Inhalt des Intent ist in der App sichtbar. **Schließen ohne Merge** setzt das
+   Ticket auf „bereit“ zurück und löscht den Branch.
+
+Ein Lauf nutzt den eigenen Claude-Login und verbraucht Tokens; Kosten und Tokens stehen im Log des Tickets.
+
+## Neues Ticket
+
+Eine Datei `examples/tickets/cb-4-<kurzname>.md` anlegen (Format in
+[`examples/tickets/README.md`](examples/tickets/README.md)). **Sie erscheint nach einem Neustart oder Reset als
+neues Ticket.**
 
 ## Struktur
 
 ```
 apps/
-  web/            # Next.js (App Router): UI, Server Actions, SSE-Route – der einzige Prozess
+  web/            # Next.js (App Router): Board, Ticketseite, Server Actions, SSE-Route – der einzige Prozess
 packages/
-  core/           # Fachkern nach Ports & Adapters (Domäne, Use Cases, Adapter für SQLite, Git, Claude CLI, Events)
+  core/           # Fachkern nach Ports & Adapters (Domäne, Use Cases; Adapter für SQLite, GitHub,
+                  # Markdown-Tickets, Git-Klon, Claude CLI, Events)
   shared/         # Zod-Verträge zwischen Kern und UI (DTOs, Inputs, Events, Agent-Ausgabe)
+examples/tickets/ # simulierte Jira-Tickets (Ticket-Eingang)
 ```
 
 Abhängigkeitsrichtung: `web → core → shared`. Domäne und Use Cases importieren keine Adapter; das prüft `npm run lint`.
@@ -40,15 +112,27 @@ Abhängigkeitsrichtung: `web → core → shared`. Domäne und Use Cases importi
 
 - Node.js 20+
 - `claude` CLI eingeloggt (`claude login`); das Binary kommt über `@anthropic-ai/claude-code` als Abhängigkeit von `packages/core`
+- `git` (die App klont das Ziel-Repo für den Agent)
+
+## Umgebungsvariablen (`apps/web/.env.local`)
+
+| Variable                | Vorgabe                                                              | Zweck                                       |
+|-------------------------|----------------------------------------------------------------------|---------------------------------------------|
+| `GITHUB_TOKEN`          | —                                                                    | Schreiben ins Ziel-Repo (siehe oben)        |
+| `TARGET_REPO`           | `https://github.com/wojciechlaka/node-express-realworld-example-app` | Ziel-Repo auf GitHub                        |
+| `REPO_CACHE_DIR`        | `$TMPDIR/repo-cache`                                                 | Ablage des Klons                            |
+| `DB_PATH`               | `apps/web/data/refinement.db`                                        | SQLite-Datei                                |
+| `REFINEMENT_TIMEOUT_MS` | `600000` (10 min)                                                    | maximale Laufzeit eines Agent-Laufs         |
 
 ## Befehle
 
-| Befehl          | Zweck                                   |
-|-----------------|-----------------------------------------|
+| Befehl          | Zweck                                      |
+|-----------------|--------------------------------------------|
 | `npm run dev`   | Entwicklungsserver (http://localhost:3000) |
-| `npm run build` | Typprüfung aller Pakete + `next build`  |
-| `npm start`     | gebaute App starten                     |
-| `npm test`      | alle Tests (Vitest)                     |
-| `npm run lint`  | Abhängigkeitsregel des Hexagons         |
+| `npm run build` | Typprüfung aller Pakete + `next build`     |
+| `npm start`     | gebaute App starten                        |
+| `npm test`      | alle Tests (Vitest)                        |
+| `npm run lint`  | Abhängigkeitsregel des Hexagons            |
 
-Die App läuft als ein dauerhafter Node-Prozess (lang laufende Agent-Prozesse, Event-Bus im Speicher, lokale SQLite). Serverless-Hosting wird nicht unterstützt (siehe [E2](docs/decisions.md)).
+Die App läuft als ein dauerhafter Node-Prozess (lang laufende Agent-Prozesse, Event-Bus im Speicher, lokale
+SQLite, Abgleich-Timer). Serverless-Hosting wird nicht unterstützt (siehe [E2](docs/decisions.md)).
