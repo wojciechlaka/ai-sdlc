@@ -114,22 +114,28 @@ Ein Lauf nutzt den eigenen Claude-Login und verbraucht Tokens; Kosten und Tokens
 
 ## Leitplanken für den Agent
 
-Der Agent darf im Klon des Ziel-Repos nur **lesen**. Das steht nicht nur im Prompt, sondern wird durch Hooks
-von Claude Code durchgesetzt (pro Lauf über `--settings`, eigene Claude-Einstellungen bleiben unberührt):
+Der Agent darf im Klon des Ziel-Repos nur **lesen** — durchgesetzt durch Hooks von Claude Code, nicht nur durch
+den Prompt. Jeder `claude`-Prozess der App läuft in einer Sandbox:
 
-- **Erlaubt:** die Werkzeuge `Read`, `Glob`, `Grep` und lesende `Bash`-Befehle — `ls`, `cat`, `head`, `tail`,
-  `wc`, `grep`, `rg`, `find`, `tree`, `pwd`, `file`, `stat`, `du`, `sort`, `uniq`, `cut`, `awk`, `sed`, `jq` und
-  `git log|show|diff|status|ls-files|blame|grep|branch|rev-parse|cat-file`, auch verkettet mit `|`, `;`, `&&`, `||`.
-- **Blockiert:** alle anderen Werkzeuge (`Write`, `Edit`, `WebFetch`, …) und Befehle, außerdem Umleitungen
-  (`>`, `>>`, `tee`), Befehlsersetzung (`$(…)`, Backticks), `find -delete/-exec`, `sed -i`, `awk` mit `system`,
-  Netzwerk (`curl`, `wget`, `ssh`, …), Interpreter und Paketmanager (`node`, `npm`, `python`, `sh`, …) und
-  schreibende `git`-Befehle.
+- **Lesen nur im Klon:** `Read`, `Glob` und `Grep` sind erlaubt, aber nur für Pfade innerhalb des Klons (Symlinks
+  werden aufgelöst; `/etc/…`, `~/.ssh/…`, `../…` werden abgelehnt).
+- **Bash nur für die git-Historie:** `git log`, `show`, `diff`, `blame`, `ls-files`, `status`, `rev-parse` mit
+  wenigen erlaubten Optionen (z. B. `git log --oneline -n20`, `git blame -L10,40 src/app.ts`), ohne jedes
+  Sonderzeichen (`$`, `;`, `|`, `>`, Anführungszeichen, `~`, …) und ohne Pfade außerhalb. Alles andere —
+  `rm`, `cat`, `curl`, `npm`, `git push`, Umleitungen, Verkettungen — wird blockiert.
+- **Alle anderen Werkzeuge** (`Write`, `Edit`, `WebFetch`, …) sind blockiert.
+- **Keine Secrets im Agent:** Der Prozess sieht nur eine kleine Liste an Umgebungsvariablen (`PATH`, `HOME`,
+  Claude-Login, Proxy) — kein `GITHUB_TOKEN`. Einstellungen und Hooks aus einem `.claude/`-Ordner des Ziel-Repos
+  werden nicht geladen (`--setting-sources user`).
+- **Im Zweifel blockiert:** Kann der Guard nicht laufen, wird der Aufruf abgelehnt.
 
-Der Agent sieht die Begründung und arbeitet ohne den Befehl weiter. Im **Log des Tickets** steht ein blockierter
-Aufruf rot hervorgehoben (z. B. „Blockiert: Bash \`rm -rf docs\` — Befehl rm ist nicht erlaubt (nur lesende
-Befehle)“), während des Laufs auch als Fortschrittszeile. Alle ausgeführten Aufrufe eines Laufs erscheinen
+Der Agent sieht die Begründung und arbeitet ohne den Aufruf weiter. Im **Log des Tickets** steht ein blockierter
+Aufruf rot hervorgehoben (z. B. „Blockiert: Bash \`rm -rf docs\` — Befehl rm ist nicht erlaubt. Nur git
+log/show/diff/blame/ls-files/status/rev-parse ohne Sonderzeichen erlaubt — zum Lesen Read, Glob oder Grep
+verwenden“), während des Laufs auch als Fortschrittszeile. Alle ausgeführten Aufrufe eines Laufs erscheinen
 zusammengefasst als „N Werkzeugaufrufe“ und lassen sich aufklappen. Bei der Codebase-Analyse (ohne Ticket)
-landen blockierte Aufrufe nur im Server-Log. Die Regeln stehen in `packages/core/hooks/guardPolicy.mjs`.
+landen blockierte Aufrufe nur im Server-Log. Regeln: `packages/core/hooks/guardPolicy.mjs`; Sandbox:
+`packages/core/src/adapters/agentSandbox/agentSandbox.ts`.
 
 ## Neues Ticket
 

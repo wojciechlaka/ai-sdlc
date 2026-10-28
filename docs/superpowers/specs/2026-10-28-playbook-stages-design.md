@@ -214,39 +214,67 @@ durch, und jeder Werkzeugaufruf des Agents wird nachvollziehbar (Playbook: „Go
 die Use Cases nach den Regeln der Domäne. Ein DB-Werkzeug für den Agent würde diese Regeln umgehen. Der Hook
 sitzt deshalb dort, wo das Risiko liegt: an den Werkzeugen des Agents.
 
-**Hooks (pro Aufruf über `--settings`, Nutzer- und Projekt-Einstellungen bleiben unberührt).**
-- `PreToolUse` (Matcher: alle Werkzeuge) → `packages/core/hooks/guard.mjs`: erlaubt `Read`, `Glob`, `Grep` und
-  lesende `Bash`-Befehle; alles andere wird mit `permissionDecision: "deny"` und Begründung abgelehnt. Der Agent
-  sieht die Begründung und arbeitet ohne den Befehl weiter.
-- `PostToolUse` (alle Werkzeuge) → `packages/core/hooks/audit.mjs`: hält jeden ausgeführten Aufruf kurz fest
-  (Werkzeug, Datei bzw. Befehl, bei Bash der Exit-Code).
-- Beide Skripte sind reines Node (`.mjs`), schreiben je eine JSON-Zeile in die Datei aus der Umgebungsvariable
-  `REFINEMENT_HOOK_LOG` (pro Lauf eine Datei) und scheitern nie hart: Fehler im Audit-Skript ändern nichts am Lauf,
-  ein Fehler im Guard lehnt im Zweifel ab.
-- `--allowedTools` wird `Read,Glob,Grep,Bash` (`LS` ist kein Werkzeug mehr).
+**Sandbox jedes `claude`-Prozesses** (Agent und Codebase-Analyse; gebaut einmal in `compose.ts` von
+`adapters/agentSandbox`, an beide Adapter gereicht):
+- `--setting-sources user`: Projekt- und lokale Einstellungen des fremden Klons (`.claude/settings*.json`, samt
+  deren Hooks) werden nie geladen. Unsere Hooks kommen pro Aufruf über `--settings`.
+- `--allowedTools Read,Glob,Grep,Bash` (`LS` ist kein Werkzeug mehr).
+- Umgebung nur aus einer Positivliste: `PATH`, `HOME`, `USER`, `LANG`, `LC_ALL`, `TERM`, `TMPDIR`, `SHELL`,
+  `ANTHROPIC_API_KEY`, `CLAUDE_CONFIG_DIR`, `CLAUDE_CODE_*`, Proxy-Variablen (`HTTP(S)_PROXY`, `NO_PROXY`,
+  `NODE_EXTRA_CA_CERTS`); dazu `REFINEMENT_HOOK_LOG`, `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null`.
+  **Kein `GITHUB_TOKEN`** und keine anderen Variablen der App. Die `.git/config` des Klons legt die App selbst an.
 
-**Regel für Bash (Positivliste).** Der Befehl wird an `|`, `;`, `&&`, `||` in Teile zerlegt; jeder Teil muss mit
-einem erlaubten Befehl beginnen: `ls`, `cat`, `head`, `tail`, `wc`, `grep`, `rg`, `find`, `tree`, `pwd`, `file`,
-`stat`, `du`, `sort`, `uniq`, `cut`, `awk` (ohne `system`), `sed` (ohne `-i`), `jq`, `git` mit `log`, `show`, `diff`,
-`status`, `ls-files`, `blame`, `grep`, `branch`, `rev-parse`, `cat-file`. Abgelehnt werden immer: Ausgabeumleitung
-(`>`, `>>`, `tee`), Befehlsersetzung (`$(…)`, Backticks), `find` mit `-delete`/`-exec`/`-ok`, Netzwerk
-(`curl`, `wget`, `nc`, `ssh`), Paketmanager und Interpreter (`npm`, `npx`, `node`, `python`, `sh`, `bash`, `eval`),
-alle übrigen `git`-Befehle. Die Regel ist eine reine Funktion (`hooks/guardPolicy.mjs`) mit eigenen Tests.
+**Hooks.**
+- `PreToolUse` (Matcher: alle Werkzeuge) → `packages/core/hooks/guard.mjs`: entscheidet nach `hooks/guardPolicy.mjs`;
+  Abgelehntes bekommt `permissionDecision: "deny"` und eine Begründung, der Agent arbeitet ohne den Aufruf weiter.
+  **Scheitert geschlossen:** Regel und I/O werden im `try` geladen, jeder eigene Fehler lehnt ab; startet `node`
+  oder das Skript gar nicht, endet der Hook-Befehl über `|| { echo 'Guard nicht ausführbar' >&2; exit 2; }` mit
+  Exit-Code 2 (blockierend).
+- `PostToolUse` (alle Werkzeuge) → `packages/core/hooks/audit.mjs`: hält jeden ausgeführten Aufruf fest
+  (Werkzeug und Datei, Muster bzw. Befehl). Einen Exit-Code liefert das Bash-Werkzeug an den Hook nicht
+  verlässlich; er wird nicht erfasst. Scheitert offen (Exit-Code 0).
+- Beide Skripte sind reines Node (`.mjs`, nur `node:`-Module und Nachbarskripte, per ESLint geprüft) und schreiben
+  je eine JSON-Zeile in die Datei aus `REFINEMENT_HOOK_LOG` (pro Versuch eine Datei).
+
+**Regel (Positivliste, kein Shell-Parser).** Zum Erkunden des Codes sind `Read`, `Glob` und `Grep` da; `Bash` ist nur
+eine schmale Tür für die git-Historie.
+- `Read`, `Glob`, `Grep` nur **innerhalb des Klons**: `file_path`/`path` wird gegen `cwd` aufgelöst und über
+  `realpath` (Symlinks!) geprüft; `~` ist nicht erlaubt. Glob-Muster (`Glob.pattern`, `Grep.glob`) dürfen nicht
+  absolut sein (auch nicht in `{a,b}`) und kein `..` enthalten. Der reguläre Ausdruck `Grep.pattern` ist kein Pfad
+  und bleibt frei.
+- `Bash` nur, wenn der Befehl höchstens 300 Zeichen hat, **keines** der Zeichen
+  `` $ ` ; & | < > ( ) { } [ ] * ? ! ~ \ ' " `` und kein Steuerzeichen (Zeilenumbruch, Tab, …) enthält — auch nicht in
+  Anführungszeichen —, an einfachen Leerzeichen in Wörter zerfällt und dieser Grammatik folgt:
+  `git [--no-pager] <unterbefehl> <wort>…` mit den Optionen
+  `log`: `--oneline`, `-n<zahl>`, `-<zahl>`, `--stat`, `--name-only`, `--name-status`, `--since=<datum>`,
+  `--author=<name>`, `--follow`, `--` · `show`: `--stat`, `--name-only`, `--oneline` ·
+  `diff`: `--stat`, `--name-only`, `--name-status`, `--no-ext-diff`, `--` · `blame`: `-L<n>,<m>` ·
+  `ls-files`: `--` · `status`: `--short`, `--porcelain` · `rev-parse`: `--short`, `--abbrev-ref`.
+  Andere Wörter müssen `^[A-Za-z0-9._/:@=+-]+$` erfüllen, dürfen nicht mit `/` beginnen und kein `..` enthalten.
+  Revisionen sind damit `HEAD`, Hashes, Branch- und Tag-Namen und `rev:pfad`; `HEAD~1`, `HEAD^` und Bereiche
+  `a..b` sind bewusst nicht möglich.
+- Alle anderen Werkzeuge werden abgelehnt. Die Regel ist `hooks/guardPolicy.mjs` mit Tabellentests, in denen auch
+  alle bekannten Umgehungen (Verkettung, Umleitung, Ersetzung, Klammer-Expansion, ANSI-C-Quoting, `/dev/tcp`,
+  `git grep -O`, `sort -o`, `sed …w`, Lesen außerhalb des Klons) als Ablehnung stehen.
 
 **Rückweg in die App.** Der Claude-CLI-Adapter legt pro Lauf die Log-Datei an, liest neue Zeilen während des Laufs
 mit und meldet sie über einen neuen Rückkanal am Port: `AgentRunner.run(input, { onProgress, onToolEvent })` mit
-`ToolEvent = { kind: 'blocked' | 'used', tool, target, reason?, exitCode? }`. Der Kern schreibt daraus
+`ToolEvent = { kind: 'blocked' | 'used', tool, target, reason? }`. Der Kern schreibt daraus
 Log-Einträge `guard_blocked` (Akteur `system`, mit Begründung) und `tool_used` (Akteur `agent`) — nur solange der
 Versuch aktuell ist — und sendet `progress` für blockierte Aufrufe. Die Ticketseite zeigt blockierte Aufrufe
 hervorgehoben; `tool_used`-Einträge eines Laufs werden zusammengefasst angezeigt (aufklappbar), damit das Log
 lesbar bleibt.
 
-**Codebase-Analyse.** Der Lauf, der die Übersicht erzeugt (`adapters/git/repoCache.ts`), bekommt denselben Guard
-(ohne Rückweg ins Ticket-Log; blockierte Aufrufe nur im Server-Log). Pfad der Skripte kommt aus der Komposition
-(`resolveCorePaths` → `hooksDir`), damit kein Adapter einen anderen importiert.
+**Codebase-Analyse.** Der Lauf, der die Übersicht erzeugt (`adapters/git/repoCache.ts`), läuft in derselben Sandbox
+(ohne Rückweg ins Ticket-Log; blockierte Aufrufe nur im Server-Log). Der Pfad der Skripte kommt aus der Komposition
+(`resolveCorePaths` → `hooksDir` → `createAgentSandbox`), damit kein Adapter einen anderen importiert.
 
-**Tests.** `guardPolicy` mit vielen erlaubten und verbotenen Befehlen; `guard.mjs`/`audit.mjs` als echte
-Prozesse (stdin-JSON → stdout/Log-Datei); Adapter: `--settings` und Umgebung im Aufruf, Mitlesen der Log-Datei;
+**Grenzen.** Ein Hook, der in sein Zeitlimit (10 s) läuft, blockiert nicht; die Skripte brauchen Millisekunden.
+Was der Agent im Klon liest, sieht er ganz — der Klon ist öffentlich.
+
+**Tests.** `guardPolicy` mit vielen erlaubten und verbotenen Befehlen und Pfaden; `guard.mjs`/`audit.mjs` als echte
+Prozesse (stdin-JSON → stdout/Log-Datei); Guard-Befehl über `/bin/sh -c` (fehlendes Skript → Exit-Code 2, kaputte
+Regel → Ablehnung); Sandbox: Flags und Umgebung (ohne `GITHUB_TOKEN`); Adapter: Sandbox im Aufruf, Mitlesen der Log-Datei;
 Kern: `guard_blocked`/`tool_used` im Log, nicht bei veraltetem Versuch; Web: Darstellung im Log. Optional, nur nach
 Zustimmung: ein kleiner Eval mit echtem `claude` (Haiku) in einem Temp-Ordner, der einen verbotenen Befehl
 provoziert und prüft, dass er blockiert wird.

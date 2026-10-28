@@ -9,7 +9,7 @@ npm install          # install all workspace dependencies
 npm run dev          # Next.js dev server on :3000 (single process)
 npm run build        # tsc --noEmit for packages + next build
 npm test             # all workspace tests (Vitest)
-npm run lint         # hexagon dependency rule (packages/core)
+npm run lint         # hexagon dependency rule + hook scripts (packages/core)
 
 npm test -w packages/core                       # core only
 npm test -w packages/core -- src/domain/rules   # single file / pattern
@@ -44,7 +44,8 @@ apps/web/          Next.js App Router — driving adapter: Server Components (re
                    lib/container.ts = composition root (engine singleton on globalThis)
 packages/core/     domain/ (pure rules, naming, Markdown rendering), ports/ (interfaces),
                    application/ (use cases), adapters/ (sqlite, github, markdownTickets, git, claudeCli,
-                   nodeEvents), compose.ts (createRefinementEngine wires real adapters)
+                   agentSandbox, nodeEvents), compose.ts (createRefinementEngine wires real adapters),
+                   hooks/ (guard/audit scripts Claude Code runs per tool call)
 packages/shared/   Zod contracts: DTOs, inputs, TicketEvent, agent output (IntentSchema; RefinementOutputSchema for stage 2)
 examples/tickets/  simulated Jira tickets — the only ticket source (`# CB-3: Title`, text, `**Priorität:** …`)
 ```
@@ -106,15 +107,21 @@ running|awaiting_answer --stop--> ready
 6. Events reach the browser via `GET /api/events?ticketKey=` (ticket page) or `GET /api/events` (board);
    clients call `router.refresh()` on state/question events
 
-**Guard and audit hooks (spec §13):** every `claude` run (agent and codebase summary) gets
-`--allowedTools Read,Glob,Grep,Bash` and `--settings` with a `PreToolUse` hook (`packages/core/hooks/guard.mjs`,
-fails closed: denies with a reason) and a `PostToolUse` hook (`hooks/audit.mjs`, fails open). Both append JSON lines
-to `$REFINEMENT_HOOK_LOG`, a temp file per attempt that `adapters/claudeCli/hookLog.ts` follows during the run and
-reports as `ToolEvent` (`{ kind: 'blocked' | 'used', tool, target, reason?, exitCode? }`) via
-`AgentRunner.run(input, { onProgress, onToolEvent })`. `executeRun` turns them into `guard_blocked` (system, plus a
-progress event) / `tool_used` (agent) log entries while the attempt is current. The summary run (`adapters/git`)
-only warns about blocked calls in the server log. `hooks/` holds plain Node ESM scripts (no imports from `src`,
-type-checked via `checkJs`); adapters get the path as `hooksDir` from `resolveCorePaths`.
+**Agent sandbox, guard and audit hooks (spec §13):** `adapters/agentSandbox` (built once in `compose.ts`, passed to
+the claudeCli and git adapters) gives every `claude` process `--setting-sources user` (the clone's `.claude/` settings
+and hooks are never loaded), `--allowedTools Read,Glob,Grep,Bash`, `--settings` with a `PreToolUse` hook
+(`packages/core/hooks/guard.mjs`) and a `PostToolUse` hook (`hooks/audit.mjs`), and an allowlisted env (no
+`GITHUB_TOKEN`; `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null`). Policy (`hooks/guardPolicy.mjs`, no shell
+parsing): Read/Glob/Grep only inside the realpath of the clone; Bash only `git log|show|diff|blame|ls-files|status|
+rev-parse` with allowlisted options, no shell special characters at all, no absolute paths or `..`; every other tool
+denied. The guard fails closed (modules loaded inside `try`; shell fallback `|| … exit 2` if node cannot run it);
+audit fails open. Both append JSON lines to `$REFINEMENT_HOOK_LOG`, a temp file per attempt that
+`adapters/claudeCli/hookLog.ts` follows during the run and reports as `ToolEvent` (`{ kind: 'blocked' | 'used', tool,
+target, reason? }`) via `AgentRunner.run(input, { onProgress, onToolEvent })`. `executeRun` turns them into
+`guard_blocked` (system, plus a progress event) / `tool_used` (agent) log entries while the attempt is current. The
+summary run (`adapters/git`) only warns about blocked calls in the server log. `hooks/` holds plain Node ESM scripts
+(only `node:` modules and sibling scripts — ESLint; no imports between `hooks/` and `src/` — ArchUnitTS; type-checked
+via `checkJs`).
 
 **Attempt identity:** every background step checks `isCurrentRun` (`application/beginRun.ts`: ticket still
 `running` and this run is its latest). Stop, restart and reset therefore never let a stale job write state;
@@ -150,6 +157,7 @@ makes `startStage`/`answerQuestion` throw a `ConflictError`.
   `FakeTicketSource`, `FakeAgentRunner` (`hold()`/`stop()`, scripted `progress`/`toolEvents`, recorded `callbacks`),
   `createTestContext({ token })`, `seedTicket`
 - `packages/core/hooks/{guardPolicy,guard,audit,hookIo}.mjs` — guard/audit hook scripts for the agent (spec §13)
+- `packages/core/src/adapters/agentSandbox/agentSandbox.ts` — flags, hook settings and env allowlist of every `claude` process
 - `packages/core/skills/intent-agent.md` — stage 1 skill, included verbatim in the prompt
   (`refinement-agent.md` is kept for stage 2)
 
@@ -161,8 +169,9 @@ makes `startStage`/`answerQuestion` throw a `ConflictError`.
   port + both implementations (SQLite and in-memory fake)
 - **New stage agent**: skill file in `packages/core/skills/`, output schema in `packages/shared`, entry in
   `STAGE_AGENTS` (`adapters/claudeCli/index.ts`), add the stage to `STARTABLE_STAGES`
-- **Change what the agent may do**: edit the lists in `packages/core/hooks/guardPolicy.mjs` (pure `decide()`), extend
-  the table tests in `hooks/guardPolicy.test.ts`; the scripts run per tool call, so no restart is needed
+- **Change what the agent may do**: edit `GIT_OPTIONS` / the checks in `packages/core/hooks/guardPolicy.mjs`
+  (`decide()`), extend the table tests in `hooks/guardPolicy.test.ts` (keep every known bypass as a deny case); the
+  scripts run per tool call, so no restart is needed. Env passed to `claude`: `ENV_ALLOWLIST` in `agentSandbox.ts`
 - **New log event**: add the type to `AuditEventType` (`ports/auditLog.ts`) and a line to `apps/web/lib/logFormat.ts`
 - **New UI**: `apps/web/components/`; mutations as Server Actions in `apps/web/app/actions.ts` using `runAction`;
   UI primitives in `apps/web/components/ui/` (shadcn/Base UI)

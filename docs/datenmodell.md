@@ -131,8 +131,8 @@ Das Log pro Ticket, append-only (Tabelle `audit_events`); die Ticketseite zeigt 
 | `stage_changed` | system | `{ from, to }` |
 | `cleanup` | system | `{ prNumber, branch }` — beim Start geschlossener PR der App |
 | `error` | system | `{ message }` — fehlgeschlagener Lauf oder PR nicht mehr auffindbar |
-| `guard_blocked` | system | `{ tool, target, reason }` — der Guard-Hook hat einen Werkzeugaufruf des Agents abgelehnt |
-| `tool_used` | agent | `{ tool, target, exitCode? }` — ausgeführter Werkzeugaufruf (`target`: Befehl, Datei oder Muster, max. 200 Zeichen; `exitCode` bei Bash, falls bekannt) |
+| `guard_blocked` | system | `{ tool, target, reason }` — der Guard-Hook hat einen Werkzeugaufruf des Agents abgelehnt (`target` max. 1000 Zeichen) |
+| `tool_used` | agent | `{ tool, target }` — ausgeführter Werkzeugaufruf (`target`: Befehl, Datei oder Muster, max. 200 Zeichen) |
 
 ## Stufe und Zustand
 

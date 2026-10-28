@@ -110,13 +110,14 @@ Token aus; geschrieben wird nur über `CodeHost` mit `GITHUB_TOKEN`.
    der Browser zeigt den Fortschritt und lädt bei Zustand oder Rückfrage die Seite neu.
 
 **Leitplanken für den Agent.** Dass der Agent im Klon nur liest, setzen Hooks von Claude Code durch, nicht nur der
-Prompt: Jeder `claude`-Aufruf (Agent und Codebase-Summary) bekommt per `--settings` einen `PreToolUse`-Hook
-(`packages/core/hooks/guard.mjs`, Positivliste für Werkzeuge und Bash-Befehle, lehnt im Zweifel ab) und einen
-`PostToolUse`-Hook (`hooks/audit.mjs`). Beide schreiben JSON-Zeilen in eine Datei pro Versuch, die der
-Claude-CLI-Adapter während des Laufs mitliest und als `ToolEvent` über `AgentRunner.run(input, { onProgress,
-onToolEvent })` meldet; der Kern schreibt daraus `guard_blocked`/`tool_used` ins Log, solange der Versuch aktuell
-ist. Die Skripte sind reines Node ohne Abhängigkeit zu `src`; den Pfad (`hooksDir`) reicht die Komposition an die
-Adapter. Der Agent schreibt nie in die DB — Zustände ändern nur die Use Cases.
+Prompt. Jeder `claude`-Prozess (Agent und Codebase-Summary) läuft in einer Sandbox (`adapters/agentSandbox`, einmal
+in `compose.ts` gebaut): nur Nutzer-Einstellungen (`--setting-sources user`, nichts aus `.claude/` des fremden
+Klons), Umgebung aus einer Positivliste (kein `GITHUB_TOKEN`), ein `PreToolUse`-Hook (`packages/core/hooks/guard.mjs`)
+und ein `PostToolUse`-Hook (`hooks/audit.mjs`). Der Guard lässt `Read`/`Glob`/`Grep` nur innerhalb des Klons zu und
+`Bash` nur für wenige lesende git-Befehle ohne Sonderzeichen; im Zweifel lehnt er ab. Beide Hooks schreiben
+JSON-Zeilen in eine Datei pro Versuch, die der Claude-CLI-Adapter während des Laufs mitliest und als `ToolEvent` über
+`AgentRunner.run(input, { onProgress, onToolEvent })` meldet; der Kern schreibt daraus `guard_blocked`/`tool_used` ins
+Log, solange der Versuch aktuell ist. Der Agent schreibt nie in die DB — Zustände ändern nur die Use Cases.
 
 Jeder Hintergrundschritt prüft, ob sein Lauf noch der aktuelle ist. Stop, Neustart und Reset lassen so keinen
 veralteten Lauf Zustand schreiben; ein PR aus einem veralteten Lauf wird wieder geschlossen.
