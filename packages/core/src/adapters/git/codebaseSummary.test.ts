@@ -41,6 +41,66 @@ describe('getCommitHash', () => {
   })
 })
 
+describe('getCommitHash — cache key', () => {
+  function commit(dir: string, file: string): void {
+    fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true })
+    fs.writeFileSync(path.join(dir, file), String(Math.random()))
+    execFileSync('git', ['add', '.'], { cwd: dir })
+    execFileSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=T', 'commit', '-q', '-m', file], { cwd: dir })
+  }
+
+  it('stays the same for commits that only touch docs/work and changes for code commits', () => {
+    const repo = makeTempRepo()
+    try {
+      commit(repo, 'src/a.ts')
+      const key = getCommitHash(repo)
+      commit(repo, 'docs/work/CB-1/intent.md')
+      expect(getCommitHash(repo)).toBe(key)
+      commit(repo, 'src/b.ts')
+      expect(getCommitHash(repo)).not.toBe(key)
+    } finally {
+      fs.rmSync(repo, { recursive: true, force: true })
+    }
+  })
+
+  it('falls back to HEAD when only docs/work exists', () => {
+    const repo = makeTempRepo()
+    try {
+      commit(repo, 'docs/work/CB-1/intent.md')
+      const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repo }).toString().trim()
+      expect(getCommitHash(repo)).toBe(head)
+    } finally {
+      fs.rmSync(repo, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('ensureRepoSummary — outdated files', () => {
+  it('removes summaries of the same model for older keys after writing a new one', async () => {
+    const repo = makeTempRepo()
+    mockSpawn.mockImplementation((() => {
+      const proc = new EventEmitter() as any
+      proc.stdin = Object.assign(new EventEmitter(), { write: vi.fn(), end: vi.fn() })
+      proc.stdout = new EventEmitter()
+      proc.stderr = new EventEmitter()
+      setTimeout(() => {
+        proc.stdout.emit('data', Buffer.from(JSON.stringify({ type: 'result', subtype: 'success', result: 'neu' }) + '\n'))
+        proc.emit('close', 0)
+      }, 5)
+      return proc
+    }) as never)
+    try {
+      fs.writeFileSync(path.join(repo, 'codebase-summary-oldhash-m1.md'), 'alt')
+      fs.writeFileSync(path.join(repo, 'codebase-summary-oldhash-m2.md'), 'anderes Modell')
+      await ensureRepoSummary(repo, 'm1', () => {}, OPTIONS)
+      const files = fs.readdirSync(repo).filter((f) => f.startsWith('codebase-summary-')).sort()
+      expect(files).toEqual([`codebase-summary-${getCommitHash(repo)}-m1.md`, 'codebase-summary-oldhash-m2.md'])
+    } finally {
+      fs.rmSync(repo, { recursive: true, force: true })
+    }
+  })
+})
+
 describe('ensureRepoSummary — summary run with guard and audit hooks', () => {
   it('runs claude in the sandbox and reports blocked calls only as server warnings', async () => {
     vi.stubEnv('GITHUB_TOKEN', 'ghp_secret')

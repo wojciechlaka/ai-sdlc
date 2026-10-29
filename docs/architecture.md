@@ -103,7 +103,8 @@ Token aus; geschrieben wird nur über `CodeHost` mit `GITHUB_TOKEN`.
 
 1. Server Action `startStageAction` → Use Case `startStage`: prüft Zustand und Token, setzt `running`, legt den
    AgentRun an und übergibt den Lauf an den Hintergrund.
-2. Klon des Ziel-Repos aktualisieren → Codebase-Summary → `claude --print` mit dem Skill der Stufe
+2. Klon des Ziel-Repos aktualisieren → Codebase-Summary (Cache-Schlüssel: letzter Commit außerhalb von `docs/work`,
+   Showcase-Merges entwerten sie nicht; veraltete Dateien desselben Modells werden gelöscht) → `claude --print` mit dem Skill der Stufe
    (`skills/intent-agent.md`), Ausgabe per Zod geprüft, ein Wiederholungsversuch.
 3. **Rückfrage** → `awaiting_answer`; die Antwort (`answerQuestion`) startet einen neuen Lauf mit dem
    Q&A-Verlauf.

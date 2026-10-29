@@ -4,7 +4,7 @@ import fsPromises from 'fs/promises'
 import type { ClaudeProcessSandbox } from '../../ports'
 import { describeError } from '../../domain/errors'
 
-// Codebase summary: one sandboxed `claude` run per commit and model, cached as a Markdown file in the clone and
+// Codebase summary: one sandboxed `claude` run per code state (last commit outside docs/work) and model, cached as a Markdown file in the clone and
 // pasted into the agent prompt. Failures only cost the summary — the agent then starts without it.
 
 // Same value as in adapters/claudeCli/errors.ts; adapters must not import each other (architecture test).
@@ -40,13 +40,33 @@ Where to add a new API endpoint, component, model, etc.
 Be concise. Focus on what a developer needs to quickly understand the codebase.`
 
 /**
- * Returns the current HEAD commit hash of the cached repository.
+ * Returns the cache key of the summary: the last commit that changed anything outside `docs/work` (showcase merges
+ * only add work artifacts and must not invalidate the summary). Falls back to HEAD if no such commit exists.
  * @param repoDir - Absolute path to the cloned repository directory.
  */
 export function getCommitHash(repoDir: string): string {
-  return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repoDir, stdio: 'pipe' })
+  const last = execFileSync('git', ['log', '-1', '--format=%H', '--', '.', ':(exclude)docs/work'], {
+    cwd: repoDir,
+    stdio: 'pipe',
+  })
     .toString()
     .trim()
+  if (last) {
+    return last
+  }
+  return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repoDir, stdio: 'pipe' }).toString().trim()
+}
+
+/** Removes summaries of the same model for other keys; failures are irrelevant. */
+async function removeOutdatedSummaries(repoDir: string, keepPath: string, model: string): Promise<void> {
+  const names = await fsPromises.readdir(repoDir).catch(() => [] as string[])
+  const suffix = `-${model}.md`
+  for (const name of names) {
+    const full = path.join(repoDir, name)
+    if (name.startsWith('codebase-summary-') && name.endsWith(suffix) && full !== keepPath) {
+      await fsPromises.rm(full, { force: true }).catch(() => {})
+    }
+  }
 }
 
 // Deduplicates concurrent calls for the same summary path — both callers await the same job.
@@ -84,6 +104,7 @@ async function generateAndCache(
     onProgress(`Codebase wird analysiert (einmalig für das Modell: ${model})…`)
     const summary = await runSummaryJob(repoDir, model, options)
     await fsPromises.writeFile(summaryPath, summary)
+    await removeOutdatedSummaries(repoDir, summaryPath, model)
     onProgress('Codebase-Analyse abgeschlossen.')
     return summary
   } catch (err) {
@@ -95,7 +116,7 @@ async function generateAndCache(
 }
 
 /**
- * Ensures a Claude-generated codebase summary exists for the current git commit and model.
+ * Ensures a Claude-generated codebase summary exists for the current code state (last commit outside `docs/work`) and model.
  * Returns the cached file immediately on a local cache hit.
  * Deduplicates concurrent generation requests for the same summary via an in-flight map.
  * Returns null without throwing if generation fails for any reason.

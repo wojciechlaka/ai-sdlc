@@ -211,7 +211,8 @@ makes `startStage`/`answerQuestion` throw a `ConflictError`.
   `agentOutput.ts` (JSON extraction, schema validation), `hookLog.ts`, `prompt.ts`
 - `packages/core/src/adapters/git/` — `repoCache.ts` (clone into the cache, checkout of the base branch via fetch +
   `checkout -B FETCH_HEAD`, `getRepoDir`, factory with `baseBranch`),
-  `codebaseSummary.ts` (summary prompt, in-flight dedupe, sandboxed summary run, blocked-call warnings)
+  `codebaseSummary.ts` (summary prompt, in-flight dedupe, sandboxed summary run, blocked-call warnings; cache key = last
+  commit outside `docs/work`, so showcase merges keep the summary; outdated files of the same model are deleted)
 - `packages/core/src/adapters/sqlite/schema.ts` — Drizzle schema: `tickets`, `agent_runs`, `artifacts`, `audit_events`
 - `packages/core/src/testing/` — test doubles, all re-exported by `fakes.ts` (tests import from there):
   `inMemoryRepositories.ts`, `fakeCodeHost.ts` (GitHub-like semantics), `fakeTicketSource.ts`, `fakeAgentRunner.ts`
