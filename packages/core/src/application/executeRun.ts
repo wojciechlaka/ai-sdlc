@@ -1,4 +1,4 @@
-import type { StageOutput } from '@refinement/shared'
+import type { AuditPayloads, StageOutput } from '@refinement/shared'
 import type { Ticket } from '../domain/types'
 import { renderIntent } from '../domain/render'
 import { describeError } from '../domain/errors'
@@ -44,7 +44,7 @@ export async function executeRun(deps: UseCaseDeps, ticket: Ticket, request: Exe
   try {
     const { output, meta } = await deps.agent.run(agentInput(ticket, request), {
       onProgress: reporter.logAndProgress,
-      onToolEvent: toolEventRecorder(deps, ticket.key, reporter, isCurrent),
+      onToolEvent: toolEventRecorder(attempt),
     })
     if (!isCurrent()) {
       discardStaleResult(attempt, meta)
@@ -75,19 +75,14 @@ function agentInput(ticket: Ticket, request: ExecuteRunRequest): AgentRunnerInpu
  * Turns the tool calls the guard/audit hooks saw (spec §13) into log entries: blocked calls also as progress.
  * A stale attempt no longer writes to the log.
  */
-function toolEventRecorder(
-  deps: UseCaseDeps,
-  ticketKey: string,
-  reporter: Reporter,
-  isCurrent: () => boolean,
-): (event: ToolEvent) => void {
+function toolEventRecorder({ deps, ticket, reporter, isCurrent }: Attempt): (event: ToolEvent) => void {
   return ({ kind, tool, target, reason }) => {
     if (!isCurrent()) return
     if (kind === 'blocked') {
-      record(deps, ticketKey, 'system', 'guard_blocked', { tool, target, reason })
+      record(deps, ticket.key, 'system', 'guard_blocked', { tool, target, reason })
       reporter.logAndProgress(`Blockiert: ${tool} ${target}`)
     } else {
-      record(deps, ticketKey, 'agent', 'tool_used', { tool, target })
+      record(deps, ticket.key, 'agent', 'tool_used', { tool, target })
     }
   }
 }
@@ -103,8 +98,11 @@ function runUsage(meta: AgentRunMeta): Omit<RunCompletion, 'output'> {
   }
 }
 
+/** Usage fields of a `run_finished` log entry (everything but run id, status and reason). */
+type RunUsagePayload = Omit<AuditPayloads['run_finished'], 'runId' | 'status' | 'reason'>
+
 /** Usage fields of a `run_finished` log entry: model, duration, cost and tokens. */
-function runMetaPayload(meta: AgentRunMeta) {
+function runMetaPayload(meta: AgentRunMeta): RunUsagePayload {
   return { model: meta.model, durationSeconds: meta.durationSeconds, ...runUsage(meta) }
 }
 
