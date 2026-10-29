@@ -175,6 +175,11 @@ async function applyOutput({ deps, ticket, reporter, request, questionsRemaining
         summary: output.result.goal,
       }, request.runId)
       return
+    default: {
+      // Compile-time guard: a new StageOutput type must be handled above.
+      const unhandled: never = output
+      throw new Error(`Unhandled stage output: ${JSON.stringify(unhandled)}`)
+    }
   }
 }
 

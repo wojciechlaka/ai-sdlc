@@ -91,6 +91,30 @@ describe('design stage — intent', () => {
     expect(ctx.store.audit.at(-1)?.payload).toEqual({ message: 'GitHub ist nicht erreichbar' })
   })
 
+  it('stop during the intent read ends the run without starting the agent', async () => {
+    const ctx = setup()
+    let openGate!: () => void
+    const gate = new Promise<void>((resolve) => { openGate = resolve })
+    const original = ctx.codeHost.readFile.bind(ctx.codeHost)
+    let reached = false
+    ctx.codeHost.readFile = async (...args) => {
+      reached = true
+      await gate
+      return original(...args)
+    }
+    startStage(ctx.deps, 'CB-2', MODEL)
+    await vi.waitFor(() => expect(reached).toBe(true))
+    stopRun(ctx.deps, 'CB-2')
+    openGate()
+    await ctx.settle()
+
+    expect(ctx.deps.tickets.findByKey('CB-2')?.state).toBe('ready')
+    expect(ctx.agent.calls).toEqual([])
+    expect(ctx.repos.requestedUrls).toEqual([])
+    expect(ctx.store.runs[0]?.status).toBe('failed')
+    expect(ctx.store.audit.some((e) => e.type === 'error')).toBe(false)
+  })
+
   it('does not read an intent in the plan stage', async () => {
     const ctx = createTestContext()
     seedTicket(ctx, 'CB-3')

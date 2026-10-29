@@ -134,7 +134,6 @@ describe('runAgent (stage plan)', () => {
     const { AgentRunTimeoutError } = await import('../../ports')
     await expect(runAgent(INPUT, callbacks(), { ...OPTIONS, timeoutMs: 50 })).rejects.toBeInstanceOf(AgentRunTimeoutError)
   })
-
 })
 
 describe('runAgent (stage design)', () => {

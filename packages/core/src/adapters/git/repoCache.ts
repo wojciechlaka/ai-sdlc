@@ -81,17 +81,17 @@ function checkoutBaseBranch(repoUrl: string, repoDir: string, baseBranch: string
  * Note: uses execFileSync — blocks the event loop during network I/O.
  *
  * @param repoUrl    - The repository URL.
- * @param cacheDirInput - Root of the clone cache (resolved to an absolute path).
+ * @param cacheDir   - Root of the clone cache (resolved to an absolute path).
  * @param baseBranch - Branch to check out, e.g. `showcase`.
  * @returns The absolute path to the cached repository directory.
  * @throws If `git clone` fails or the fresh clone has no `baseBranch` (a failed update falls back to a fresh clone).
  */
-export async function ensureRepo(repoUrl: string, cacheDirInput: string, baseBranch: string): Promise<string> {
-  const cacheDir = path.resolve(cacheDirInput)
-  const repoDir = getRepoDir(repoUrl, cacheDir)
+export async function ensureRepo(repoUrl: string, cacheDir: string, baseBranch: string): Promise<string> {
+  const root = path.resolve(cacheDir)
+  const repoDir = getRepoDir(repoUrl, root)
 
   if (!fs.existsSync(repoDir)) {
-    freshClone(repoUrl, repoDir, cacheDir)
+    freshClone(repoUrl, repoDir, root)
     checkoutBaseBranch(repoUrl, repoDir, baseBranch)
     return repoDir
   }
@@ -100,7 +100,7 @@ export async function ensureRepo(repoUrl: string, cacheDirInput: string, baseBra
   } catch {
     // Any failed update (not a git repo after an interrupted clone, network error, …) is answered with a fresh
     // clone; the cache has no local changes (cached summaries are regenerated).
-    freshClone(repoUrl, repoDir, cacheDir)
+    freshClone(repoUrl, repoDir, root)
     checkoutBaseBranch(repoUrl, repoDir, baseBranch)
   }
   return repoDir

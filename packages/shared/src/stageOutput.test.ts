@@ -11,6 +11,15 @@ describe('StageOutputSchema', () => {
       options: [{ id: 'A', title: 'a', description: 'd', pros: [], cons: [] }, { id: 'B', title: 'b', description: 'd', pros: [], cons: [] }],
     }
     expect(StageOutputSchema.parse(choice).type).toBe('choice')
+    const spec = {
+      title: 'T', goal: 'G',
+      approach: { chosen: 'C', rationale: 'R', alternatives: [{ name: 'N', reason: 'R' }] },
+      components: [{ name: 'c', purpose: 'p', interface: 'i', dependsOn: [] }],
+      dataFlow: 'D', errorHandling: 'E', acceptanceCriteria: ['K'], tests: 'T',
+      affectedFiles: [{ path: 'a.js', change: 'c', isNew: false }],
+      risks: [{ description: 'D', severity: 'low', mitigation: 'M' }], openPoints: [],
+    }
+    expect(StageOutputSchema.parse({ type: 'spec', result: spec }).type).toBe('spec')
   })
 
   it('rejects unknown output types', () => {
