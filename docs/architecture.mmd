@@ -1,50 +1,29 @@
-flowchart TD
-    subgraph Browser["Browser"]
-        FE["Frontend\nReact 19 + Vite\n:5173"]
+flowchart LR
+    B["Browser<br/><small>localhost:3000</small>"]
+
+    subgraph Web["apps/web · Next.js"]
+        W["Seiten · Actions · SSE"]
     end
 
-    subgraph Backend["Backend — Hono :3000"]
-        REST["REST API\nrestApi.ts"]
-        SSE["SSE Layer\nsseLayer.ts"]
-        ORC["Refinement\nOrchestrator"]
-        CACHE["Repo Cache\nrepoCache.ts"]
-        CLI["Agent CLI\nagentCli/"]
-        EV["Event Bus\nrefinementEvents"]
-        DB[("SQLite\nDrizzle ORM\nrefinement.db")]
+    subgraph Core["packages/core · Hexagon"]
+        UC["Use Cases + Domäne"]
+        AD["Adapter<br/><small>sqlite · git · claudeCli · Events</small>"]
+        UC --> AD
     end
 
-    subgraph Shared["packages/shared"]
-        ZOD["AgentOutputSchema\n(Zod)"]
+    subgraph Ext["Extern"]
+        DB[("SQLite")]
+        GIT["Git-Repo"]
+        CL["claude CLI"]
     end
 
-    subgraph External["Extern"]
-        CLAUDE["claude CLI\nSubprocess"]
-        REPO["Git Repository\n(GitHub etc.)"]
-    end
+    B <-->|"Befehle / Live-Events"| W
+    W --> UC
+    AD --> DB
+    AD --> GIT
+    AD --> CL
 
-    FE -->|"REST: POST /tickets/:id/refine\nPOST /tickets/:id/answer\nGET /tickets"| REST
-    FE -->|"SSE: GET /events?ticketId"| SSE
-
-    REST --> ORC
-    REST --> DB
-
-    ORC --> CACHE
-    ORC --> CLI
-    ORC --> DB
-    ORC -->|"emit: status\nprogress\nquestion"| EV
-
-    EV --> SSE
-    SSE -->|"stream JSON events\nstatus / progress / question"| FE
-
-    CACHE -->|"git clone / pull"| REPO
-    CACHE -->|"spawn: claude --print\n(codebase summary)"| CLAUDE
-
-    CLI -->|"spawn: claude --print\n--output-format stream-json"| CLAUDE
-    CLI --> ZOD
-
-    CLAUDE -->|"stream-json stdout"| CLI
-
-    style Browser fill:#dbeafe,stroke:#3b82f6
-    style Backend fill:#dcfce7,stroke:#16a34a
-    style Shared fill:#fef9c3,stroke:#ca8a04
-    style External fill:#f3e8ff,stroke:#9333ea
+    style Web fill:#dcfce7,stroke:#16a34a
+    style Core fill:#ffedd5,stroke:#ea580c
+    style Ext fill:#f3e8ff,stroke:#9333ea
+    style B fill:#dbeafe,stroke:#3b82f6
