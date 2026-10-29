@@ -22,9 +22,12 @@ export function aCostSummary(patch: Partial<CostSummaryDto> = {}): CostSummaryDt
   }
 }
 
-/** `aTicket` plus the detail fields of the ticket page: no stages, empty log, no open question, no cost. */
+/** `aTicket` plus the detail fields of the ticket page: no stages, empty log, no open question or choice, no cost. */
 export function aTicketDetail(patch: Partial<TicketDetailDto> = {}): TicketDetailDto {
-  return { ...aTicket(patch), stages: [], log: [], pendingQuestion: null, costs: aCostSummary(), ...patch }
+  return {
+    ...aTicket(patch), stages: [], log: [], pendingQuestion: null, pendingChoice: null, questionsAsked: 0, questionLimit: null,
+    costs: aCostSummary(), ...patch,
+  }
 }
 
 /** One log entry of the ticket page, written by `actor` (system by default). */

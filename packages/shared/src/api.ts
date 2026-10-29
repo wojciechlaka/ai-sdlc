@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { ArtifactStageSchema, PrStateSchema, StageSchema, TicketStateSchema } from './stages'
 import { AuditActorSchema } from './auditEvents'
-import { ChoiceIdSchema } from './agentOutput'
+import { ChoiceIdSchema, PendingChoiceSchema } from './agentOutput'
 
 const notBlank = (message: string) => z.string().refine((value) => value.trim().length > 0, message)
 
@@ -101,14 +101,20 @@ export const AuditLogEntrySchema = z.object({
 })
 export type AuditLogEntryDto = z.infer<typeof AuditLogEntrySchema>
 
-/** Everything the ticket page shows: the ticket, its stages, its log and an open question. */
+/** Everything the ticket page shows: the ticket, its stages, its log and an open question or choice. */
 export const TicketDetailSchema = TicketSchema.extend({
   /** One entry per artifact stage, in playbook order. */
   stages: z.array(StageViewSchema),
   /** Log entries, oldest first. */
   log: z.array(AuditLogEntrySchema),
-  /** Question of the agent while the ticket is `awaiting_answer`. */
+  /** Free-text question of the agent while the ticket is `awaiting_answer`. */
   pendingQuestion: z.string().nullable(),
+  /** Approaches to pick from while the ticket is `awaiting_answer` with a choice (stage 2). */
+  pendingChoice: PendingChoiceSchema.nullable(),
+  /** Questions and choices the agent asked since the current stage was last started. */
+  questionsAsked: z.number().int(),
+  /** Maximum of questions and choices in the current stage; null without limit (stage 1, done). */
+  questionLimit: z.number().int().nullable(),
   /** Agent cost of the ticket, per stage and in total. */
   costs: CostSummarySchema,
 })
