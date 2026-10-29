@@ -11,11 +11,12 @@ vi.mock('child_process', async (importOriginal) => {
 })
 
 import { spawn } from 'child_process'
-import { ensureRepoSummary } from './repoCache'
+import { ensureRepoSummary, getCommitHash } from './codebaseSummary'
 import { createAgentSandbox } from '../agentSandbox/agentSandbox'
 
 const mockSpawn = vi.mocked(spawn)
 const HOOKS_DIR = path.resolve(__dirname, '../../../hooks')
+const OPTIONS = { sandbox: createAgentSandbox({ hooksDir: HOOKS_DIR }) }
 
 function makeTempRepo(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'summary-repo-'))
@@ -51,7 +52,7 @@ describe('ensureRepoSummary — summary run with guard and audit hooks', () => {
     }) as never)
 
     try {
-      const summary = await ensureRepoSummary(repo, 'test-model', () => {}, { sandbox: createAgentSandbox({ hooksDir: HOOKS_DIR }) })
+      const summary = await ensureRepoSummary(repo, 'test-model', () => {}, OPTIONS)
 
       expect(summary).toBe('## Stack')
       const args = mockSpawn.mock.calls[0]![1] as string[]
@@ -64,10 +65,44 @@ describe('ensureRepoSummary — summary run with guard and audit hooks', () => {
       expect(settings.hooks.PreToolUse[0].hooks[0].command).toContain(path.join(HOOKS_DIR, 'guard.mjs'))
       expect(settings.hooks.PostToolUse[0].hooks[0].command).toContain(path.join(HOOKS_DIR, 'audit.mjs'))
       expect(warn).toHaveBeenCalledTimes(1)
-      expect(warn).toHaveBeenCalledWith('[repoCache] Blocked: Bash npm install — npm: nicht erlaubt')
+      expect(warn).toHaveBeenCalledWith('[codebaseSummary] Blocked: Bash npm install — npm: nicht erlaubt')
       expect(fs.existsSync(logFile)).toBe(false)
     } finally {
       fs.rmSync(repo, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('ensureRepoSummary', () => {
+  it('returns cached summary and emits a single cache-hit message', async () => {
+    const tmp = makeTempRepo()
+    try {
+      const hash = getCommitHash(tmp)
+      const model = 'test-model'
+      const summaryPath = path.join(tmp, `codebase-summary-${hash}-${model}.md`)
+      fs.writeFileSync(summaryPath, '## Test\nCached content.')
+
+      const messages: string[] = []
+      const result = await ensureRepoSummary(tmp, model, (msg) => messages.push(msg), OPTIONS)
+
+      expect(result).toBe('## Test\nCached content.')
+      expect(messages).toHaveLength(1)
+      expect(messages[0]).toContain('test-model')
+    } finally {
+      fs.rmSync(tmp, { recursive: true })
+    }
+  })
+
+  it('returns null when a subprocess fails (git ENOENT with empty PATH)', async () => {
+    const tmp = makeTempRepo()
+    const originalPath = process.env.PATH
+    try {
+      process.env.PATH = ''
+      const result = await ensureRepoSummary(tmp, 'test-model', () => {}, OPTIONS)
+      expect(result).toBeNull()
+    } finally {
+      process.env.PATH = originalPath
+      fs.rmSync(tmp, { recursive: true })
     }
   })
 })

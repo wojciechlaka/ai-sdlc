@@ -1,3 +1,4 @@
+import os from 'os'
 import path from 'path'
 import { createUseCases, type UseCases } from './application/createUseCases'
 import { createSqliteDatabase } from './adapters/sqlite/database'
@@ -35,6 +36,8 @@ export interface EngineConfig {
   baselineTag?: string
   /** Maximum runtime of one Claude call in ms (`REFINEMENT_TIMEOUT_MS`); default `DEFAULT_AGENT_TIMEOUT_MS`. */
   agentTimeoutMs?: number
+  /** Root of the clone cache (`REPO_CACHE_DIR`); default `$TMPDIR/repo-cache`. */
+  repoCacheDir?: string
 }
 
 const STOP_SETTLE_MS = 500
@@ -77,7 +80,7 @@ export function createRefinementEngine(config: EngineConfig): UseCases {
       ? createGitHubCodeHost({ repoUrl: config.targetRepo, token: config.githubToken, baseBranch, baselineTag })
       : null,
     agent: createClaudeCliAgentRunner({ skillsDir: config.skillsDir, sandbox, timeoutMs: agentTimeoutMs }),
-    repos: createGitRepoProvider({ sandbox }),
+    repos: createGitRepoProvider({ cacheDir: config.repoCacheDir ?? path.join(os.tmpdir(), 'repo-cache'), sandbox }),
     events: createNodeEventPublisher(),
     repoUrl: config.targetRepo,
     baseBranch,

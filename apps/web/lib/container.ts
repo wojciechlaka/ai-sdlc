@@ -31,6 +31,7 @@ export function getEngine(): UseCases {
       targetRepo: process.env.TARGET_REPO || DEFAULT_TARGET_REPO,
       githubToken: process.env.GITHUB_TOKEN || undefined,
       agentTimeoutMs: positiveInt(process.env.REFINEMENT_TIMEOUT_MS),
+      repoCacheDir: process.env.REPO_CACHE_DIR,
     })
   }
   return globalForEngine.__refinementEngine
