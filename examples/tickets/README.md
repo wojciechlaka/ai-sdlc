@@ -1,16 +1,13 @@
-# Seed-Tickets für das Beispiel-Repo „Conduit“
+# Ticket-Eingang: Beispiel-Tickets für „Conduit“
 
-Diese Tickets sind bewusst roh und unterspezifiziert formuliert — so, wie sie ein Stakeholder
-ins Backlog werfen würde. Sie sind der Input für den Refinement Agent, der sie gegen das Repo
+Jede Markdown-Datei in diesem Ordner simuliert ein Jira-Ticket und ist die **einzige Quelle** für die Tickets
+der App. Die Tickets sind bewusst roh und unterspezifiziert — so, wie ein Stakeholder sie ins Backlog wirft.
+Der Intent-Agent macht daraus in Stufe 1 ein `intent.md` im Ziel-Repo
 [wojciechlaka/node-express-realworld-example-app](https://github.com/wojciechlaka/node-express-realworld-example-app)
-schärft (Fork von [gothinkster/node-express-realworld-example-app](https://github.com/gothinkster/node-express-realworld-example-app)).
-Eine Datei pro Ticket; die Dateien simulieren Jira-Tickets und sind die Vorlage für den Ticket-Eingang.
+(Fork von [gothinkster/node-express-realworld-example-app](https://github.com/gothinkster/node-express-realworld-example-app)).
 
-Die App-Seeds in `packages/core/src/domain/seeds.ts` spiegeln diese Dateien derzeit von Hand; das Einlesen
-der Dateien folgt mit dem Umbau auf das Arbeitsmodell.
-
-Kontext zum Repo: Backend des Blogs „Conduit“ (Medium-Klon aus dem RealWorld-Projekt) —
-TypeScript, Express, Prisma; REST-API für Artikel, Kommentare, Tags, Favoriten, Follow und Auth.
+Kontext zum Repo: Backend des Blogs „Conduit“ (Medium-Klon aus dem RealWorld-Projekt) — TypeScript, Express,
+Prisma; REST-API für Artikel, Kommentare, Tags, Favoriten, Follow und Auth.
 
 | Ticket | Zweck in der Demo |
 |---|---|
@@ -18,4 +15,26 @@ TypeScript, Express, Prisma; REST-API für Artikel, Kommentare, Tags, Favoriten,
 | CB-2 Lesezeit | klein — schneller, günstiger Lauf |
 | CB-3 Kommentare melden | fachlich unklar (wer moderiert? was passiert danach?) — Agent muss Regeln erfragen |
 
-Bis zum Wechsel auf dieses Repo zielten die Seeds auf [qvest-digital/coffee-chat](https://github.com/qvest-digital/coffee-chat).
+## Neues Ticket anlegen
+
+1. Datei `cb-<nummer>-<kurzname>.md` in diesem Ordner anlegen, z. B. `cb-4-tags-umbenennen.md`.
+2. Format:
+
+   ```markdown
+   # CB-4: Tags umbenennen
+
+   Freier Text: Was soll sich ändern, für wen, warum? Gern roh und unvollständig.
+
+   **Priorität:** Niedrig
+   ```
+
+   - **Erste Zeile** ist Pflicht: `# <SCHLÜSSEL>: <Titel>`. Der Schlüssel besteht aus einem Präfix
+     (Großbuchstabe, danach Großbuchstaben oder Ziffern), Bindestrich und Nummer (`CB-4`, `B2B-7`) und muss
+     eindeutig sein. Er bestimmt Branch (`CB-4/intent`) und Ablage (`docs/work/CB-4/intent.md`).
+   - Der Text darunter wird die Beschreibung.
+   - Die Zeile `**Priorität:** …` ist optional.
+3. App neu starten oder **Reset** klicken — **das neue Ticket erscheint in Stufe 1 Plan.**
+
+Dateien ohne passende erste Zeile werden mit einer Warnung im Server-Log übersprungen (diese README still).
+Geänderter Text eines bestehenden Tickets wird beim nächsten Start übernommen; Stufe und Zustand bleiben.
+Löscht man eine Datei, bleibt das Ticket bis zum nächsten Reset in der App.

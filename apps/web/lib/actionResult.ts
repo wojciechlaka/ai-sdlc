@@ -1,5 +1,6 @@
 import { errorCode } from '@refinement/core'
 
+/** Outcome of a Server Action: the data, or a German error message the UI shows. */
 export type ActionResult<T = void> = { ok: true; data: T } | { ok: false; error: string }
 
 /**
@@ -10,7 +11,9 @@ export async function runAction<T>(fn: () => T | Promise<T>): Promise<ActionResu
   try {
     return { ok: true, data: await fn() }
   } catch (err) {
-    if (errorCode(err)) return { ok: false, error: (err as Error).message }
+    if (errorCode(err)) {
+      return { ok: false, error: (err as Error).message }
+    }
     throw err
   }
 }

@@ -1,46 +1,42 @@
 import { describe, it, expect } from 'vitest'
 import { buildPrompt } from './prompt'
 
-const BASE_INPUT = {
-  skill: '# Refinement Agent\nYou are a refinement agent.',
-  ticketId: 'ticket-123',
-  title: 'Add reconnect logic',
-  description: 'Players drop on disconnect.',
-  acceptanceCriteria: 'Player can rejoin within 30s',
-  summary: undefined as string | undefined,
+const BASE = {
+  skill: '# Intent Agent Skill',
+  ticketKey: 'CB-2',
+  title: 'Lesezeit bei Artikeln anzeigen',
+  description: 'Leser möchten vorher sehen, wie lange ein Artikel dauert.',
+  answeredQuestions: [],
 }
 
 describe('buildPrompt', () => {
-  it('includes skill, ticket ID and title', () => {
-    const prompt = buildPrompt(BASE_INPUT)
-    expect(prompt).toContain('Refinement Agent')
-    expect(prompt).toContain('ticket-123')
-    expect(prompt).toContain('Add reconnect logic')
+  it('contains skill, key, title and description', () => {
+    const prompt = buildPrompt(BASE)
+    expect(prompt).toContain('# Intent Agent Skill')
+    expect(prompt).toContain('Ticket: CB-2')
+    expect(prompt).toContain('# Lesezeit bei Artikeln anzeigen')
+    expect(prompt).toContain('## Beschreibung\nLeser möchten')
   })
 
-  it('includes acceptanceCriteria when present', () => {
-    const prompt = buildPrompt(BASE_INPUT)
-    expect(prompt).toContain('Player can rejoin within 30s')
+  it('adds the codebase summary on the first call', () => {
+    expect(buildPrompt({ ...BASE, codebaseSummary: 'Express + Prisma' })).toContain('## Codebase-Übersicht\n\nExpress + Prisma')
   })
 
-  it('omits acceptanceCriteria section when empty', () => {
-    const prompt = buildPrompt({ ...BASE_INPUT, acceptanceCriteria: '' })
-    expect(prompt).not.toContain('Akzeptanzkriterien')
+  it('adds answered questions', () => {
+    const prompt = buildPrompt({ ...BASE, answeredQuestions: [{ question: 'Wer?', answer: 'Alle Leser' }] })
+    expect(prompt).toContain('## Bisherige Rückfragen (bereits beantwortet)')
+    expect(prompt).toContain('**F:** Wer?\n**A:** Alle Leser')
   })
 
-  it('includes previous output as feedback when summary provided', () => {
-    const prompt = buildPrompt({ ...BASE_INPUT, summary: 'Previous attempt failed.' })
-    expect(prompt).toContain('Previous attempt failed.')
-    expect(prompt).toContain('Vorheriger Versuch')
-  })
-
-  it('includes previousRuns section when previousRuns are provided', () => {
+  it('builds a correction prompt without the summary on retry', () => {
     const prompt = buildPrompt({
-      ...BASE_INPUT,
-      previousRuns: [{ question: 'Which DB?', answer: 'PostgreSQL' }],
+      ...BASE,
+      codebaseSummary: 'Express + Prisma',
+      retryContext: { previousOutput: 'x'.repeat(4000), reason: 'invalid_json', schemaError: 'Agent-Ausgabe ist kein gültiges JSON' },
     })
-    expect(prompt).toContain('Bisherige Rückfragen')
-    expect(prompt).toContain('Which DB?')
-    expect(prompt).toContain('PostgreSQL')
+    expect(prompt).not.toContain('Codebase-Übersicht')
+    expect(prompt).toContain('## Korrektur erforderlich')
+    expect(prompt).toContain('kein gültiges JSON')
+    expect(prompt).not.toContain('x'.repeat(3001))
   })
 })

@@ -1,40 +1,165 @@
-import { describe, it, expect, beforeEach } from 'vitest'
-import { createTestContext, errorCodeOf, type TestContext } from '../testing/fakes'
-import { listTickets, getTicket } from './queries'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { CodeHostError } from '../ports'
+import { createTestContext, seedTicket, type TestContext } from '../testing/fakes'
+import { getSettings, getTicket, listTickets } from './queries'
 
-let ctx: TestContext
-
-beforeEach(() => {
-  ctx = createTestContext()
+afterEach(() => {
+  vi.restoreAllMocks()
 })
 
-const RUN_INPUT = { ticketTitle: 'T', ticketDescription: 'D', acceptanceCriteria: '', repo: 'r', model: 'm' }
+function openIntentPr(ctx: TestContext, key: string, prNumber: number) {
+  return ctx.deps.artifacts.create({
+    ticketKey: key, stage: 'plan', path: `docs/work/${key}/intent.md`, branch: `${key}/intent`,
+    prNumber, prUrl: `https://github.com/o/r/pull/${prNumber}`,
+  })
+}
+
+/** A run of `stage` logged like `beginRun` + `recordSucceededRun` do (or without usage when `costUsd` is null). */
+function finishedRun(ctx: TestContext, key: string, stage: 'plan' | 'design', costUsd: number | null) {
+  const run = ctx.deps.runs.create({ ticketKey: key, stage, trigger: 'initial', model: 'm', input: { model: 'm', answeredQuestions: [] } })
+  ctx.deps.audit.append({ ticketKey: key, actor: 'system', type: 'run_started', payload: { runId: run.id, stage, trigger: 'initial', model: 'm' } })
+  const usage = costUsd === null
+    ? { status: 'failed' as const }
+    : { status: 'succeeded' as const, costUsd, inputTokens: 100, cacheCreationTokens: 900, cacheReadTokens: 5000, outputTokens: 200 }
+  ctx.deps.audit.append({ ticketKey: key, actor: 'agent', type: 'run_finished', payload: { runId: run.id, ...usage } })
+  return run
+}
 
 describe('listTickets', () => {
-  it('returns DTOs with public ids', () => {
-    ctx.deps.tickets.create({ title: 'A', description: 'a' })
-    const [dto] = listTickets(ctx.deps)
-    expect(dto).toMatchObject({ id: 'T-1', title: 'A', description: 'a', status: 'backlog', iteration: 0 })
-    expect(dto.createdAt).toBeInstanceOf(Date)
+  it('lists tickets by key with the open PR of the current stage', () => {
+    const ctx = createTestContext()
+    seedTicket(ctx, 'CB-10')
+    seedTicket(ctx, 'CB-2', { state: 'in_review' })
+    openIntentPr(ctx, 'CB-2', 4)
+
+    const tickets = listTickets(ctx.deps)
+
+    expect(tickets.map((t) => t.key)).toEqual(['CB-2', 'CB-10'])
+    expect(tickets[0]).toMatchObject({ state: 'in_review', openPr: { number: 4, url: 'https://github.com/o/r/pull/4', state: 'open' } })
+    expect(tickets[1]?.openPr).toBeNull()
+  })
+
+  it('gives each ticket its total agent cost over all stages', () => {
+    const ctx = createTestContext()
+    seedTicket(ctx, 'CB-1', { stage: 'design' })
+    seedTicket(ctx, 'CB-2')
+    finishedRun(ctx, 'CB-1', 'plan', 0.25)
+    finishedRun(ctx, 'CB-1', 'design', 0.5)
+
+    expect(listTickets(ctx.deps).map((t) => [t.key, t.totalCostUsd])).toEqual([['CB-1', 0.75], ['CB-2', 0]])
   })
 })
 
 describe('getTicket', () => {
-  it('returns the ticket with latestRun null when there are no runs', () => {
-    ctx.deps.tickets.create({ title: 'A', description: 'a' })
-    expect(getTicket(ctx.deps, 'T-1').latestRun).toBeNull()
+  it('shows both stages; open stages have no content and need no GitHub call', async () => {
+    const ctx = createTestContext()
+    seedTicket(ctx, 'CB-1')
+
+    const detail = await getTicket(ctx.deps, 'CB-1')
+
+    expect(detail.stages).toEqual([
+      {
+        stage: 'plan', path: 'docs/work/CB-1/intent.md',
+        fileUrl: 'https://github.com/o/r/blob/showcase/docs/work/CB-1/intent.md',
+        completed: false, pr: null, mergedAt: null, content: null,
+      },
+      {
+        stage: 'design', path: 'docs/work/CB-1/spec.md',
+        fileUrl: 'https://github.com/o/r/blob/showcase/docs/work/CB-1/spec.md',
+        completed: false, pr: null, mergedAt: null, content: null,
+      },
+    ])
+    expect(ctx.codeHost.calls).toEqual([])
   })
 
-  it('returns the latest run as DTO without its input', () => {
-    const ticket = ctx.deps.tickets.create({ title: 'A', description: 'a' })
-    ctx.deps.runs.create({ ticketId: ticket.id, trigger: 'initial', model: 'm', input: RUN_INPUT })
-    const detail = getTicket(ctx.deps, 'T-1')
-    expect(detail.latestRun).toMatchObject({ id: 'run-1', ticketId: 'T-1', status: 'running', trigger: 'initial' })
-    expect(detail.latestRun).not.toHaveProperty('input')
+  it('reads the content of completed stages live from the base branch', async () => {
+    const ctx = createTestContext()
+    seedTicket(ctx, 'CB-1', { stage: 'design' })
+    const artifact = openIntentPr(ctx, 'CB-1', 1)
+    const mergedAt = new Date('2026-10-28T12:00:00Z')
+    ctx.deps.artifacts.markMerged(artifact.id, mergedAt)
+    ctx.codeHost.files.set('docs/work/CB-1/intent.md', '# CB-1: Intent')
+
+    const [plan, design] = (await getTicket(ctx.deps, 'CB-1')).stages
+
+    expect(plan).toMatchObject({ completed: true, content: '# CB-1: Intent', mergedAt, pr: { number: 1, state: 'merged' } })
+    expect(design).toMatchObject({ completed: false, content: null, pr: null })
   })
 
-  it('throws NotFoundError for unknown and malformed ids', () => {
-    expect(errorCodeOf(() => getTicket(ctx.deps, 'T-99'))).toBe('NOT_FOUND')
-    expect(errorCodeOf(() => getTicket(ctx.deps, 'garbage'))).toBe('NOT_FOUND')
+  it('shows no content without token or when GitHub fails', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const noToken = createTestContext({ token: false })
+    seedTicket(noToken, 'CB-1', { stage: 'design' })
+    expect((await getTicket(noToken.deps, 'CB-1')).stages[0]?.content).toBeNull()
+
+    const failing = createTestContext()
+    seedTicket(failing, 'CB-1', { stage: 'design' })
+    failing.codeHost.failures.readFile = new CodeHostError(0, 'offline')
+    expect((await getTicket(failing.deps, 'CB-1')).stages[0]?.content).toBeNull()
+  })
+
+  it('returns the log and the open question', async () => {
+    const ctx = createTestContext()
+    seedTicket(ctx, 'CB-1', { state: 'awaiting_answer' })
+    const run = ctx.deps.runs.create({ ticketKey: 'CB-1', stage: 'plan', trigger: 'initial', model: 'm', input: { model: 'm', answeredQuestions: [] } })
+    ctx.deps.runs.complete(run.id, {
+      output: { type: 'question', question: 'Wer?' }, costUsd: 0, inputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, outputTokens: 0,
+    })
+    ctx.deps.audit.append({ ticketKey: 'CB-1', actor: 'agent', type: 'question_asked', payload: { question: 'Wer?' } })
+
+    const detail = await getTicket(ctx.deps, 'CB-1')
+
+    expect(detail.pendingQuestion).toBe('Wer?')
+    expect(detail.log).toEqual([{ actor: 'agent', type: 'question_asked', payload: { question: 'Wer?' }, createdAt: expect.any(Date) }])
+  })
+
+  it('sums the agent cost per stage; runs without usage count with cost 0', async () => {
+    const ctx = createTestContext()
+    seedTicket(ctx, 'CB-1', { stage: 'design' })
+    finishedRun(ctx, 'CB-1', 'plan', 0.25)
+    finishedRun(ctx, 'CB-1', 'plan', null)
+    finishedRun(ctx, 'CB-1', 'design', 0.5)
+
+    const detail = await getTicket(ctx.deps, 'CB-1')
+
+    expect(detail.costs).toEqual({
+      totalUsd: 0.75, runs: 3, inputTokens: 2000, outputTokens: 400,
+      byStage: {
+        plan: { usd: 0.25, runs: 2, inputTokens: 1000, outputTokens: 200 },
+        design: { usd: 0.5, runs: 1, inputTokens: 1000, outputTokens: 200 },
+      },
+    })
+    expect(detail.totalCostUsd).toBe(0.75)
+  })
+
+  it('takes the stage from the AgentRun when the log has no run_started entry', async () => {
+    const ctx = createTestContext()
+    seedTicket(ctx, 'CB-1')
+    const run = ctx.deps.runs.create({ ticketKey: 'CB-1', stage: 'design', trigger: 'initial', model: 'm', input: { model: 'm', answeredQuestions: [] } })
+    ctx.deps.audit.append({ ticketKey: 'CB-1', actor: 'agent', type: 'run_finished', payload: { runId: run.id, status: 'succeeded', costUsd: 0.5 } })
+
+    expect((await getTicket(ctx.deps, 'CB-1')).costs.byStage.design).toMatchObject({ usd: 0.5, runs: 1 })
+  })
+
+  it('has no open question outside awaiting_answer', async () => {
+    const ctx = createTestContext()
+    seedTicket(ctx, 'CB-1')
+    expect((await getTicket(ctx.deps, 'CB-1')).pendingQuestion).toBeNull()
+  })
+
+  it('accepts lower-case keys and reports unknown ones', async () => {
+    const ctx = createTestContext()
+    seedTicket(ctx, 'CB-1')
+    expect((await getTicket(ctx.deps, 'cb-1')).key).toBe('CB-1')
+    await expect(getTicket(ctx.deps, 'CB-404')).rejects.toMatchObject({ code: 'NOT_FOUND' })
+  })
+})
+
+describe('getSettings', () => {
+  it('reports the target repository, its base branch and whether a token is configured', () => {
+    expect(getSettings(createTestContext().deps)).toEqual({
+      repoUrl: 'https://github.com/o/r', baseBranch: 'showcase', baselineTag: 'showcase-base', tokenConfigured: true,
+    })
+    expect(getSettings(createTestContext({ token: false }).deps)).toMatchObject({ baseBranch: 'showcase', tokenConfigured: false })
   })
 })

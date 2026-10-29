@@ -1,66 +1,139 @@
 import { z } from 'zod'
-import { AgentOutputSchema } from './refinementSchema'
+import { ArtifactStageSchema, PrStateSchema, StageSchema, TicketStateSchema } from './stages'
+import { AuditActorSchema } from './auditEvents'
 
 const notBlank = (message: string) => z.string().refine((value) => value.trim().length > 0, message)
 
-export const TicketStatusSchema = z.enum(['backlog', 'refining', 'review', 'ready', 'failed'])
-export type TicketStatus = z.infer<typeof TicketStatusSchema>
+/** A PR as the UI links it: number, URL and state. */
+export const PullRequestRefSchema = z.object({
+  number: z.number().int(),
+  url: z.string(),
+  state: PrStateSchema,
+})
+export type PullRequestRefDto = z.infer<typeof PullRequestRefSchema>
 
-export const RunTriggerSchema = z.enum(['initial', 'answer', 'rework'])
-export type RunTrigger = z.infer<typeof RunTriggerSchema>
+/** Agent cost of one artifact stage of a ticket (or of all stages together). */
+export const StageCostSchema = z.object({
+  /** Sum of the cost the Claude CLI reported (`total_cost_usd`), in USD; 0 when no run reported usage. */
+  usd: z.number(),
+  /** Number of finished runs, including failed runs without usage. */
+  runs: z.number().int(),
+  /** Uncached input plus cache writes (cache reads are left out, as in the log line). */
+  inputTokens: z.number(),
+  /** Tokens Claude generated. */
+  outputTokens: z.number(),
+})
+export type StageCostDto = z.infer<typeof StageCostSchema>
 
-export const RunStatusSchema = z.enum(['running', 'succeeded', 'failed', 'timeout'])
-export type RunStatus = z.infer<typeof RunStatusSchema>
+/**
+ * Agent cost of a ticket over all stages, derived from its `run_finished` log entries. The shared codebase-summary
+ * run has no ticket and is not included.
+ */
+export const CostSummarySchema = z.object({
+  /** Sum over all stages, in USD. */
+  totalUsd: z.number(),
+  /** Number of finished runs over all stages. */
+  runs: z.number().int(),
+  /** Input tokens over all stages (uncached input plus cache writes). */
+  inputTokens: z.number(),
+  /** Output tokens over all stages. */
+  outputTokens: z.number(),
+  /** Cost per artifact stage. */
+  byStage: z.object({ plan: StageCostSchema, design: StageCostSchema }),
+})
+export type CostSummaryDto = z.infer<typeof CostSummarySchema>
 
+/** A ticket as the board and the ticket page show it. */
 export const TicketSchema = z.object({
-  id: z.string().regex(/^T-\d+$/),
+  /** Ticket key from the source file, e.g. `CB-3`. */
+  key: z.string().regex(/^[A-Z][A-Z0-9]*-\d+$/),
+  /** Ticket title from the `# KEY: Title` heading. */
   title: z.string(),
+  /** Ticket text below the heading (Markdown). */
   description: z.string(),
-  status: TicketStatusSchema,
-  iteration: z.number().int(),
-  createdAt: z.date(),
+  /** Value of the `**Priorität:**` line; null when the file has none. */
+  priority: z.string().nullable(),
+  /** Source file relative to the repository root, e.g. `examples/tickets/cb-3-kommentare-melden.md`. */
+  sourcePath: z.string(),
+  /** Playbook stage the ticket is in. */
+  stage: StageSchema,
+  /** Where the ticket stands inside its stage. */
+  state: TicketStateSchema,
+  /** PR of the current stage while the ticket is `in_review`. */
+  openPr: PullRequestRefSchema.nullable(),
+  /** Last write of the ticket: import, stage or state change. */
   updatedAt: z.date(),
+  /** Agent cost of the ticket over all stages, in USD (`CostSummaryDto.totalUsd`). */
+  totalCostUsd: z.number(),
 })
 export type TicketDto = z.infer<typeof TicketSchema>
 
-export const AgentRunSchema = z.object({
-  id: z.string(),
-  ticketId: z.string(),
-  iteration: z.number().int(),
-  trigger: RunTriggerSchema,
-  status: RunStatusSchema,
-  model: z.string(),
-  output: AgentOutputSchema.nullable(),
-  costUsd: z.number().nullable(),
-  inputTokens: z.number().int().nullable(),
-  cacheCreationTokens: z.number().int().nullable(),
-  cacheReadTokens: z.number().int().nullable(),
-  outputTokens: z.number().int().nullable(),
-  startedAt: z.date(),
-  finishedAt: z.date().nullable(),
+/** One artifact stage on the ticket page: file, PR and content. */
+export const StageViewSchema = z.object({
+  /** Stage that produces this artifact. */
+  stage: ArtifactStageSchema,
+  /** Artifact path in the target repository, e.g. `docs/work/CB-3/intent.md`. */
+  path: z.string(),
+  /** Link to the file on the base branch (`showcase`). */
+  fileUrl: z.string(),
+  /** True once the artifact is merged and the ticket moved on. */
+  completed: z.boolean(),
+  /** Latest PR the app opened for this stage. */
+  pr: PullRequestRefSchema.nullable(),
+  /** When the stage's PR was merged; null until then. */
+  mergedAt: z.date().nullable(),
+  /** File content read live from the base branch; null if not merged or not readable. */
+  content: z.string().nullable(),
 })
-export type AgentRunDto = z.infer<typeof AgentRunSchema>
+export type StageViewDto = z.infer<typeof StageViewSchema>
 
+/**
+ * One stored entry of the ticket log as the core returns it. `type` and `payload` stay loose because old rows may
+ * predate the current contract; the web parses them with `AuditEventSchema` and falls back to a
+ * generic German line.
+ */
+export const AuditLogEntrySchema = z.object({
+  actor: AuditActorSchema,
+  type: z.string(),
+  payload: z.unknown(),
+  createdAt: z.date(),
+})
+export type AuditLogEntryDto = z.infer<typeof AuditLogEntrySchema>
+
+/** Everything the ticket page shows: the ticket, its stages, its log and an open question. */
 export const TicketDetailSchema = TicketSchema.extend({
-  latestRun: AgentRunSchema.nullable(),
+  /** One entry per artifact stage, in playbook order. */
+  stages: z.array(StageViewSchema),
+  /** Log entries, oldest first. */
+  log: z.array(AuditLogEntrySchema),
+  /** Question of the agent while the ticket is `awaiting_answer`. */
+  pendingQuestion: z.string().nullable(),
+  /** Agent cost of the ticket, per stage and in total. */
+  costs: CostSummarySchema,
 })
 export type TicketDetailDto = z.infer<typeof TicketDetailSchema>
 
-export const CreateTicketInput = z.object({
-  title: notBlank('Titel ist erforderlich'),
-  description: notBlank('Beschreibung ist erforderlich'),
+/** Configuration the sidebar and the reset button show. */
+export const SettingsSchema = z.object({
+  /** URL of the target repository (`TARGET_REPO`). */
+  repoUrl: z.string(),
+  /** Branch of the target repository the app works on; PRs target it. */
+  baseBranch: z.string(),
+  /** Tag marking the initial state of the base branch; the reset moves the branch back to it. */
+  baselineTag: z.string(),
+  /** False without `GITHUB_TOKEN`: stages cannot be started. */
+  tokenConfigured: z.boolean(),
 })
-export type CreateTicketInput = z.infer<typeof CreateTicketInput>
+export type SettingsDto = z.infer<typeof SettingsSchema>
 
-/** `repo` is not checked as URL on purpose: SSH remotes and local paths are valid git sources. */
-export const StartRefinementInput = z.object({
-  repo: notBlank('Repository ist erforderlich'),
+/** Input of `startStage`: the model the agent runs with. */
+export const StartStageInputSchema = z.object({
   model: notBlank('Modell ist erforderlich'),
-  acceptanceCriteria: z.string().default(''),
 })
-export type StartRefinementInput = z.infer<typeof StartRefinementInput>
+export type StartStageInput = z.infer<typeof StartStageInputSchema>
 
-export const AnswerInput = z.object({
+/** Input of `answerQuestion`: the human's answer to the open question. */
+export const AnswerInputSchema = z.object({
   answer: notBlank('Antwort ist erforderlich'),
 })
-export type AnswerInput = z.infer<typeof AnswerInput>
+export type AnswerInput = z.infer<typeof AnswerInputSchema>

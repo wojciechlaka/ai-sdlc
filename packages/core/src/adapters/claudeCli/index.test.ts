@@ -1,180 +1,225 @@
-import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { EventEmitter } from 'events'
-import type { RefinementInput } from './index'
+import fs from 'fs'
 import path from 'path'
+import type { AgentRunnerInput } from '../../ports'
+import { createAgentSandbox } from '../agentSandbox/agentSandbox'
 
-const CLI_OPTIONS = { skillPath: path.resolve(__dirname, '../../../skills/refinement-agent.md') }
+const HOOKS_DIR = path.resolve(__dirname, '../../../hooks')
+const OPTIONS = {
+  skillsDir: path.resolve(__dirname, '../../../skills'),
+  sandbox: createAgentSandbox({ hooksDir: HOOKS_DIR }),
+  timeoutMs: 10_000,
+}
 
-const VALID_JSON_OUTPUT = JSON.stringify({
-  type: 'refinement',
+const callbacks = () => ({ onProgress: vi.fn(), onToolEvent: vi.fn() })
+
+const INTENT_OUTPUT = JSON.stringify({
+  type: 'intent',
   result: {
-    title: 'Add reconnect logic',
-    userStory: 'Als Spieler möchte ich erneut beitreten können, damit mein Spielstand nicht verloren geht.',
-    acceptanceCriteria: ['Player can rejoin'],
-    affectedFiles: [{ path: 'src/game.ts', description: 'Add handler' }],
-    risks: [],
-    openQuestions: [],
-    confidence: 90,
+    title: 'Lesezeit anzeigen',
+    problem: 'Leser wissen nicht, wie lange ein Artikel dauert.',
+    desiredOutcome: 'Die API liefert eine Lesezeit.',
+    successCriteria: ['Leser sehen vor dem Lesen, wie lange ein Artikel ungefähr dauert.'],
+    affected: ['Leser'],
+    openPoints: [],
   },
 })
 
-const STREAM_JSON_RESULT = JSON.stringify({
-  type: 'result',
-  subtype: 'success',
-  result: VALID_JSON_OUTPUT,
-  cost_usd: 0.0421,
-  usage: { input_tokens: 12345, output_tokens: 678, cache_read_input_tokens: 0 },
-})
+const resultLine = (result: string, extra: Record<string, unknown> = {}) =>
+  JSON.stringify({ type: 'result', subtype: 'success', result, ...extra })
 
-const STREAM_JSON_RESULT_NO_USAGE = JSON.stringify({
-  type: 'result',
-  subtype: 'success',
-  result: VALID_JSON_OUTPUT,
-})
-
+/**
+ * Fake `claude` process that answers once the code under test has sent the whole prompt (`stdin.end()`),
+ * so the answer never races the setup of the stdout/close listeners.
+ */
 function makeFakeProcess(stdout: string, exitCode: number) {
   const proc = new EventEmitter() as any
-  proc.stdin = { write: vi.fn(), end: vi.fn() }
   proc.stdout = new EventEmitter()
   proc.stderr = new EventEmitter()
-  setTimeout(() => {
-    proc.stdout.emit('data', Buffer.from(stdout + '\n'))
-    proc.emit('close', exitCode)
-  }, 10)
+  proc.kill = vi.fn()
+  proc.stdin = {
+    write: vi.fn(),
+    end: vi.fn(() => setImmediate(() => {
+      proc.stdout.emit('data', Buffer.from(stdout + '\n'))
+      proc.emit('close', exitCode)
+    })),
+  }
   return proc
 }
 
-vi.mock('child_process', () => ({
-  spawn: vi.fn(),
-}))
+vi.mock('child_process', () => ({ spawn: vi.fn() }))
 
 import { spawn } from 'child_process'
 const mockSpawn = vi.mocked(spawn)
 
-function makeResultWith(result: string) {
-  return JSON.stringify({ type: 'result', subtype: 'success', result, cost_usd: 0, usage: { input_tokens: 0, output_tokens: 0 } })
+const INPUT: AgentRunnerInput = {
+  ticketKey: 'CB-2', stage: 'plan', title: 'Lesezeit', description: 'D', repoDir: '/tmp/repo',
+  model: 'claude-sonnet-4-6', answeredQuestions: [],
 }
 
-describe('JSON extraction (parseAndValidate)', () => {
-  beforeAll(async () => { await import('./index') })
-  beforeEach(() => { vi.clearAllMocks() })
-
-  const EXTRACT_INPUT: RefinementInput = {
-    ticketId: 'ticket-x', title: 'T', description: 'D', acceptanceCriteria: '',
-    repoPath: '/tmp/repo', model: 'claude-sonnet-4-6',
-  }
-
-  it('parses plain JSON output', async () => {
-    mockSpawn.mockImplementation(() => makeFakeProcess(makeResultWith(VALID_JSON_OUTPUT), 0) as any)
-    const { runRefinement } = await import('./index')
-    const { output } = await runRefinement(EXTRACT_INPUT, vi.fn(), CLI_OPTIONS)
-    expect(output.type).toBe('refinement')
-    if (output.type === 'refinement') expect(output.result.title).toBe('Add reconnect logic')
-  })
-
-  it('parses JSON wrapped in ```json code fence', async () => {
-    const wrapped = '```json\n' + VALID_JSON_OUTPUT + '\n```'
-    mockSpawn.mockImplementation(() => makeFakeProcess(makeResultWith(wrapped), 0) as any)
-    const { runRefinement } = await import('./index')
-    const { output } = await runRefinement(EXTRACT_INPUT, vi.fn(), CLI_OPTIONS)
-    expect(output.type).toBe('refinement')
-    if (output.type === 'refinement') expect(output.result.title).toBe('Add reconnect logic')
-  })
-
-  it('parses JSON preceded by explanation text', async () => {
-    const withPreamble = 'Here is my analysis:\n\n' + VALID_JSON_OUTPUT
-    mockSpawn.mockImplementation(() => makeFakeProcess(makeResultWith(withPreamble), 0) as any)
-    const { runRefinement } = await import('./index')
-    const { output } = await runRefinement(EXTRACT_INPUT, vi.fn(), CLI_OPTIONS)
-    expect(output.type).toBe('refinement')
-    if (output.type === 'refinement') expect(output.result.title).toBe('Add reconnect logic')
-  })
+beforeEach(() => {
+  vi.clearAllMocks()
 })
 
-describe('runRefinement', () => {
-  beforeAll(async () => { await import('./index') }) // warm up module cache
-  beforeEach(() => { vi.clearAllMocks() })
+afterEach(() => {
+  vi.unstubAllEnvs()
+})
 
-  const INPUT: RefinementInput = {
-    ticketId: 'ticket-123',
-    title: 'Add reconnect logic',
-    description: 'Players drop.',
-    acceptanceCriteria: '',
-    repoPath: '/tmp/repo',
-    model: 'claude-sonnet-4-6',
-  }
-
-  it('returns validated RefinementOutput on success', async () => {
-    mockSpawn.mockReturnValue(makeFakeProcess(STREAM_JSON_RESULT, 0) as any)
-    const { runRefinement } = await import('./index')
-    const { output, meta } = await runRefinement(INPUT, vi.fn(), CLI_OPTIONS)
-    expect(output.type).toBe('refinement')
-    if (output.type === 'refinement') {
-      expect(output.result.title).toBe('Add reconnect logic')
-      expect(output.result.confidence).toBe(90)
-    }
-    expect(meta.model).toBe('claude-sonnet-4-6')
-    expect(meta.durationSeconds).toBeGreaterThanOrEqual(0)
-    expect(meta.inputTokens).toBe(12345)
-    expect(meta.outputTokens).toBe(678)
-    expect(meta.costUsd).toBe(0.0421)
+describe('runAgent (stage plan)', () => {
+  it.each([
+    ['plain JSON', INTENT_OUTPUT],
+    ['a json code fence', '```json\n' + INTENT_OUTPUT + '\n```'],
+    ['text before the JSON', 'Hier ist das Ergebnis:\n\n' + INTENT_OUTPUT],
+  ])('parses %s', async (_label, text) => {
+    mockSpawn.mockImplementation(() => makeFakeProcess(resultLine(text), 0))
+    const { runAgent } = await import('./index')
+    const { output } = await runAgent(INPUT, callbacks(), OPTIONS)
+    expect(output).toMatchObject({ type: 'intent', result: { title: 'Lesezeit anzeigen' } })
   })
 
-  it('falls back to zero tokens when usage is absent in CLI output', async () => {
-    mockSpawn.mockReturnValue(makeFakeProcess(STREAM_JSON_RESULT_NO_USAGE, 0) as any)
-    const { runRefinement } = await import('./index')
-    const { meta } = await runRefinement(INPUT, vi.fn(), CLI_OPTIONS)
-    expect(meta.inputTokens).toBe(0)
-    expect(meta.outputTokens).toBe(0)
-    expect(meta.costUsd).toBe(0)
+  it('sends the intent skill and reports usage', async () => {
+    const proc = makeFakeProcess(
+      resultLine(INTENT_OUTPUT, { cost_usd: 0.04, usage: { input_tokens: 100, output_tokens: 20, cache_read_input_tokens: 5 } }),
+      0,
+    )
+    mockSpawn.mockReturnValue(proc)
+    const { runAgent } = await import('./index')
+    const { meta } = await runAgent(INPUT, callbacks(), OPTIONS)
+    expect(proc.stdin.write.mock.calls[0][0]).toContain('# Intent Agent Skill')
+    expect(meta).toMatchObject({ model: 'claude-sonnet-4-6', inputTokens: 100, outputTokens: 20, cacheReadTokens: 5, costUsd: 0.04 })
   })
 
-  it('retries once on schema validation failure, then throws SchemaValidationError', async () => {
-    const INVALID = JSON.stringify({ type: 'result', subtype: 'success', result: '{"title": "x"}' })
-    mockSpawn.mockImplementation(() => makeFakeProcess(INVALID, 0) as any)
-    const { runRefinement } = await import('./index')
+  it('prefers total_cost_usd over cost_usd', async () => {
+    mockSpawn.mockReturnValue(makeFakeProcess(resultLine(INTENT_OUTPUT, { total_cost_usd: 0.07, cost_usd: 0.01 }), 0))
+    const { runAgent } = await import('./index')
+    const { meta } = await runAgent(INPUT, callbacks(), OPTIONS)
+    expect(meta.costUsd).toBe(0.07)
+  })
+
+  it('retries once on invalid output, then throws SchemaValidationError', async () => {
+    const refinement = JSON.stringify({ type: 'refinement', result: {} })
+    mockSpawn.mockImplementation(() => makeFakeProcess(resultLine(refinement), 0))
+    const { runAgent } = await import('./index')
     const { SchemaValidationError } = await import('./errors')
-    await expect(runRefinement(INPUT, vi.fn(), CLI_OPTIONS)).rejects.toBeInstanceOf(SchemaValidationError)
+    await expect(runAgent(INPUT, callbacks(), OPTIONS)).rejects.toBeInstanceOf(SchemaValidationError)
     expect(mockSpawn).toHaveBeenCalledTimes(2)
   })
 
-  it('throws CliError on non-zero exit code', async () => {
-    mockSpawn.mockReturnValue(makeFakeProcess('', 1) as any)
-    const { runRefinement } = await import('./index')
-    const { CliError } = await import('./errors')
-    await expect(runRefinement(INPUT, vi.fn(), CLI_OPTIONS)).rejects.toBeInstanceOf(CliError)
+  it('tells the retry prompt that the output was no JSON at all', async () => {
+    mockSpawn
+      .mockImplementationOnce(() => makeFakeProcess(resultLine('Ich habe das Ticket gelesen.'), 0))
+      .mockImplementationOnce(() => makeFakeProcess(resultLine(INTENT_OUTPUT), 0))
+    const { runAgent } = await import('./index')
+    await runAgent(INPUT, callbacks(), OPTIONS)
+    const retry = mockSpawn.mock.results[1]?.value as { stdin: { write: { mock: { calls: string[][] } } } }
+    expect(retry.stdin.write.mock.calls[0]?.[0]).toContain('kein gültiges JSON')
   })
 
-  it('throws AgentRunTimeoutError when claude does not respond in time', async () => {
+  it('throws CliError on a non-zero exit code', async () => {
+    mockSpawn.mockReturnValue(makeFakeProcess('', 1))
+    const { runAgent } = await import('./index')
+    const { CliError } = await import('./errors')
+    await expect(runAgent(INPUT, callbacks(), OPTIONS)).rejects.toBeInstanceOf(CliError)
+  })
+
+  it('throws AgentRunTimeoutError when claude does not answer in time', async () => {
     const proc = new EventEmitter() as any
     proc.stdin = { write: vi.fn(), end: vi.fn() }
     proc.stdout = new EventEmitter()
     proc.stderr = new EventEmitter()
     proc.kill = vi.fn()
-    mockSpawn.mockReturnValue(proc as any)
-    process.env['REFINEMENT_TIMEOUT_MS'] = '50'
-    const { runRefinement } = await import('./index')
+    mockSpawn.mockReturnValue(proc)
+    const { runAgent } = await import('./index')
     const { AgentRunTimeoutError } = await import('../../ports')
-    await expect(runRefinement(INPUT, vi.fn(), CLI_OPTIONS)).rejects.toBeInstanceOf(AgentRunTimeoutError)
-    delete process.env['REFINEMENT_TIMEOUT_MS']
+    await expect(runAgent(INPUT, callbacks(), { ...OPTIONS, timeoutMs: 50 })).rejects.toBeInstanceOf(AgentRunTimeoutError)
+  })
+
+  it('rejects stages without an agent before spawning claude', async () => {
+    const { runAgent } = await import('./index')
+    await expect(runAgent({ ...INPUT, stage: 'design' }, callbacks(), OPTIONS)).rejects.toThrow('design')
+    expect(mockSpawn).not.toHaveBeenCalled()
+  })
+})
+
+describe('runAgent — guard and audit hooks (spec §13)', () => {
+  type SpawnOptions = { env: Record<string, string> }
+  const spawnCall = (index = 0) => {
+    const [command, args, options] = mockSpawn.mock.calls[index] as unknown as [string, string[], SpawnOptions]
+    return { command, args, options, logFile: options.env.REFINEMENT_HOOK_LOG }
+  }
+  const argAfter = (args: string[], flag: string) => args[args.indexOf(flag) + 1]
+
+  it('runs claude in the sandbox: user settings only, guard and audit hooks, read tools, clean env', async () => {
+    vi.stubEnv('GITHUB_TOKEN', 'ghp_secret')
+    mockSpawn.mockImplementation(() => makeFakeProcess(resultLine(INTENT_OUTPUT), 0))
+    const { runAgent } = await import('./index')
+    await runAgent(INPUT, callbacks(), OPTIONS)
+
+    const { args, options, logFile } = spawnCall()
+    expect(argAfter(args, '--setting-sources')).toBe('user')
+    expect(argAfter(args, '--allowedTools')).toBe('Read,Glob,Grep,Bash')
+    expect(options.env).toEqual(OPTIONS.sandbox.env(logFile))
+    expect(options.env).not.toHaveProperty('GITHUB_TOKEN')
+    expect(options.env).toMatchObject({ GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' })
+    const settings = JSON.parse(argAfter(args, '--settings'))
+    expect(settings.hooks.PreToolUse).toEqual([{ matcher: '', hooks: [{ type: 'command', timeout: 10, command: expect.stringContaining(path.join(HOOKS_DIR, 'guard.mjs')) }] }])
+    expect(settings.hooks.PostToolUse).toEqual([{ matcher: '', hooks: [{ type: 'command', timeout: 10, command: expect.stringContaining(path.join(HOOKS_DIR, 'audit.mjs')) }] }])
+    expect(logFile).toMatch(/tools\.jsonl$/)
+    expect(fs.existsSync(logFile)).toBe(false) // removed after the run
+  })
+
+  it('reports hook log lines while the run lasts and drains the rest at the end', async () => {
+    const proc = new EventEmitter() as any
+    proc.stdin = { write: vi.fn(), end: vi.fn() }
+    proc.stdout = new EventEmitter()
+    proc.stderr = new EventEmitter()
+    proc.kill = vi.fn()
+    mockSpawn.mockReturnValue(proc)
+    const cb = callbacks()
+    const { runAgent } = await import('./index')
+    const run = runAgent(INPUT, cb, OPTIONS)
+
+    await vi.waitFor(() => expect(mockSpawn).toHaveBeenCalled())
+    const { logFile } = spawnCall()
+    const blocked = JSON.stringify({ kind: 'blocked', tool: 'Bash', target: 'rm -rf docs', reason: 'nein', at: 'x' })
+    fs.appendFileSync(logFile, blocked.slice(0, 20)) // partial line: not reported yet
+    fs.appendFileSync(logFile, blocked.slice(20) + '\nkein json\n')
+    await vi.waitFor(() => expect(cb.onToolEvent).toHaveBeenCalledTimes(1))
+    expect(cb.onToolEvent).toHaveBeenCalledWith({ kind: 'blocked', tool: 'Bash', target: 'rm -rf docs', reason: 'nein' })
+
+    fs.appendFileSync(logFile, JSON.stringify({ kind: 'used', tool: 'Bash', target: 'git log -5' }) + '\n')
+    proc.stdout.emit('data', Buffer.from(resultLine(INTENT_OUTPUT) + '\n'))
+    proc.emit('close', 0)
+    await run
+
+    expect(cb.onToolEvent).toHaveBeenLastCalledWith({ kind: 'used', tool: 'Bash', target: 'git log -5' })
+    expect(cb.onToolEvent).toHaveBeenCalledTimes(2)
+    expect(fs.existsSync(logFile)).toBe(false)
+  })
+
+  it('uses the hooks on the retry call as well, each with its own log file', async () => {
+    const refinement = JSON.stringify({ type: 'refinement', result: {} })
+    mockSpawn.mockImplementation(() => makeFakeProcess(resultLine(refinement), 0))
+    const { runAgent } = await import('./index')
+    await expect(runAgent(INPUT, callbacks(), OPTIONS)).rejects.toThrow()
+
+    expect(mockSpawn).toHaveBeenCalledTimes(2)
+    expect(argAfter(spawnCall(1).args, '--settings')).toContain('guard.mjs')
+    expect(spawnCall(1).logFile).not.toBe(spawnCall(0).logFile)
   })
 })
 
 describe('createClaudeCliAgentRunner', () => {
-  beforeEach(() => { vi.clearAllMocks() })
-
-  it('runs the refinement through the AgentRunner port', async () => {
-    mockSpawn.mockReturnValue(makeFakeProcess(STREAM_JSON_RESULT, 0) as any)
+  it('runs through the AgentRunner port', async () => {
+    mockSpawn.mockReturnValue(makeFakeProcess(resultLine(INTENT_OUTPUT), 0))
     const { createClaudeCliAgentRunner } = await import('./index')
-    const runner = createClaudeCliAgentRunner(CLI_OPTIONS)
-    const { output } = await runner.run({
-      ticketId: 'T-9', title: 'T', description: 'D', acceptanceCriteria: '', repoPath: '/tmp/repo', model: 'm',
-    }, vi.fn())
-    expect(output.type).toBe('refinement')
+    const { output } = await createClaudeCliAgentRunner(OPTIONS).run(INPUT, callbacks())
+    expect(output.type).toBe('intent')
   })
 
   it('returns false when stopping a ticket without a running process', async () => {
     const { createClaudeCliAgentRunner } = await import('./index')
-    expect(createClaudeCliAgentRunner(CLI_OPTIONS).stop('T-404')).toBe(false)
+    expect(createClaudeCliAgentRunner(OPTIONS).stop('CB-404')).toBe(false)
   })
 })

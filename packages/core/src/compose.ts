@@ -1,49 +1,95 @@
+import os from 'os'
 import path from 'path'
 import { createUseCases, type UseCases } from './application/createUseCases'
 import { createSqliteDatabase } from './adapters/sqlite/database'
 import { createSqliteTicketRepository } from './adapters/sqlite/ticketRepository'
 import { createSqliteAgentRunRepository } from './adapters/sqlite/agentRunRepository'
+import { createSqliteArtifactRepository } from './adapters/sqlite/artifactRepository'
 import { createSqliteAuditLog } from './adapters/sqlite/auditLog'
+import { createMarkdownTicketSource } from './adapters/markdownTickets/markdownTicketSource'
+import { createGitHubCodeHost, parseGitHubRepoUrl } from './adapters/github/githubCodeHost'
 import { createClaudeCliAgentRunner } from './adapters/claudeCli'
 import { createGitRepoProvider } from './adapters/git/repoCache'
 import { createNodeEventPublisher } from './adapters/nodeEvents/nodeEventPublisher'
+import { createAgentSandbox } from './adapters/agentSandbox/agentSandbox'
 
+/** What the app passes in: paths, target repository, token and optional overrides of the defaults. */
 export interface EngineConfig {
   /** SQLite file; parent directories are created. */
   dbPath: string
   /** `packages/core/drizzle` */
   migrationsFolder: string
-  /** `packages/core/skills/refinement-agent.md` */
-  skillPath: string
+  /** `packages/core/skills` */
+  skillsDir: string
+  /** `packages/core/hooks` — guard and audit scripts for the agent (spec §13). */
+  hooksDir: string
+  /** Directory with the ticket files (`examples/tickets`). */
+  ticketsDir: string
+  /** Repository root; ticket source paths are shown relative to it. */
+  rootDir: string
+  /** Target repository on GitHub (`TARGET_REPO`). */
+  targetRepo: string
+  /** Fine-grained PAT (`GITHUB_TOKEN`); without it stages cannot be started. */
+  githubToken?: string
+  /** Branch the app works on; default `SHOWCASE_BRANCH`. */
+  baseBranch?: string
+  /** Tag the repo reset moves the base branch back to; default `BASELINE_TAG`. */
+  baselineTag?: string
+  /** Maximum runtime of one Claude call in ms (`REFINEMENT_TIMEOUT_MS`); default `DEFAULT_AGENT_TIMEOUT_MS`. */
+  agentTimeoutMs?: number
+  /** Root of the clone cache (`REPO_CACHE_DIR`); default `$TMPDIR/repo-cache`. */
+  repoCacheDir?: string
 }
 
 const STOP_SETTLE_MS = 500
+/** Maximum runtime of one Claude call unless `agentTimeoutMs` is set: 10 minutes. */
+export const DEFAULT_AGENT_TIMEOUT_MS = 10 * 60 * 1000
+
+/** Branch the app works on; PRs target it, `master` stays untouched (spec §12). */
+export const SHOWCASE_BRANCH = 'showcase'
+/** Tag marking the initial state of the showcase branch; the repo reset moves the branch back to it. */
+export const BASELINE_TAG = 'showcase-base'
 
 /**
  * Paths of the assets shipped with this package. Passed in from the app because bundlers
  * (Next.js) relocate the code, so `__dirname` inside the package is not reliable.
  * @param coreDir - Absolute path to `packages/core`.
  */
-export function resolveCorePaths(coreDir: string): Pick<EngineConfig, 'migrationsFolder' | 'skillPath'> {
+export function resolveCorePaths(coreDir: string): Pick<EngineConfig, 'migrationsFolder' | 'skillsDir' | 'hooksDir'> {
   return {
     migrationsFolder: path.join(coreDir, 'drizzle'),
-    skillPath: path.join(coreDir, 'skills', 'refinement-agent.md'),
+    skillsDir: path.join(coreDir, 'skills'),
+    hooksDir: path.join(coreDir, 'hooks'),
   }
 }
 
 /** Composition of the production adapters. Call once per process and keep the result. */
 export function createRefinementEngine(config: EngineConfig): UseCases {
+  // Fail at start with the clear message, with or without token.
+  parseGitHubRepoUrl(config.targetRepo)
+  const { baseBranch = SHOWCASE_BRANCH, baselineTag = BASELINE_TAG, agentTimeoutMs = DEFAULT_AGENT_TIMEOUT_MS } = config
+  // One sandbox for every `claude` process: user settings only, guard/audit hooks, read tools, clean env (spec §13).
+  const sandbox = createAgentSandbox({ hooksDir: config.hooksDir })
   const db = createSqliteDatabase({ path: config.dbPath, migrationsFolder: config.migrationsFolder })
   return createUseCases({
     tickets: createSqliteTicketRepository(db),
     runs: createSqliteAgentRunRepository(db),
+    artifacts: createSqliteArtifactRepository(db),
     audit: createSqliteAuditLog(db),
-    agent: createClaudeCliAgentRunner({ skillPath: config.skillPath }),
-    repos: createGitRepoProvider(),
+    source: createMarkdownTicketSource({ dir: config.ticketsDir, rootDir: config.rootDir }),
+    codeHost: config.githubToken
+      ? createGitHubCodeHost({ repoUrl: config.targetRepo, token: config.githubToken, baseBranch, baselineTag })
+      : null,
+    agent: createClaudeCliAgentRunner({ skillsDir: config.skillsDir, sandbox, timeoutMs: agentTimeoutMs }),
+    repos: createGitRepoProvider({ cacheDir: config.repoCacheDir ?? path.join(os.tmpdir(), 'repo-cache'), sandbox }),
     events: createNodeEventPublisher(),
+    repoUrl: config.targetRepo,
+    baseBranch,
+    baselineTag,
     runInBackground: (task) => {
       task.catch((err) => console.error('[background] unhandled error in agent run', err))
     },
     stopSettleMs: STOP_SETTLE_MS,
+    resetState: { resetting: false },
   })
 }
