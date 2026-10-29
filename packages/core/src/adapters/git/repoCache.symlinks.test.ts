@@ -13,7 +13,7 @@ const git = (cwd: string, ...args: string[]) =>
   execFileSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=T', ...args], { cwd, stdio: 'pipe' })
 
 let ensureRepo: (url: string) => Promise<string>
-let getRepoCacheDir: (url: string) => string
+let getRepoDir: (url: string) => string
 
 beforeAll(async () => {
   fs.mkdirSync(source)
@@ -24,7 +24,7 @@ beforeAll(async () => {
   git(source, 'commit', '-qm', 'init')
   vi.stubEnv('REPO_CACHE_DIR', path.join(base, 'cache'))
   vi.resetModules()
-  ;({ ensureRepo, getRepoCacheDir } = await import('./repoCache'))
+  ;({ ensureRepo, getRepoDir } = await import('./repoCache'))
 })
 
 afterAll(() => {
@@ -43,7 +43,7 @@ describe('ensureRepo — symlinks as files', () => {
   })
 
   it('turns symlinks of an older cache into files when updating', async () => {
-    const dir = getRepoCacheDir(source)
+    const dir = getRepoDir(source)
     fs.mkdirSync(path.dirname(dir), { recursive: true })
     execFileSync('git', ['clone', '-q', source, dir], { stdio: 'pipe' }) // old cache, with symlinks
     expect(isSymlink(path.join(dir, 'link'))).toBe(true)

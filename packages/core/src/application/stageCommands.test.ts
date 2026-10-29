@@ -46,7 +46,7 @@ describe('startStage — success', () => {
     expect(ctx.repos.requestedUrls).toEqual(['https://github.com/o/r'])
     expect(ctx.agent.calls[0]).toMatchObject({
       ticketKey: 'CB-2', stage: 'plan', title: 'Lesezeit bei Artikeln anzeigen', model: 'claude-sonnet-4-6',
-      repoPath: '/repo', codebaseSummary: 'Express + Prisma', answeredQuestions: [],
+      repoDir: '/repo', codebaseSummary: 'Express + Prisma', answeredQuestions: [],
     })
   })
 

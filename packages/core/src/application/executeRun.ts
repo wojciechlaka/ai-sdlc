@@ -43,7 +43,7 @@ export async function executeRun(deps: UseCaseDeps, ticket: Ticket, request: Exe
         stage: request.stage,
         title: ticket.title,
         description: ticket.description,
-        repoPath: request.repoDir,
+        repoDir: request.repoDir,
         model: request.model,
         codebaseSummary: request.codebaseSummary ?? undefined,
         answeredQuestions: request.answeredQuestions,

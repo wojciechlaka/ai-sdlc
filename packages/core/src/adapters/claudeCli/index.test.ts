@@ -43,7 +43,7 @@ import { spawn } from 'child_process'
 const mockSpawn = vi.mocked(spawn)
 
 const INPUT: AgentRunnerInput = {
-  ticketKey: 'CB-2', stage: 'plan', title: 'Lesezeit', description: 'D', repoPath: '/tmp/repo',
+  ticketKey: 'CB-2', stage: 'plan', title: 'Lesezeit', description: 'D', repoDir: '/tmp/repo',
   model: 'claude-sonnet-4-6', answeredQuestions: [],
 }
 

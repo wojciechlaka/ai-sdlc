@@ -49,11 +49,11 @@ Where to add a new API endpoint, component, model, etc.
 Be concise. Focus on what a developer needs to quickly understand the codebase.`
 
 /**
- * Returns the local cache directory path for the given repository URL.
- * The path is derived from a 12-character SHA-256 hash of the URL.
+ * Local checkout directory of the repository under the cache root.
+ * The folder name is a 12-character SHA-256 prefix of the URL.
  * @param repoUrl - The full repository URL.
  */
-export function getRepoCacheDir(repoUrl: string): string {
+export function getRepoDir(repoUrl: string): string {
   const hash = crypto.createHash('sha256').update(repoUrl).digest('hex').slice(0, HASH_PREFIX_LENGTH)
   return path.join(CACHE_ROOT, hash)
 }
@@ -62,8 +62,8 @@ export function getRepoCacheDir(repoUrl: string): string {
 const CLONE_CONFIG = ['-c', 'core.symlinks=false']
 
 /** `git clone` without symlinks. */
-function cloneRepo(repoUrl: string, cacheDir: string): void {
-  execFileSync('git', ['clone', ...CLONE_CONFIG, repoUrl, cacheDir], { stdio: 'pipe' })
+function cloneRepo(repoUrl: string, repoDir: string): void {
+  execFileSync('git', ['clone', ...CLONE_CONFIG, repoUrl, repoDir], { stdio: 'pipe' })
 }
 
 /**
@@ -71,8 +71,8 @@ function cloneRepo(repoUrl: string, cacheDir: string): void {
  * symlinks; dropping the index and resetting re-checks out every tracked file, so they become plain files.
  * Safe because the cache belongs to the app (no local changes to keep; untracked summaries survive).
  */
-function pullWithoutSymlinks(repoUrl: string, cacheDir: string): void {
-  const git = (args: string[]) => execFileSync('git', args, { cwd: cacheDir, stdio: 'pipe' })
+function pullWithoutSymlinks(repoUrl: string, repoDir: string): void {
+  const git = (args: string[]) => execFileSync('git', args, { cwd: repoDir, stdio: 'pipe' })
   // Strip any token an earlier version may have stored in the remote URL.
   git(['remote', 'set-url', 'origin', repoUrl])
   git(['config', 'core.symlinks', 'false'])
@@ -96,33 +96,33 @@ function pullWithoutSymlinks(repoUrl: string, cacheDir: string): void {
  * @throws If `git clone` or `git pull` fails.
  */
 export async function ensureRepo(repoUrl: string): Promise<string> {
-  const cacheDir = getRepoCacheDir(repoUrl)
+  const repoDir = getRepoDir(repoUrl)
 
-  if (fs.existsSync(cacheDir)) {
+  if (fs.existsSync(repoDir)) {
     try {
       // execFileSync avoids shell interpretation — no injection risk from the URL.
-      pullWithoutSymlinks(repoUrl, cacheDir)
+      pullWithoutSymlinks(repoUrl, repoDir)
     } catch {
       // Directory exists but is not a valid git repo (e.g. interrupted clone).
       // Remove it and fall through to a fresh clone.
-      fs.rmSync(cacheDir, { recursive: true, force: true })
+      fs.rmSync(repoDir, { recursive: true, force: true })
       fs.mkdirSync(CACHE_ROOT, { recursive: true })
-      cloneRepo(repoUrl, cacheDir)
+      cloneRepo(repoUrl, repoDir)
     }
   } else {
     fs.mkdirSync(CACHE_ROOT, { recursive: true })
-    cloneRepo(repoUrl, cacheDir)
+    cloneRepo(repoUrl, repoDir)
   }
 
-  return cacheDir
+  return repoDir
 }
 
 /**
  * Returns the current HEAD commit hash of the cached repository.
- * @param cacheDir - Absolute path to the cloned repository directory.
+ * @param repoDir - Absolute path to the cloned repository directory.
  */
-export function getCommitHash(cacheDir: string): string {
-  return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: cacheDir, stdio: 'pipe' })
+export function getCommitHash(repoDir: string): string {
+  return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repoDir, stdio: 'pipe' })
     .toString()
     .trim()
 }
@@ -145,20 +145,20 @@ async function warnBlockedCalls(logFile: string): Promise<void> {
  * Generates a codebase summary by spawning a Claude process, writes it to disk,
  * and removes the in-flight entry when done. Returns null on any failure.
  * @param summaryPath - Absolute path where the generated summary will be written.
- * @param cacheDir    - Working directory for the Claude process (cloned repository).
+ * @param repoDir     - Working directory for the Claude process (cloned repository).
  * @param model       - Claude model identifier used for generation.
  * @param onProgress  - Receives status messages during generation.
  */
 async function generateAndCache(
   summaryPath: string,
-  cacheDir: string,
+  repoDir: string,
   model: string,
   onProgress: (msg: string) => void,
   options: RepoCacheOptions,
 ): Promise<string | null> {
   try {
     onProgress(`Codebase wird analysiert (einmalig für das Modell: ${model})...`)
-    const summary = await runSummaryJob(cacheDir, model, options)
+    const summary = await runSummaryJob(repoDir, model, options)
     await fsPromises.writeFile(summaryPath, summary)
     onProgress('Codebase-Analyse abgeschlossen.')
     return summary
@@ -175,20 +175,20 @@ async function generateAndCache(
  * Returns the cached file immediately on a local cache hit.
  * Deduplicates concurrent generation requests for the same summary via an in-flight map.
  * Returns null without throwing if generation fails for any reason.
- * @param cacheDir   - Absolute path to the cloned repository directory.
+ * @param repoDir    - Absolute path to the cloned repository directory.
  * @param model      - Claude model used to generate the summary.
  * @param onProgress - Receives status messages during generation (silent on cache hit).
  * @param options    - Sandbox of the summary run.
  */
 export async function ensureRepoSummary(
-  cacheDir: string,
+  repoDir: string,
   model: string,
   onProgress: (msg: string) => void,
   options: RepoCacheOptions,
 ): Promise<string | null> {
   try {
-    const hash = getCommitHash(cacheDir)
-    const summaryPath = path.join(cacheDir, `codebase-summary-${hash}-${model}.md`)
+    const hash = getCommitHash(repoDir)
+    const summaryPath = path.join(repoDir, `codebase-summary-${hash}-${model}.md`)
 
     const cached = await fsPromises.readFile(summaryPath, 'utf-8').catch(() => null)
     if (cached) {
@@ -199,7 +199,7 @@ export async function ensureRepoSummary(
     const existing = inFlight.get(summaryPath)
     if (existing) return existing
 
-    const job = generateAndCache(summaryPath, cacheDir, model, onProgress, options)
+    const job = generateAndCache(summaryPath, repoDir, model, onProgress, options)
     inFlight.set(summaryPath, job)
     return job
   } catch (err) {
@@ -286,6 +286,6 @@ function spawnSummary(cwd: string, model: string, sandbox: SummarySandbox, logFi
 export function createGitRepoProvider(options: RepoCacheOptions): RepoProvider {
   return {
     ensureRepo,
-    ensureSummary: (cacheDir, model, onProgress) => ensureRepoSummary(cacheDir, model, onProgress, options),
+    ensureSummary: (repoDir, model, onProgress) => ensureRepoSummary(repoDir, model, onProgress, options),
   }
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getRepoCacheDir, getCommitHash, ensureRepoSummary } from './repoCache'
+import { getRepoDir, getCommitHash, ensureRepoSummary } from './repoCache'
 import { createAgentSandbox } from '../agentSandbox/agentSandbox'
 import { execFileSync } from 'child_process'
 import fs from 'fs/promises'
@@ -17,16 +17,16 @@ async function makeTempRepo(): Promise<string> {
   return tmp
 }
 
-describe('getRepoCacheDir', () => {
+describe('getRepoDir', () => {
   it('generates consistent cache dir from repo url', () => {
     const url = 'https://github.com/example/repo'
-    expect(getRepoCacheDir(url)).toBe(getRepoCacheDir(url))
-    expect(getRepoCacheDir(url)).toContain('repo-cache')
+    expect(getRepoDir(url)).toBe(getRepoDir(url))
+    expect(getRepoDir(url)).toContain('repo-cache')
   })
 
   it('generates different dirs for different repos', () => {
-    expect(getRepoCacheDir('https://github.com/a/repo'))
-      .not.toBe(getRepoCacheDir('https://github.com/b/repo'))
+    expect(getRepoDir('https://github.com/a/repo'))
+      .not.toBe(getRepoDir('https://github.com/b/repo'))
   })
 })
 

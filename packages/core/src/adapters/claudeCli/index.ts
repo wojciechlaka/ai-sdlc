@@ -233,7 +233,7 @@ async function runClaudeOnce(
   const hookLog = await openHookLog(callbacks.onToolEvent)
   let cliResult: ExtractedResult
   try {
-    cliResult = await spawnClaude(input.ticketKey, prompt, input.repoPath, input.model, callbacks.onProgress, {
+    cliResult = await spawnClaude(input.ticketKey, prompt, input.repoDir, input.model, callbacks.onProgress, {
       sandbox: agent.sandbox,
       logFile: hookLog.file,
     })

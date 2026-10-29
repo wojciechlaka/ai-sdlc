@@ -9,7 +9,7 @@ export interface AgentRunnerInput {
   title: string
   description: string
   /** Local clone of the target repository. */
-  repoPath: string
+  repoDir: string
   model: string
   codebaseSummary?: string
   /** Answered questions of earlier runs of this stage. */
