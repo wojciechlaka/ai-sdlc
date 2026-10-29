@@ -9,4 +9,4 @@ export type { AgentRunner, AgentRunnerInput, AgentRunMeta, AgentRunResult, Agent
 export { AgentRunTerminatedError, AgentRunTimeoutError } from './agentRunner'
 export type { RepoProvider } from './repoProvider'
 export type { EventPublisher } from './eventPublisher'
-export type { ClaudeProcessSandbox } from './claudeProcessSandbox'
+export type { ClaudeProcessSandbox, HookLogFile } from './claudeProcessSandbox'

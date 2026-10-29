@@ -1,4 +1,3 @@
-import os from 'os'
 import path from 'path'
 import { execFileSync, spawn } from 'child_process'
 import fsPromises from 'fs/promises'
@@ -8,11 +7,8 @@ import { describeError } from '../../domain/errors'
 // Codebase summary: one sandboxed `claude` run per commit and model, cached as a Markdown file in the clone and
 // pasted into the agent prompt. Failures only cost the summary — the agent then starts without it.
 
-// Same values as in adapters/claudeCli (errors.ts, hookLog.ts); adapters must not import each other
-// (architecture test), so each keeps its own copy.
+// Same value as in adapters/claudeCli/errors.ts; adapters must not import each other (architecture test).
 const STDERR_PREVIEW_CHARS = 200
-const HOOK_LOG_DIR_PREFIX = 'refinement-hooks-'
-const HOOK_LOG_FILE_NAME = 'tools.jsonl'
 
 /** Configuration of the summary run. */
 export interface CodebaseSummaryOptions {
@@ -166,13 +162,12 @@ function extractStreamJsonResult(raw: string): string {
  * @throws If the Claude process exits with a non-zero code or no success result is found.
  */
 async function runSummaryJob(cwd: string, model: string, options: CodebaseSummaryOptions): Promise<string> {
-  const logDir = await fsPromises.mkdtemp(path.join(/*turbopackIgnore: true*/ os.tmpdir(), HOOK_LOG_DIR_PREFIX))
-  const logFile = path.join(/*turbopackIgnore: true*/ logDir, HOOK_LOG_FILE_NAME)
+  const logFile = await options.sandbox.createLogFile()
   try {
-    return await spawnSummary(cwd, model, options.sandbox, logFile)
+    return await spawnSummary(cwd, model, options.sandbox, logFile.path)
   } finally {
-    await warnBlockedCalls(logFile)
-    await fsPromises.rm(logDir, { recursive: true, force: true })
+    await warnBlockedCalls(logFile.path)
+    await logFile.cleanup()
   }
 }
 

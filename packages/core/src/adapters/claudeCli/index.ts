@@ -55,7 +55,7 @@ async function runClaudeOnce(
     retryContext,
   })
 
-  const hookLog = await openHookLog(callbacks.onToolEvent)
+  const hookLog = await openHookLog(await agent.sandbox.createLogFile(), callbacks.onToolEvent)
   let cliResult: ExtractedResult
   try {
     cliResult = await spawnClaude({

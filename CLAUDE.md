@@ -113,7 +113,7 @@ running|awaiting_answer --stop--> ready
    clients call `router.refresh()` on state/question events
 
 **Agent sandbox, guard and audit hooks (spec §13):** `adapters/agentSandbox` implements the `ClaudeProcessSandbox`
-port (`ports/claudeProcessSandbox.ts`: `args`, `env(logFile)`, `claudeArgs(model)`); it is built once in `compose.ts`
+port (`ports/claudeProcessSandbox.ts`: `args`, `env(logFile)`, `claudeArgs(model)`, `createLogFile()`); it is built once in `compose.ts`
 and passed to the claudeCli and git adapters. It gives every `claude` process `--setting-sources user` (the clone's `.claude/` settings
 and hooks are never loaded), `--allowedTools Read,Glob,Grep,Bash`, `--settings` with a `PreToolUse` hook
 (`packages/core/hooks/guard.mjs`) and a `PostToolUse` hook (`hooks/audit.mjs`), and an allowlisted env (no
@@ -121,8 +121,8 @@ and hooks are never loaded), `--allowedTools Read,Glob,Grep,Bash`, `--settings` 
 parsing): Read/Glob/Grep only inside the realpath of the clone; Bash only `git log|show|diff|blame|ls-files|status|
 rev-parse` with allowlisted options, no shell special characters (`~`/`^` only inside a revision word), no absolute
 paths or `..`; every other tool denied. The clone is checked out with `core.symlinks=false` (`adapters/git`). The guard fails closed (modules loaded inside `try`; shell fallback `|| … exit 2` if node cannot run it);
-audit fails open. Both append JSON lines to `$REFINEMENT_HOOK_LOG`, a temp file per Claude call that
-`adapters/claudeCli/hookLog.ts` follows during the run and reports as `ToolEvent` (`{ kind: 'blocked' | 'used', tool,
+audit fails open. Both append JSON lines to `$REFINEMENT_HOOK_LOG`, a temp file per Claude call (created by
+`sandbox.createLogFile()`) that `adapters/claudeCli/hookLog.ts` follows during the run and reports as `ToolEvent` (`{ kind: 'blocked' | 'used', tool,
 target, reason? }`) via `AgentRunner.run(input, { onProgress, onToolEvent })`. `executeRun` turns them into
 `guard_blocked` (system, plus a progress event) / `tool_used` (agent) log entries while the attempt is current. The
 summary run (`adapters/git`) only warns about blocked calls in the server log. `hooks/` holds plain Node ESM scripts

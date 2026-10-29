@@ -1,5 +1,7 @@
+import fs from 'fs/promises'
+import os from 'os'
 import path from 'path'
-import type { ClaudeProcessSandbox } from '../../ports'
+import type { ClaudeProcessSandbox, HookLogFile } from '../../ports'
 
 // Sandbox of every `claude` process the app starts (agent and codebase summary, spec §13): which settings are
 // loaded, which hooks guard the tools, which tools are allowed and which environment the process sees.
@@ -9,6 +11,9 @@ import type { ClaudeProcessSandbox } from '../../ports'
 export const HOOK_LOG_ENV = 'REFINEMENT_HOOK_LOG'
 /** Read-only tools; the guard additionally confines them to the clone and restricts Bash to reading git commands. */
 export const ALLOWED_TOOLS = 'Read,Glob,Grep,Bash'
+/** Temp directory prefix and file name of a hook log. */
+const HOOK_LOG_DIR_PREFIX = 'refinement-hooks-'
+const HOOK_LOG_FILE_NAME = 'tools.jsonl'
 /** Seconds Claude Code waits for a hook; the scripts need milliseconds. */
 const HOOK_TIMEOUT_SECONDS = 10
 
@@ -63,6 +68,17 @@ export function sandboxEnv(baseEnv: NodeJS.ProcessEnv, logFile: string): NodeJS.
   return env
 }
 
+/** Creates an empty hook log in a fresh temp directory (one per `claude` process, so parallel runs never mix). */
+export async function createHookLogFile(): Promise<HookLogFile> {
+  const dir = await fs.mkdtemp(path.join(/*turbopackIgnore: true*/ os.tmpdir(), HOOK_LOG_DIR_PREFIX))
+  const file = path.join(/*turbopackIgnore: true*/ dir, HOOK_LOG_FILE_NAME)
+  await fs.writeFile(file, '')
+  return {
+    path: file,
+    cleanup: () => fs.rm(dir, { recursive: true, force: true }).catch(() => {}),
+  }
+}
+
 /** Flags of a headless `claude` call whose stream-json output the adapters parse line by line. */
 const HEADLESS_ARGS = ['--print', '--output-format', 'stream-json', '--verbose']
 
@@ -80,5 +96,6 @@ export function createAgentSandbox(options: { hooksDir: string }): ClaudeProcess
     args,
     env: (logFile) => sandboxEnv(process.env, logFile),
     claudeArgs: (model) => [...HEADLESS_ARGS, '--model', model, ...args],
+    createLogFile: createHookLogFile,
   }
 }

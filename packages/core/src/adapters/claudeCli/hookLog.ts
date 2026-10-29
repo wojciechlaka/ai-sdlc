@@ -1,19 +1,13 @@
 import fs from 'fs/promises'
-import os from 'os'
-import path from 'path'
 import { StringDecoder } from 'string_decoder'
-import type { ToolEvent } from '../../ports'
+import type { HookLogFile, ToolEvent } from '../../ports'
 import { describeError } from '../../domain/errors'
 
 // Guard and audit hooks of the agent (spec §13). The hook scripts (`packages/core/hooks`) append one JSON line
-// per tool call to the file in REFINEMENT_HOOK_LOG (set by the sandbox); this module creates that file per run,
-// follows it while the run lasts and turns the lines into ToolEvents.
+// per tool call to the file in REFINEMENT_HOOK_LOG (created and set by the sandbox); this module follows that file
+// while the run lasts and turns the lines into ToolEvents.
 
 const POLL_INTERVAL_MS = 200
-// Same names as the summary run in adapters/git/repoCache.ts; adapters must not import each other
-// (architecture test), so each keeps its own copy.
-const HOOK_LOG_DIR_PREFIX = 'refinement-hooks-'
-const HOOK_LOG_FILE_NAME = 'tools.jsonl'
 const READ_CHUNK_BYTES = 64 * 1024
 
 /** Parses one log line of the hook scripts; null for anything that is not a tool event. */
@@ -46,13 +40,15 @@ export interface HookLog {
 }
 
 /**
- * Creates an empty log file for one run and reports every complete line to `onEvent` while the run lasts
- * (polling; partial lines wait for their newline). `close` drains the rest.
+ * Follows the sandbox's log file of one Claude call and reports every complete line to `onEvent` while the call lasts
+ * (polling; partial lines wait for their newline). `close` drains the rest and cleans the file up.
  */
-export async function openHookLog(onEvent: (event: ToolEvent) => void, pollMs = POLL_INTERVAL_MS): Promise<HookLog> {
-  const dir = await fs.mkdtemp(path.join(/*turbopackIgnore: true*/ os.tmpdir(), HOOK_LOG_DIR_PREFIX))
-  const file = path.join(/*turbopackIgnore: true*/ dir, HOOK_LOG_FILE_NAME)
-  await fs.writeFile(file, '')
+export async function openHookLog(
+  logFile: HookLogFile,
+  onEvent: (event: ToolEvent) => void,
+  pollMs = POLL_INTERVAL_MS,
+): Promise<HookLog> {
+  const file = logFile.path
   const handle = await fs.open(file, 'r')
   const decoder = new StringDecoder('utf8')
   const buffer = Buffer.alloc(READ_CHUNK_BYTES)
@@ -99,7 +95,7 @@ export async function openHookLog(onEvent: (event: ToolEvent) => void, pollMs = 
       emit(pending + decoder.end())
       pending = ''
       await handle.close().catch(() => {})
-      await fs.rm(dir, { recursive: true, force: true })
+      await logFile.cleanup()
     },
   }
 }

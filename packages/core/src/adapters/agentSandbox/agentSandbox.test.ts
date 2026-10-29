@@ -108,3 +108,20 @@ describe('guard command via /bin/sh (fail closed)', () => {
     expect(JSON.parse(result.stdout).hookSpecificOutput).toMatchObject({ permissionDecision: 'deny', permissionDecisionReason: expect.stringContaining('Guard-Fehler') })
   })
 })
+
+describe('createLogFile', () => {
+  it('creates a fresh empty hook log per call and removes it on cleanup', async () => {
+    const sandbox = createAgentSandbox({ hooksDir: HOOKS_DIR })
+    const first = await sandbox.createLogFile()
+    const second = await sandbox.createLogFile()
+    expect(first.path).not.toBe(second.path)
+    expect(first.path).toMatch(/tools\.jsonl$/)
+    expect(fs.readFileSync(first.path, 'utf-8')).toBe('')
+
+    await first.cleanup()
+    await second.cleanup()
+    expect(fs.existsSync(path.dirname(first.path))).toBe(false)
+    expect(fs.existsSync(second.path)).toBe(false)
+    await expect(first.cleanup()).resolves.toBeUndefined()
+  })
+})
