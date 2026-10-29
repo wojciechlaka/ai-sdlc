@@ -1,12 +1,13 @@
 import { EventEmitter } from 'events'
-import type { RefinementEvent } from '@refinement/shared'
+import type { TicketEvent } from '@refinement/shared'
 import type { EventPublisher } from '../../ports'
 
-const channel = (ticketId: string) => `ticket:${ticketId}`
+const ALL_TICKETS = 'all'
+const channel = (ticketKey: string | null) => (ticketKey === null ? ALL_TICKETS : `ticket:${ticketKey}`)
 
 /**
- * In-process event bus on top of Node's EventEmitter, one channel per ticket.
- * Only reaches subscribers in the same process (see spec section 11 for Phase 3).
+ * In-process event bus on top of Node's EventEmitter: one channel per ticket plus one for all
+ * tickets (board). Only reaches subscribers in the same process.
  */
 export function createNodeEventPublisher(): EventPublisher {
   const emitter = new EventEmitter()
@@ -14,11 +15,12 @@ export function createNodeEventPublisher(): EventPublisher {
   emitter.setMaxListeners(0)
 
   return {
-    publish(event: RefinementEvent) {
-      emitter.emit(channel(event.ticketId), event)
+    publish(event: TicketEvent) {
+      emitter.emit(channel(event.ticketKey), event)
+      emitter.emit(ALL_TICKETS, event)
     },
-    subscribe(ticketId, handler) {
-      const name = channel(ticketId)
+    subscribe(ticketKey, handler) {
+      const name = channel(ticketKey)
       emitter.on(name, handler)
       return () => {
         emitter.off(name, handler)

@@ -1,54 +1,48 @@
 'use client'
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
 
-const REPO_URL_KEY = 'repoUrl'
-
+/** Client state shared across pages: the live progress log per ticket. */
 export interface AppState {
-  /** null until localStorage has been read on the client. */
-  repoUrl: string | null
-  setRepoUrl(url: string): void
+  /** Progress messages per ticket key, oldest first. */
   progressLogs: Record<string, string[]>
-  appendProgress(ticketId: string, message: string): void
-  clearProgress(): void
+  /** Adds one progress message to the ticket's live log. */
+  appendProgress(ticketKey: string, message: string): void
+  /** Without a key all live logs are cleared, with a key only that ticket's. */
+  clearProgress(ticketKey?: string): void
 }
 
 const AppStateContext = createContext<AppState | null>(null)
 
 /**
- * Client state that must survive navigation between tickets: the target repository
- * (persisted in localStorage) and the live progress log per ticket. Lives in the root layout,
- * which App Router keeps mounted across navigations.
+ * Client state that must survive navigation between tickets: the live progress log per ticket.
+ * Lives in the root layout, which App Router keeps mounted across navigations; a client component for React state.
  */
 export function AppStateProvider({ children }: { children: ReactNode }) {
-  const [repoUrl, setRepoUrlState] = useState<string | null>(null)
   const [progressLogs, setProgressLogs] = useState<Record<string, string[]>>({})
 
-  useEffect(() => {
-    setRepoUrlState(localStorage.getItem(REPO_URL_KEY) ?? '')
+  const appendProgress = useCallback((ticketKey: string, message: string) => {
+    setProgressLogs((prev) => ({ ...prev, [ticketKey]: [...(prev[ticketKey] ?? []), message] }))
   }, [])
 
-  const setRepoUrl = useCallback((url: string) => {
-    localStorage.setItem(REPO_URL_KEY, url)
-    setRepoUrlState(url)
+  const clearProgress = useCallback((ticketKey?: string) => {
+    if (ticketKey === undefined) {
+      setProgressLogs({})
+    } else {
+      setProgressLogs(({ [ticketKey]: _dropped, ...rest }) => rest)
+    }
   }, [])
 
-  const appendProgress = useCallback((ticketId: string, message: string) => {
-    setProgressLogs((prev) => ({ ...prev, [ticketId]: [...(prev[ticketId] ?? []), message] }))
-  }, [])
-
-  const clearProgress = useCallback(() => setProgressLogs({}), [])
-
-  const value = useMemo(
-    () => ({ repoUrl, setRepoUrl, progressLogs, appendProgress, clearProgress }),
-    [repoUrl, setRepoUrl, progressLogs, appendProgress, clearProgress],
-  )
+  const value = useMemo(() => ({ progressLogs, appendProgress, clearProgress }), [progressLogs, appendProgress, clearProgress])
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>
 }
 
+/** The `AppState` of the surrounding provider. @throws outside `<AppStateProvider>` */
 export function useAppState(): AppState {
   const ctx = useContext(AppStateContext)
-  if (!ctx) throw new Error('useAppState must be used inside <AppStateProvider>')
+  if (!ctx) {
+    throw new Error('useAppState must be used inside <AppStateProvider>')
+  }
   return ctx
 }

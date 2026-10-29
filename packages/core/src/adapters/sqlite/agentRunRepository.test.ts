@@ -1,119 +1,87 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import type { AgentOutput } from '@refinement/shared'
 import { createTestDatabase } from '../../testing/testDb'
+import { SAMPLE_INTENT_OUTPUT, sourceTicket } from '../../testing/fakes'
 import { createSqliteTicketRepository } from './ticketRepository'
 import { createSqliteAgentRunRepository } from './agentRunRepository'
 import type { AgentRunRepository, TicketRepository } from '../../ports'
+import type { SqliteDb } from './database'
+import { agentRuns } from './schema'
 
-const INPUT = {
-  ticketTitle: 'Test', ticketDescription: 'Desc', acceptanceCriteria: '',
-  repo: 'https://github.com/example/repo', model: 'claude-sonnet-4-6',
-}
+const INPUT = { model: 'm', answeredQuestions: [] }
 
-const OUTPUT: AgentOutput = {
-  type: 'refinement',
-  result: { title: 'Test', userStory: 'Als Nutzer...', acceptanceCriteria: ['AC 1'], affectedFiles: [], risks: [], openQuestions: [], confidence: 80 },
-}
-
-const NO_TOKENS = { costUsd: 0, inputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, outputTokens: 0 }
-
+let db: SqliteDb
 let tickets: TicketRepository
 let runs: AgentRunRepository
 
 beforeEach(() => {
-  const db = createTestDatabase()
+  db = createTestDatabase()
   tickets = createSqliteTicketRepository(db)
   runs = createSqliteAgentRunRepository(db)
+  tickets.upsertFromSource([sourceTicket('CB-1'), sourceTicket('CB-2')])
 })
 
-function newTicketId(): number {
-  return tickets.create({ title: 'T', description: 'D' }).id
-}
+const create = (ticketKey = 'CB-1', stage: 'plan' | 'design' = 'plan') =>
+  runs.create({ ticketKey, stage, trigger: 'initial', input: INPUT, model: 'm' })
 
 describe('create', () => {
-  it('creates a running run and increments the ticket iteration', () => {
-    const ticketId = newTicketId()
-    const run = runs.create({ ticketId, trigger: 'initial', input: INPUT, model: 'm' })
-    expect(run.status).toBe('running')
-    expect(run.iteration).toBe(1)
-    expect(run.trigger).toBe('initial')
-    expect(tickets.findById(ticketId)?.iteration).toBe(1)
+  it('numbers runs per ticket and starts them running', () => {
+    expect(create('CB-1')).toMatchObject({ seq: 1, status: 'running', stage: 'plan', output: null, input: INPUT })
+    expect(create('CB-1').seq).toBe(2)
+    expect(create('CB-2').seq).toBe(1)
   })
 
-  it('throws for an unknown ticket', () => {
-    expect(() => runs.create({ ticketId: 9999, trigger: 'initial', input: INPUT, model: 'm' })).toThrow('not found')
+  it('throws for unknown tickets', () => {
+    expect(() => create('CB-404')).toThrow()
   })
 })
 
-describe('findById', () => {
-  it('returns the run or null', () => {
-    const run = runs.create({ ticketId: newTicketId(), trigger: 'initial', input: INPUT, model: 'm' })
-    expect(runs.findById(run.id)?.id).toBe(run.id)
-    expect(runs.findById('nope')).toBeNull()
+describe('input', () => {
+  it('reads rows written before the rename (`previousRuns`) as answeredQuestions', () => {
+    const qa = [{ question: 'Wer?', answer: 'Alle' }]
+    const legacyInput = { model: 'm', previousRuns: qa } as unknown as typeof agentRuns.$inferInsert['input']
+    const row = db.insert(agentRuns).values({
+      ticketKey: 'CB-1', stage: 'plan', seq: 1, trigger: 'answer', input: legacyInput, status: 'succeeded', model: 'm', startedAt: new Date(),
+    }).returning().get()
+    expect(runs.findById(row.id)?.input).toEqual({ model: 'm', answeredQuestions: qa })
+    expect(runs.listForTicket('CB-1')[0]?.input).toEqual({ model: 'm', answeredQuestions: qa })
   })
 })
 
 describe('complete / fail', () => {
-  it('stores output and tokens on complete', () => {
-    const run = runs.create({ ticketId: newTicketId(), trigger: 'initial', input: INPUT, model: 'm' })
-    runs.complete(run.id, { output: OUTPUT, costUsd: 0.05, inputTokens: 1000, cacheCreationTokens: 0, cacheReadTokens: 0, outputTokens: 200 })
-    const updated = runs.findById(run.id)!
-    expect(updated.status).toBe('succeeded')
-    expect(updated.output?.type).toBe('refinement')
-    expect(updated.costUsd).toBe(0.05)
-    expect(updated.finishedAt).toBeInstanceOf(Date)
-  })
-
-  it('sets failed or timeout on fail', () => {
-    const ticketId = newTicketId()
-    const a = runs.create({ ticketId, trigger: 'initial', input: INPUT, model: 'm' })
-    const b = runs.create({ ticketId, trigger: 'initial', input: INPUT, model: 'm' })
-    runs.fail(a.id, 'failed')
-    runs.fail(b.id, 'timeout')
-    expect(runs.findById(a.id)?.status).toBe('failed')
-    expect(runs.findById(b.id)?.status).toBe('timeout')
-  })
-})
-
-describe('listForTicket / latestForTicket', () => {
-  it('returns runs in iteration order and the latest regardless of status', () => {
-    const ticketId = newTicketId()
-    const first = runs.create({ ticketId, trigger: 'initial', input: INPUT, model: 'm' })
-    runs.complete(first.id, { output: { type: 'question', question: 'Q?' }, ...NO_TOKENS })
-    const second = runs.create({
-      ticketId, trigger: 'answer', model: 'm',
-      input: { ...INPUT, previousRuns: [{ question: 'Q?', answer: 'A' }] },
+  it('stores output, cost and tokens', () => {
+    const run = create()
+    runs.complete(run.id, {
+      output: SAMPLE_INTENT_OUTPUT, costUsd: 0.5, inputTokens: 10, cacheCreationTokens: 1, cacheReadTokens: 2, outputTokens: 3,
     })
-
-    expect(runs.listForTicket(ticketId).map((r) => r.id)).toEqual([first.id, second.id])
-    expect(runs.latestForTicket(ticketId)?.id).toBe(second.id)
-    expect(runs.latestForTicket(ticketId)?.status).toBe('running')
+    expect(runs.findById(run.id)).toMatchObject({ status: 'succeeded', output: SAMPLE_INTENT_OUTPUT, costUsd: 0.5, outputTokens: 3 })
+    expect(runs.findById(run.id)?.finishedAt).toBeInstanceOf(Date)
   })
 
-  it('returns empty results for a ticket without runs', () => {
-    const ticketId = newTicketId()
-    expect(runs.listForTicket(ticketId)).toEqual([])
-    expect(runs.latestForTicket(ticketId)).toBeNull()
+  it('marks failures', () => {
+    const run = create()
+    runs.fail(run.id, 'timeout')
+    expect(runs.findById(run.id)?.status).toBe('timeout')
   })
 })
 
-describe('findStuck', () => {
-  it('returns only running runs', () => {
-    const ticketId = newTicketId()
-    const running = runs.create({ ticketId, trigger: 'initial', input: INPUT, model: 'm' })
-    const failed = runs.create({ ticketId, trigger: 'initial', input: INPUT, model: 'm' })
-    runs.fail(failed.id, 'failed')
-    const ids = runs.findStuck().map((r) => r.id)
-    expect(ids).toContain(running.id)
-    expect(ids).not.toContain(failed.id)
+describe('listForTicket / findStuck', () => {
+  it('lists runs of a ticket in order, optionally of one stage', () => {
+    create('CB-1', 'plan')
+    create('CB-1', 'design')
+    create('CB-2', 'plan')
+    expect(runs.listForTicket('CB-1').map((r) => r.seq)).toEqual([1, 2])
+    expect(runs.listForTicket('CB-1', 'design').map((r) => r.seq)).toEqual([2])
   })
-})
 
-describe('cascade', () => {
-  it('deletes runs together with their ticket', () => {
-    const ticketId = newTicketId()
-    const run = runs.create({ ticketId, trigger: 'initial', input: INPUT, model: 'm' })
-    tickets.delete(ticketId)
-    expect(runs.findById(run.id)).toBeNull()
+  it('finds runs left running', () => {
+    const stuck = create()
+    runs.fail(create().id, 'failed')
+    expect(runs.findStuck().map((r) => r.id)).toEqual([stuck.id])
+  })
+
+  it('removes runs together with their tickets', () => {
+    create()
+    tickets.clear()
+    expect(runs.findStuck()).toEqual([])
   })
 })

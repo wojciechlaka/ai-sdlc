@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { NotFoundError, ConflictError, ValidationError, errorCode } from './errors'
+import { NotFoundError, ConflictError, ValidationError, errorCode, describeError } from './errors'
 
 describe('domain errors', () => {
   it('carry a stable code and their message', () => {
@@ -26,5 +26,22 @@ describe('errorCode', () => {
     expect(errorCode(Object.assign(new Error('fs'), { code: 'ENOENT' }))).toBeNull()
     expect(errorCode(null)).toBeNull()
     expect(errorCode('string')).toBeNull()
+  })
+})
+
+describe('describeError', () => {
+  it('prefers stderr', () => {
+    expect(describeError({ stderr: Buffer.from(' boom \n') })).toBe('boom')
+  })
+
+  it('falls back to message and String()', () => {
+    expect(describeError(new Error('x'))).toBe('x')
+    expect(describeError('y')).toBe('y')
+  })
+
+  it('redacts credentials in URLs', () => {
+    const err = new Error('fatal: https://ghp_secret123@github.com/a/b failed')
+    expect(describeError(err)).toBe('fatal: https://***@github.com/a/b failed')
+    expect(describeError({ stderr: Buffer.from('https://u:p@host/x') })).toBe('https://***@host/x')
   })
 })

@@ -10,15 +10,18 @@ Maintain. Jede Stufe erzeugt ein Artefakt, das Mensch und Agent lesen und das di
 `intent.md` → `spec.md` → `plan.md` → Code-PR → Produktion → (Befund) neues `intent.md`.
 
 - **Inhalte liegen in Git**, pro Ticket im Ziel-Repo (z. B. `docs/work/CB-3/intent.md`).
-- **Pro Stufe ein Branch** `<TICKET>/<stufe>` (z. B. `CB-3/intent`) und **ein PR als Gate**; der **Merge ist
-  der Übergang** in die nächste Stufe.
+- **Pro Stufe ein Branch** nach dem Artefakt benannt, `<TICKET>/intent|spec` (z. B. `CB-3/intent`), und **ein PR
+  als Gate**; der **Merge ist der Übergang** in die nächste Stufe.
+- **Arbeitsbranch `showcase`:** PRs gehen gegen `showcase`, Stufen und Inhalte werden von dort gelesen;
+  `master` bleibt unberührt. Ein Reset setzt `showcase` auf den Tag `showcase-base` zurück.
 - **Die Plattform hält nur Zustand und Log**: aktuelle Stufe pro Ticket und ein persistentes Log (Läufe,
   Rückfragen, Freigaben, Übergänge, Zeitstempel). Merges erkennt sie durch Abfrage der Git-Host-API.
 - **Ticket-Systeme wie Jira sind nur Eingang** für den rohen Ticket-Inhalt. Es gibt keinen Spiegel von
   Inhalten zurück; höchstens ein Statuswechsel. Branch-Namen mit Ticket-Schlüssel verknüpfen sich über die
   Git-Integration von Jira von selbst.
 - **Showcase:** Stufe 1 (Plan → `intent.md`) und Stufe 2 (Design → `spec.md`). Markdown-Dateien in
-  `examples/tickets/` simulieren die Jira-Tickets.
+  `examples/tickets/` simulieren die Jira-Tickets; die echte Anbindung (REST-Adapter oder MCP-Server) ist
+  als Ausblick beschrieben ([Architektur §6](architecture.md#ausblick-ticket-system-anbinden-jira-o-ä)).
 
 **Begründung.** Wenn Agenten Code in Stunden schreiben, liegt der Engpass bei Planung, Review und
 Freigabe. Diese Schritte brauchen nachvollziehbare Artefakte und klare Gates. Git liefert Versionen,
@@ -32,7 +35,8 @@ Review und Freigabe bereits mit; jede Information hat genau eine Quelle.
 **Entscheidung.** Die Plattform ist **eine Next.js-App** (App Router) und läuft als **ein Prozess**: Server
 Components lesen, Server Actions schreiben, ein Route Handler streamt Live-Ereignisse per SSE. Die Fachlogik
 liegt in `packages/core` nach **Ports & Adapters** (Domäne, Use Cases, Ports; Adapter für SQLite/Drizzle,
-Git, Claude CLI und einen Event-Bus im Prozess). `packages/shared` hält die Zod-Verträge zwischen Kern und UI.
+GitHub (Octokit), die Markdown-Ticketquelle, den Git-Klon, Claude CLI und einen Event-Bus im Prozess).
+`packages/shared` hält die Zod-Verträge zwischen Kern und UI.
 
 **Begründung.** Ein Prozess und ein Start-Befehl halten die lokale App einfach. Die Fachlogik ist schmal,
 die Ränder wachsen mit den Playbook-Stufen (Git-Host, später Jira, CI, Monitoring) — jeder Rand ist ein
@@ -70,3 +74,35 @@ Gerenderte Bilder gibt es nur für die Übersichtsseite (`docs/architecture.png`
 `docs/architecture-annotated.png`).
 
 **Begründung.** Eine editorunabhängige Notation ohne Toolchain; Diffs bleiben lesbar.
+
+## E6 — Leitplanken des Agents als Code (Hook + Sandbox + Eval), kein MCP für Schreibzugriffe (2026-10-28)
+
+**Entscheidung.** Was der Agent darf, steht nicht nur im Skill, sondern wird als Code durchgesetzt und geprüft:
+
+- **Sandbox** für jeden `claude`-Prozess (`adapters/agentSandbox`): nur Nutzer-Einstellungen (nichts aus `.claude/`
+  des fremden Klons), nur lesende Werkzeuge, Umgebung aus einer Positivliste ohne `GITHUB_TOKEN`.
+- **Hooks** von Claude Code (`packages/core/hooks/`): der Guard (`PreToolUse`) lässt Lesen nur im Klon und Bash nur
+  für lesende git-Befehle zu und scheitert geschlossen; das Audit (`PostToolUse`) hält jeden Aufruf fest. Beides
+  landet als `guard_blocked`/`tool_used` im Log des Tickets.
+- **Eval** (`packages/core/evals/guard.eval.ts`, `npm run eval:guard`): ein echter Agent versucht verbotene und
+  erlaubte Aufrufe; geprüft wird das Hook-Log.
+- **Kein MCP-Server, über den der Agent in die DB schreibt.** Zustände ändern nur die Use Cases nach den Regeln
+  der Domäne; der Agent liefert Rückfrage oder Ergebnis, die App handelt.
+
+Die Regel für Bash war zuerst eine Positivliste lesender Shell-Befehle (`cat`, `ls`, `grep`, …). Nach einem Review
+mit einer Reihe von Umgehungen (Verkettung, Umleitung, Ersetzung, `sort -o`, `git grep -O`, …) wurde sie zu einer
+**minimalen git-Grammatik** gehärtet: nur `git log|show|diff|blame|ls-files|status|rev-parse` mit erlaubten Optionen,
+ohne Shell-Sonderzeichen; zum Lesen sind `Read`, `Glob` und `Grep` da. Jede bekannte Umgehung steht als
+Ablehnung in den Tabellentests.
+
+**Begründung.** Ein Prompt ist eine Bitte, kein Schutz — das Playbook fordert „Governance als Code“. Der Hook sitzt
+dort, wo das Risiko liegt: an den Werkzeugen des Agents. Eine Positivliste ohne Shell-Parser ist klein genug, um
+sie vollständig zu testen. Ein Schreibzugang über MCP würde die Zustandsmaschine umgehen und den Agent zum
+zweiten Schreiber der DB machen. Der Eval zeigt, dass die Regel mit dem echten Claude Code zusammenspielt, was
+Unit-Tests allein nicht belegen.
+
+**Trade-offs.** Der Agent kann weniger: keine beliebigen Shell-Befehle, keine Bereiche `a..b` in git. Die Hooks
+hängen am Hook-Format von Claude Code. Restrisiken bleiben (Zeitlimit eines Hooks, Startdateien der Nutzer-Shell,
+siehe [Spec §13](superpowers/specs/2026-10-28-playbook-stages-design.md#13-nachtrag-guard--und-audit-hooks-für-den-agent)).
+Der Eval kostet Geld (etwa 5 Cent mit Haiku) und hängt vom Verhalten des Modells ab; er läuft daher nur auf Aufruf,
+nicht in `npm test`.

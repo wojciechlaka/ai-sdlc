@@ -31,6 +31,7 @@ vi.mock('fs', async (importOriginal) => {
 import { ensureRepo } from './repoCache'
 
 const REPO_URL = 'https://github.com/test/repo'
+const CACHE_DIR = '/tmp/test/repo-cache'
 
 describe('ensureRepo', () => {
   beforeEach(() => {
@@ -44,18 +45,18 @@ describe('ensureRepo', () => {
 
   it('clones the repo when the cache directory does not exist', async () => {
     mockExistsSync.mockReturnValue(false)
-    await ensureRepo(REPO_URL)
-    expect(mockMkdirSync).toHaveBeenCalledWith(expect.any(String), { recursive: true })
+    await ensureRepo(REPO_URL, CACHE_DIR)
+    expect(mockMkdirSync).toHaveBeenCalledWith(CACHE_DIR, { recursive: true })
     expect(mockExecFileSync).toHaveBeenCalledWith(
       'git',
-      ['clone', REPO_URL, expect.stringContaining('repo-cache')],
+      ['clone', '-c', 'core.symlinks=false', REPO_URL, expect.stringContaining('repo-cache')],
       expect.objectContaining({ stdio: 'pipe' }),
     )
   })
 
   it('pulls when the cache directory already exists', async () => {
     mockExistsSync.mockReturnValue(true)
-    await ensureRepo(REPO_URL)
+    await ensureRepo(REPO_URL, CACHE_DIR)
     expect(mockExecFileSync).toHaveBeenCalledWith(
       'git',
       ['pull'],
@@ -66,27 +67,44 @@ describe('ensureRepo', () => {
   it('removes the broken directory and re-clones when git pull fails', async () => {
     mockExistsSync.mockReturnValue(true)
     mockExecFileSync
+      .mockReturnValueOnce(Buffer.from(''))
+      .mockReturnValueOnce(Buffer.from(''))
       .mockImplementationOnce(() => { throw new Error('not a git repository') })
       .mockReturnValueOnce(Buffer.from(''))
-    await ensureRepo(REPO_URL)
+    await ensureRepo(REPO_URL, CACHE_DIR)
     expect(mockRmSync).toHaveBeenCalledWith(expect.any(String), { recursive: true, force: true })
-    expect(mockMkdirSync).toHaveBeenCalledWith(expect.any(String), { recursive: true })
-    expect(mockExecFileSync).toHaveBeenCalledTimes(2)
+    expect(mockMkdirSync).toHaveBeenCalledWith(CACHE_DIR, { recursive: true })
+    expect(mockExecFileSync).toHaveBeenCalledTimes(4)
     expect(mockExecFileSync).toHaveBeenLastCalledWith(
       'git',
-      ['clone', REPO_URL, expect.stringContaining('repo-cache')],
+      ['clone', '-c', 'core.symlinks=false', REPO_URL, expect.stringContaining('repo-cache')],
       expect.objectContaining({ stdio: 'pipe' }),
     )
   })
 
-  it('injects GITHUB_TOKEN into the clone URL when the env var is set', async () => {
+  it('clones with the plain URL even when GITHUB_TOKEN is set', async () => {
     mockExistsSync.mockReturnValue(false)
     vi.stubEnv('GITHUB_TOKEN', 'mytoken123')
-    await ensureRepo(REPO_URL)
+    await ensureRepo(REPO_URL, CACHE_DIR)
     expect(mockExecFileSync).toHaveBeenCalledWith(
       'git',
-      ['clone', 'https://mytoken123@github.com/test/repo', expect.stringContaining('repo-cache')],
+      ['clone', '-c', 'core.symlinks=false', REPO_URL, expect.stringContaining('repo-cache')],
       expect.objectContaining({ stdio: 'pipe' }),
     )
+  })
+
+  it('resets the remote URL before pulling an existing cache', async () => {
+    mockExistsSync.mockReturnValue(true)
+    vi.stubEnv('GITHUB_TOKEN', 'mytoken123')
+    await ensureRepo(REPO_URL, CACHE_DIR)
+    const calls = mockExecFileSync.mock.calls.map((c) => c[1])
+    expect(calls).toEqual([
+      ['remote', 'set-url', 'origin', REPO_URL],
+      ['config', 'core.symlinks', 'false'],
+      ['pull'],
+      ['rm', '-r', '-q', '--cached', '.'],
+      ['reset', '-q', '--hard'],
+    ])
+    expect(mockExecFileSync.mock.calls[0][2]).toEqual(expect.objectContaining({ cwd: expect.any(String) }))
   })
 })

@@ -28,28 +28,33 @@ afterEach(() => {
 })
 
 describe('useSSE', () => {
-  it('connects to the ticket stream', () => {
-    renderHook(() => useSSE('T-1', { onMessage: vi.fn() }))
-    expect(latest().url).toBe('/api/events?ticketId=T-1')
+  it('connects to the stream of one ticket', () => {
+    renderHook(() => useSSE('CB-1', { onMessage: vi.fn() }))
+    expect(latest().url).toBe('/api/events?ticketKey=CB-1')
+  })
+
+  it('connects to the stream of all tickets with null', () => {
+    renderHook(() => useSSE(null, { onMessage: vi.fn() }))
+    expect(latest().url).toBe('/api/events')
   })
 
   it('passes every parsed event to onMessage and marks the connection', () => {
     const onMessage = vi.fn()
-    const { result } = renderHook(() => useSSE('T-1', { onMessage }))
+    const { result } = renderHook(() => useSSE('CB-1', { onMessage }))
 
     act(() => {
-      latest().onmessage?.({ data: JSON.stringify({ type: 'progress', ticketId: 'T-1', message: 'a' }) })
-      latest().onmessage?.({ data: JSON.stringify({ type: 'progress', ticketId: 'T-1', message: 'b' }) })
+      latest().onmessage?.({ data: JSON.stringify({ type: 'progress', ticketKey: 'CB-1', message: 'a' }) })
+      latest().onmessage?.({ data: JSON.stringify({ type: 'progress', ticketKey: 'CB-1', message: 'b' }) })
     })
 
-    expect(onMessage).toHaveBeenNthCalledWith(1, { type: 'progress', ticketId: 'T-1', message: 'a' })
-    expect(onMessage).toHaveBeenNthCalledWith(2, { type: 'progress', ticketId: 'T-1', message: 'b' })
+    expect(onMessage).toHaveBeenNthCalledWith(1, { type: 'progress', ticketKey: 'CB-1', message: 'a' })
+    expect(onMessage).toHaveBeenNthCalledWith(2, { type: 'progress', ticketKey: 'CB-1', message: 'b' })
     expect(result.current).toEqual({ connected: true, everConnected: true })
   })
 
   it('calls onReconnect only when the connection opens again', () => {
     const onReconnect = vi.fn()
-    renderHook(() => useSSE('T-1', { onMessage: vi.fn(), onReconnect }))
+    renderHook(() => useSSE('CB-1', { onMessage: vi.fn(), onReconnect }))
 
     act(() => latest().onopen?.())
     expect(onReconnect).not.toHaveBeenCalled()
@@ -58,20 +63,20 @@ describe('useSSE', () => {
   })
 
   it('reports a lost connection but remembers that it was connected', () => {
-    const { result } = renderHook(() => useSSE('T-1', { onMessage: vi.fn() }))
+    const { result } = renderHook(() => useSSE('CB-1', { onMessage: vi.fn() }))
     act(() => latest().onopen?.())
     act(() => latest().onerror?.())
     expect(result.current).toEqual({ connected: false, everConnected: true })
   })
 
   it('closes the connection on unmount and when the ticket changes', () => {
-    const { rerender, unmount } = renderHook(({ id }) => useSSE(id, { onMessage: vi.fn() }), {
-      initialProps: { id: 'T-1' },
+    const { rerender, unmount } = renderHook(({ key }) => useSSE(key, { onMessage: vi.fn() }), {
+      initialProps: { key: 'CB-1' },
     })
     const first = latest()
-    rerender({ id: 'T-2' })
+    rerender({ key: 'CB-2' })
     expect(first.closed).toBe(true)
-    expect(latest().url).toBe('/api/events?ticketId=T-2')
+    expect(latest().url).toBe('/api/events?ticketKey=CB-2')
     unmount()
     expect(latest().closed).toBe(true)
   })

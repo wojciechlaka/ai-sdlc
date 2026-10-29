@@ -1,35 +1,32 @@
-import type { AgentRunDto, TicketDto } from '@refinement/shared'
-import type { AgentRun, Ticket } from '../domain/types'
-import { formatTicketId } from '../domain/ticketId'
+import type { AuditLogEntryDto, PullRequestRefDto, TicketDto } from '@refinement/shared'
+import type { Artifact, Ticket } from '../domain/types'
+import type { AuditLogEntry } from '../ports'
 
-export function toTicketDto(ticket: Ticket): TicketDto {
+/** PR number, link and state of an artifact for the UI. */
+export function toPullRequestRef(artifact: Artifact): PullRequestRefDto {
+  return { number: artifact.prNumber, url: artifact.prUrl, state: artifact.prState }
+}
+
+/**
+ * @param openArtifact - Artifact of the current stage whose PR is still open.
+ * @param totalCostUsd - Agent cost of the ticket over all stages (`summarizeCosts(...).totalUsd`).
+ */
+export function toTicketDto(ticket: Ticket, openArtifact: Artifact | null, totalCostUsd: number): TicketDto {
   return {
-    id: formatTicketId(ticket.id),
+    key: ticket.key,
     title: ticket.title,
     description: ticket.description,
-    status: ticket.status,
-    iteration: ticket.iteration,
-    createdAt: ticket.createdAt,
+    priority: ticket.priority,
+    sourcePath: ticket.sourcePath,
+    stage: ticket.stage,
+    state: ticket.state,
+    openPr: openArtifact ? toPullRequestRef(openArtifact) : null,
     updatedAt: ticket.updatedAt,
+    totalCostUsd,
   }
 }
 
-/** The run `input` is internal (prompt snapshot) and intentionally not exposed. */
-export function toAgentRunDto(run: AgentRun): AgentRunDto {
-  return {
-    id: run.id,
-    ticketId: formatTicketId(run.ticketId),
-    iteration: run.iteration,
-    trigger: run.trigger,
-    status: run.status,
-    model: run.model,
-    output: run.output,
-    costUsd: run.costUsd,
-    inputTokens: run.inputTokens,
-    cacheCreationTokens: run.cacheCreationTokens,
-    cacheReadTokens: run.cacheReadTokens,
-    outputTokens: run.outputTokens,
-    startedAt: run.startedAt,
-    finishedAt: run.finishedAt,
-  }
+/** The ticket key is implied by the page and therefore omitted. */
+export function toAuditLogEntryDto(entry: AuditLogEntry): AuditLogEntryDto {
+  return { actor: entry.actor, type: entry.type, payload: entry.payload, createdAt: entry.createdAt }
 }
