@@ -6,8 +6,10 @@ export { SpecSchema, SpecOutputSchema, SpecAgentOutputSchema } from './specSchem
 export type { Spec, SpecAgentOutput } from './specSchema'
 export { StageSchema, ArtifactStageSchema, TicketStateSchema, PrStateSchema } from './stages'
 export type { Stage, ArtifactStage, TicketState, PrState } from './stages'
-export { IntentSchema, IntentOutputSchema, IntentAgentOutputSchema, StageOutputSchema } from './intentSchema'
-export type { Intent, IntentAgentOutput, StageOutput } from './intentSchema'
+export { IntentSchema, IntentOutputSchema, IntentAgentOutputSchema } from './intentSchema'
+export type { Intent, IntentAgentOutput } from './intentSchema'
+export { StageOutputSchema } from './stageOutput'
+export type { StageOutput } from './stageOutput'
 export {
   PullRequestRefSchema,
   StageCostSchema,

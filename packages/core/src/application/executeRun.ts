@@ -1,6 +1,6 @@
 import type { AuditPayloads, StageOutput } from '@refinement/shared'
 import type { Ticket } from '../domain/types'
-import { renderIntent } from '../domain/render'
+import { renderIntent, renderSpec } from '../domain/render'
 import { describeError } from '../domain/errors'
 import {
   AgentRunTerminatedError, AgentRunTimeoutError, type AgentRunMeta, type AgentRunnerInput, type RunCompletion,
@@ -32,8 +32,8 @@ interface Attempt {
 }
 
 /**
- * Executes the agent for the attempt's run and applies its outcome: question → `awaiting_answer`,
- * intent → branch + PR → `in_review`. Never throws.
+ * Executes the agent for the attempt's run and applies its outcome: question or choice → `awaiting_answer`,
+ * intent or spec → branch + PR → `in_review`. Never throws.
  * A stop, restart or reset makes the attempt stale while the agent may still answer; late results are discarded.
  */
 export async function executeRun(deps: UseCaseDeps, ticket: Ticket, request: ExecuteRunRequest): Promise<void> {
@@ -130,19 +130,42 @@ function recordSucceededRun({ deps, ticket, reporter, request }: Attempt, output
   record(deps, ticket.key, 'agent', 'run_finished', { runId: request.runId, status: 'succeeded', ...runMetaPayload(meta) })
 }
 
-/** Question → `awaiting_answer`; intent → rendered Markdown published as branch + PR (`in_review`). */
+/** Question or choice → `awaiting_answer`; intent or spec → rendered Markdown published as branch + PR (`in_review`). */
 async function applyOutput({ deps, ticket, reporter, request }: Attempt, output: StageOutput): Promise<void> {
-  if (output.type === 'question') {
-    record(deps, ticket.key, 'agent', 'question_asked', { question: output.question })
-    reporter.setState('awaiting_answer')
-    reporter.question(output.question)
-    return
+  switch (output.type) {
+    case 'question':
+      record(deps, ticket.key, 'agent', 'question_asked', { question: output.question })
+      awaitAnswer(reporter, output.question)
+      return
+    case 'choice':
+      record(deps, ticket.key, 'agent', 'choice_offered', {
+        question: output.question,
+        options: output.options.map(({ id, title }) => ({ id, title })),
+        recommended: output.recommended,
+      })
+      awaitAnswer(reporter, output.question)
+      return
+    case 'intent':
+      reporter.progress('Intent wird als Pull Request angelegt…')
+      await publishArtifact(deps, ticket, request.stage, {
+        markdown: renderIntent(ticket, output.result, request.answeredQuestions),
+        summary: output.result.problem,
+      }, request.runId)
+      return
+    case 'spec':
+      reporter.progress('Spec wird als Pull Request angelegt…')
+      await publishArtifact(deps, ticket, request.stage, {
+        markdown: renderSpec(ticket, output.result, request.answeredQuestions),
+        summary: output.result.goal,
+      }, request.runId)
+      return
   }
-  reporter.progress('Intent wird als Pull Request angelegt…')
-  await publishArtifact(deps, ticket, request.stage, {
-    markdown: renderIntent(ticket, output.result, request.answeredQuestions),
-    summary: output.result.problem,
-  }, request.runId)
+}
+
+/** The ticket waits for the human; the question event makes open pages reload. */
+function awaitAnswer(reporter: Reporter, question: string): void {
+  reporter.setState('awaiting_answer')
+  reporter.question(question)
 }
 
 /**

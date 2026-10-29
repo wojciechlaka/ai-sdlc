@@ -42,8 +42,10 @@ describe('canStartStage', () => {
     }
   })
 
-  it('rejects design until part B and done always', () => {
-    expect(canStartStage(ticket({ stage: 'design' }))).toBe(false)
+  it('allows design from ready and failed, never done', () => {
+    expect(canStartStage(ticket({ stage: 'design', state: 'ready' }))).toBe(true)
+    expect(canStartStage(ticket({ stage: 'design', state: 'failed' }))).toBe(true)
+    expect(canStartStage(ticket({ stage: 'design', state: 'in_review' }))).toBe(false)
     expect(canStartStage(ticket({ stage: 'done' }))).toBe(false)
   })
 })

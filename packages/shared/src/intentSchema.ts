@@ -28,8 +28,3 @@ export const IntentOutputSchema = z.object({ type: z.literal('intent'), result: 
 /** Agent output of stage 1: a blocking question or the intent. */
 export const IntentAgentOutputSchema = z.discriminatedUnion('type', [QuestionOutputSchema, IntentOutputSchema])
 export type IntentAgentOutput = z.infer<typeof IntentAgentOutputSchema>
-
-/** Everything an agent run may return, across all stages. Part B adds the spec output of stage 2. */
-export const StageOutputSchema = IntentAgentOutputSchema
-/** Output of any stage agent; widens with `StageOutputSchema` when stage 2 is added. */
-export type StageOutput = IntentAgentOutput

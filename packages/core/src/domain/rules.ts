@@ -1,7 +1,7 @@
 import type { AgentRun, ArtifactStage, QAPair, Stage, Ticket, TicketState } from './types'
 
 /** Stages that can be started; a stage is added once it has an agent (`STAGE_AGENTS` in adapters/claudeCli). */
-export const STARTABLE_STAGES: readonly ArtifactStage[] = ['plan']
+export const STARTABLE_STAGES: readonly ArtifactStage[] = ['plan', 'design']
 
 const STAGE_ORDER: readonly Stage[] = ['plan', 'design', 'done']
 
