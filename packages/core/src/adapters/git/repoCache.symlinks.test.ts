@@ -16,7 +16,7 @@ const git = (cwd: string, ...args: string[]) =>
 
 beforeAll(() => {
   fs.mkdirSync(source)
-  git(source, 'init', '-q')
+  git(source, 'init', '-q', '-b', 'showcase')
   fs.writeFileSync(path.join(source, 'a.txt'), 'a')
   fs.symlinkSync('/etc/passwd', path.join(source, 'link'))
   git(source, 'add', '.')
@@ -31,7 +31,7 @@ const isSymlink = (file: string) => fs.lstatSync(file).isSymbolicLink()
 
 describe('ensureRepo — symlinks as files', () => {
   it('checks symlinks out as plain files when cloning', async () => {
-    const dir = await ensureRepo(source, cacheDir)
+    const dir = await ensureRepo(source, cacheDir, 'showcase')
     expect(isSymlink(path.join(dir, 'link'))).toBe(false)
     expect(fs.readFileSync(path.join(dir, 'link'), 'utf-8')).toBe('/etc/passwd')
     fs.rmSync(dir, { recursive: true, force: true })
@@ -47,7 +47,7 @@ describe('ensureRepo — symlinks as files', () => {
     git(source, 'add', '.')
     git(source, 'commit', '-qm', 'second link')
 
-    await ensureRepo(source, cacheDir)
+    await ensureRepo(source, cacheDir, 'showcase')
 
     expect(isSymlink(path.join(dir, 'link'))).toBe(false)
     expect(isSymlink(path.join(dir, 'link2'))).toBe(false)

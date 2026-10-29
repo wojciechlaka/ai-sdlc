@@ -15,6 +15,8 @@ export interface RepoCacheOptions {
   cacheDir: string
   /** The summary run uses the same sandbox (guard and audit hooks, clean env) as the agent. */
   sandbox: ClaudeProcessSandbox
+  /** Branch the clone is checked out on (`showcase`): artifacts merged by earlier stages live there. */
+  baseBranch: string
 }
 
 /**
@@ -46,48 +48,54 @@ function freshClone(repoUrl: string, repoDir: string, cacheDir: string): void {
 }
 
 /**
- * Updates an existing cache without symlinks. Caches cloned before `core.symlinks=false` may still contain
- * symlinks; dropping the index and resetting re-checks out every tracked file, so they become plain files.
- * Safe because the cache belongs to the app (no local changes to keep; untracked summaries survive).
+ * Puts the clone on the head of `baseBranch` as it is on the remote, without symlinks. `fetch` + `checkout -B
+ * FETCH_HEAD` instead of `pull`: the base branch is force-reset by the app's reset, which a pull cannot follow.
+ * Caches cloned before `core.symlinks=false` may still contain symlinks; dropping the index and resetting re-checks
+ * out every tracked file, so they become plain files. Safe because the cache belongs to the app (no local changes to
+ * keep; untracked summaries survive).
  */
-function pullWithoutSymlinks(repoUrl: string, repoDir: string): void {
+function checkoutBaseBranch(repoUrl: string, repoDir: string, baseBranch: string): void {
   const git = (args: string[]) => execFileSync('git', args, { cwd: repoDir, stdio: 'pipe' })
   // Strip any token an earlier version may have stored in the remote URL.
   git(['remote', 'set-url', 'origin', repoUrl])
   git(['config', 'core.symlinks', 'false'])
-  git(['pull'])
+  git(['fetch', '-q', 'origin', baseBranch])
+  git(['checkout', '-q', '-f', '-B', baseBranch, 'FETCH_HEAD'])
   git(['rm', '-r', '-q', '--cached', '.'])
   git(['reset', '-q', '--hard'])
 }
 
 /**
- * Ensures the repository is present and up-to-date in the local cache.
- * Clones the repo on first use; runs `git pull` on subsequent calls and clones afresh if the pull fails.
+ * Ensures the repository is present in the local cache and checked out on the head of `baseBranch`.
+ * Clones the repo on first use; fetches the branch on subsequent calls and clones afresh if that fails.
  * Symlinks are always checked out as plain files, so the agent cannot follow a link out of the clone (spec §13).
  * Uses the plain URL without credentials (the target repo is public); the agent
  * must never see a write token. Caches cloned earlier with a token in the remote
- * URL are reset via `git remote set-url origin` before pulling.
+ * URL are reset via `git remote set-url origin` before fetching.
  *
  * Note: uses execFileSync — blocks the event loop during network I/O.
  *
- * @param repoUrl  - The repository URL.
- * @param cacheDir - Root of the clone cache.
+ * @param repoUrl    - The repository URL.
+ * @param cacheDir   - Root of the clone cache.
+ * @param baseBranch - Branch to check out, e.g. `showcase`.
  * @returns The absolute path to the cached repository directory.
- * @throws If `git clone` fails (a failed pull falls back to a fresh clone).
+ * @throws If `git clone` fails or the fresh clone has no `baseBranch` (a failed update falls back to a fresh clone).
  */
-export async function ensureRepo(repoUrl: string, cacheDir: string): Promise<string> {
+export async function ensureRepo(repoUrl: string, cacheDir: string, baseBranch: string): Promise<string> {
   const repoDir = getRepoDir(repoUrl, cacheDir)
 
   if (!fs.existsSync(repoDir)) {
     freshClone(repoUrl, repoDir, cacheDir)
+    checkoutBaseBranch(repoUrl, repoDir, baseBranch)
     return repoDir
   }
   try {
-    pullWithoutSymlinks(repoUrl, repoDir)
+    checkoutBaseBranch(repoUrl, repoDir, baseBranch)
   } catch {
-    // Any failed update (not a git repo after an interrupted clone, network error, diverged history, …)
-    // is answered with a fresh clone; the cache has no local changes (cached summaries are regenerated).
+    // Any failed update (not a git repo after an interrupted clone, network error, …) is answered with a fresh
+    // clone; the cache has no local changes (cached summaries are regenerated).
     freshClone(repoUrl, repoDir, cacheDir)
+    checkoutBaseBranch(repoUrl, repoDir, baseBranch)
   }
   return repoDir
 }
@@ -95,7 +103,7 @@ export async function ensureRepo(repoUrl: string, cacheDir: string): Promise<str
 /** RepoProvider port backed by a local git clone cache and a Claude-generated summary. */
 export function createGitRepoProvider(options: RepoCacheOptions): RepoProvider {
   return {
-    ensureRepo: (repoUrl) => ensureRepo(repoUrl, options.cacheDir),
+    ensureRepo: (repoUrl) => ensureRepo(repoUrl, options.cacheDir, options.baseBranch),
     ensureSummary: (repoDir, model, onProgress) => ensureRepoSummary(repoDir, model, onProgress, options),
   }
 }

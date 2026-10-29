@@ -81,7 +81,7 @@ export function createRefinementEngine(config: EngineConfig): UseCases {
       ? createGitHubCodeHost({ repoUrl: config.targetRepo, token: config.githubToken, baseBranch, baselineTag })
       : null,
     agent: createClaudeCliAgentRunner({ skillsDir: config.skillsDir, sandbox, timeoutMs: agentTimeoutMs }),
-    repos: createGitRepoProvider({ cacheDir: config.repoCacheDir ?? path.join(os.tmpdir(), 'repo-cache'), sandbox }),
+    repos: createGitRepoProvider({ cacheDir: config.repoCacheDir ?? path.join(os.tmpdir(), 'repo-cache'), sandbox, baseBranch }),
     events: createNodeEventPublisher(),
     repoUrl: config.targetRepo,
     baseBranch,
