@@ -82,8 +82,8 @@ export async function resetSystem(deps: UseCaseDeps): Promise<StartupReport> {
 /** Creates the baseline tag and the base branch if they are missing. */
 async function prepareBaseBranch(deps: UseCaseDeps, host: CodeHost, warn: Warn): Promise<void> {
   const { createdTag, createdBranch, baselineHasWork } = await host.prepareBaseBranch()
-  if (createdTag) console.log('[startup] Ausgangs-Tag auf den Default-Branch gelegt')
-  if (createdBranch) console.log(`[startup] Branch ${deps.baseBranch} auf den Ausgangs-Tag gelegt`)
+  if (createdTag) console.log('[startup] Baseline tag created on the default branch')
+  if (createdBranch) console.log(`[startup] Branch ${deps.baseBranch} created at the baseline tag`)
   if (baselineHasWork) warn('Ausgangsstand showcase-base enthält bereits docs/work — diese Tickets starten nicht in Stufe 1')
 }
 
@@ -104,7 +104,7 @@ async function resetRepository(deps: UseCaseDeps, host: CodeHost, warn: Warn): P
   }
   try {
     await host.resetBaseBranch()
-    console.log('[startup] Repo zurückgesetzt')
+    console.log('[startup] Repository reset')
   } catch (err) {
     warn(`Repo nicht zurückgesetzt: ${describeError(err)}`)
   }
@@ -129,7 +129,7 @@ function importTickets(deps: UseCaseDeps): void {
       deps.audit.append({ ticketKey: item.key, actor: 'system', type: 'ticket_imported', payload: { sourcePath: item.sourcePath } })
     }
   }
-  console.log(`[startup] ${items.length} Ticket(s) gelesen, ${created.size} neu`)
+  console.log(`[startup] ${items.length} ticket(s) read, ${created.size} new`)
 }
 
 /** Closes every open PR of the app (head branch `<KEY>/intent|spec` of a known ticket) and deletes its branch. */

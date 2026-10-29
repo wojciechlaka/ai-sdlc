@@ -192,6 +192,19 @@ makes `startStage`/`answerQuestion` throw a `ConflictError`.
 - **New adapter**: a new folder under `packages/core/src/adapters/` is picked up by the architecture tests
   automatically (they loop over the folders); wire it only in `compose.ts`
 
+## Conventions
+
+- **Language:** identifiers, code comments, JSDoc, test names and server log lines (`console.*`, `reporter.log`) are
+  English. Everything a user or the agent sees is German: UI texts, progress events, audit/log entries shown on the
+  ticket page, startup warnings, PR titles/bodies, commit messages in the target repo, prompts, skill files and the
+  guard's deny reasons. A log line that echoes such a text (e.g. a progress message also written to the server log)
+  quotes it unchanged.
+- **Thrown errors:** a message that can reach the UI is German — `ConflictError`/`ValidationError`/`NotFoundError`,
+  `CodeHostError`, and every error an agent run can end with (`failStage` shows `describeError(err)`: timeout, CLI
+  and schema errors, missing stage agent). Purely internal errors (repository invariants such as "AgentRun … not
+  found", summary-run failures that are only logged, `AgentRunTerminatedError` whose text `executeRun` replaces) are
+  English.
+
 ## Prerequisites & Environment
 
 - Node.js 20+, `git`

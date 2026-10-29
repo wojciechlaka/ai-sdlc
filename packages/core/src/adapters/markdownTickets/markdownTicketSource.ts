@@ -51,11 +51,11 @@ export function createMarkdownTicketSource(options: MarkdownTicketSourceOptions)
         const sourcePath = path.relative(options.rootDir, file).split(path.sep).join('/')
         const ticket = parseTicketMarkdown(fs.readFileSync(file, 'utf-8'), sourcePath)
         if (!ticket) {
-          if (name !== README) console.warn(`[tickets] ${sourcePath}: erste Zeile ist keine Überschrift "# KEY-n: Titel" — übersprungen`)
+          if (name !== README) console.warn(`[tickets] ${sourcePath}: first line is not a heading "# KEY-n: Title" — skipped`)
           continue
         }
         if (seen.has(ticket.key)) {
-          console.warn(`[tickets] ${sourcePath}: Schlüssel ${ticket.key} kommt doppelt vor — übersprungen`)
+          console.warn(`[tickets] ${sourcePath}: duplicate key ${ticket.key} — skipped`)
           continue
         }
         seen.add(ticket.key)

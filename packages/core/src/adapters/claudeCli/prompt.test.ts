@@ -32,7 +32,7 @@ describe('buildPrompt', () => {
     const prompt = buildPrompt({
       ...BASE,
       codebaseSummary: 'Express + Prisma',
-      retryContext: { previousOutput: 'x'.repeat(4000), schemaError: 'Agent output failed schema validation: Agent output is not valid JSON' },
+      retryContext: { previousOutput: 'x'.repeat(4000), schemaError: 'Agent-Ausgabe verletzt das Schema: Agent output is not valid JSON' },
     })
     expect(prompt).not.toContain('Codebase-Übersicht')
     expect(prompt).toContain('## Korrektur erforderlich')

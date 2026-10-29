@@ -16,14 +16,14 @@ export async function register(): Promise<void> {
   try {
     await engine.startup({ resetRepo: process.env.RESET_ON_START === 'true' })
   } catch (err) {
-    console.error('[startup] App konnte nicht starten:', err)
+    console.error('[startup] App failed to start:', err)
     throw err
   }
 
   // register() may run again (dev reloads); one timer per process is enough.
   if (globalForTimer.__reviewSyncTimer) return
   const timer = setInterval(() => {
-    engine.syncReviews().catch((err) => console.warn('[sync] PR-Abgleich fehlgeschlagen', err))
+    engine.syncReviews().catch((err) => console.warn('[sync] PR sync failed', err))
   }, SYNC_INTERVAL_MS)
   timer.unref()
   globalForTimer.__reviewSyncTimer = timer

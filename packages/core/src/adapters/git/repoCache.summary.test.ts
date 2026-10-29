@@ -64,7 +64,7 @@ describe('ensureRepoSummary — summary run with guard and audit hooks', () => {
       expect(settings.hooks.PreToolUse[0].hooks[0].command).toContain(path.join(HOOKS_DIR, 'guard.mjs'))
       expect(settings.hooks.PostToolUse[0].hooks[0].command).toContain(path.join(HOOKS_DIR, 'audit.mjs'))
       expect(warn).toHaveBeenCalledTimes(1)
-      expect(warn).toHaveBeenCalledWith('[repoCache] Blockiert: Bash npm install — npm: nicht erlaubt')
+      expect(warn).toHaveBeenCalledWith('[repoCache] Blocked: Bash npm install — npm: nicht erlaubt')
       expect(fs.existsSync(logFile)).toBe(false)
     } finally {
       fs.rmSync(repo, { recursive: true, force: true })

@@ -70,7 +70,7 @@ async function syncOne(deps: UseCaseDeps, host: CodeHost, ticket: Ticket, stage:
     try {
       await host.deleteBranch(artifact.branch)
     } catch (err) {
-      console.warn(`[syncReviews] ${ticket.key}: Branch ${artifact.branch} nicht gelöscht: ${describeError(err)}`)
+      console.warn(`[syncReviews] ${ticket.key}: branch ${artifact.branch} not deleted: ${describeError(err)}`)
     }
   }
 }

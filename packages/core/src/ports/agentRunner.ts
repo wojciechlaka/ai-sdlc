@@ -63,7 +63,9 @@ export interface AgentRunner {
   stop(ticketKey: string): boolean
 }
 
-/** The run was stopped on user request. */
+/**
+ * The run was stopped on user request. The message stays internal (English): `executeRun` shows its own German text.
+ */
 export class AgentRunTerminatedError extends Error {
   constructor() {
     super('Agent run was terminated by user')
@@ -71,10 +73,10 @@ export class AgentRunTerminatedError extends Error {
   }
 }
 
-/** The agent did not finish within its time limit. */
+/** The agent did not finish within its time limit. German message: `failStage` shows it on the ticket page. */
 export class AgentRunTimeoutError extends Error {
   constructor(timeoutMs: number) {
-    super(`Claude did not respond within ${timeoutMs}ms`)
+    super(`Claude hat nicht innerhalb von ${timeoutMs} ms geantwortet`)
     this.name = 'AgentRunTimeoutError'
   }
 }

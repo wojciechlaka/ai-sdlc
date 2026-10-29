@@ -25,6 +25,7 @@ export interface RepoCacheOptions {
   sandbox: SummarySandbox
 }
 
+// Headings are German because the summary is pasted verbatim into the agent's German prompt.
 const SUMMARY_PROMPT = `Analyze this codebase and produce a structured overview in Markdown.
 
 ## Technologie-Stack
@@ -135,7 +136,7 @@ async function warnBlockedCalls(logFile: string): Promise<void> {
   for (const line of content.split('\n')) {
     try {
       const entry = JSON.parse(line) as Record<string, unknown>
-      if (entry.kind === 'blocked') console.warn(`[repoCache] Blockiert: ${entry.tool} ${entry.target} — ${entry.reason}`)
+      if (entry.kind === 'blocked') console.warn(`[repoCache] Blocked: ${entry.tool} ${entry.target} — ${entry.reason}`)
     } catch { /* empty or partial line */ }
   }
 }

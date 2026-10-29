@@ -34,15 +34,15 @@ afterAll(() => {
 
 const isSymlink = (file: string) => fs.lstatSync(file).isSymbolicLink()
 
-describe('ensureRepo — Symlinks als Dateien', () => {
-  it('checkt Symlinks beim Klonen als normale Dateien aus', async () => {
+describe('ensureRepo — symlinks as files', () => {
+  it('checks symlinks out as plain files when cloning', async () => {
     const dir = await ensureRepo(source)
     expect(isSymlink(path.join(dir, 'link'))).toBe(false)
     expect(fs.readFileSync(path.join(dir, 'link'), 'utf-8')).toBe('/etc/passwd')
     fs.rmSync(dir, { recursive: true, force: true })
   })
 
-  it('wandelt Symlinks eines älteren Caches beim Aktualisieren in Dateien um', async () => {
+  it('turns symlinks of an older cache into files when updating', async () => {
     const dir = getRepoCacheDir(source)
     fs.mkdirSync(path.dirname(dir), { recursive: true })
     execFileSync('git', ['clone', '-q', source, dir], { stdio: 'pipe' }) // old cache, with symlinks

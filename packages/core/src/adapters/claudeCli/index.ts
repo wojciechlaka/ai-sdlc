@@ -180,7 +180,7 @@ function extractResult(raw: string): ExtractedResult {
       }
     } catch { /* skip */ }
   }
-  throw new CliError(-1, 'No success result in stream-json output')
+  throw new CliError(-1, 'Kein Erfolgsergebnis in der stream-json-Ausgabe')
 }
 
 /** Strips a Markdown fence if present, otherwise takes the outermost `{...}`. */

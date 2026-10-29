@@ -35,9 +35,9 @@ export async function publishArtifact(
   const pr = await host.openPullRequest({ branch, title, body: renderPullRequestBody(ticket, stage, artifact.summary) })
 
   if (!isCurrentRun(deps, ticket.key, runId)) {
-    createReporter(deps, ticket.key).log(`Lauf nicht mehr aktuell — PR #${pr.number} wird geschlossen`)
-    await host.closePullRequest(pr.number).catch((err) => console.warn(`PR #${pr.number} schließen: ${describeError(err)}`))
-    await host.deleteBranch(branch).catch((err) => console.warn(`Branch ${branch} löschen: ${describeError(err)}`))
+    createReporter(deps, ticket.key).log(`Attempt no longer current — closing PR #${pr.number}`)
+    await host.closePullRequest(pr.number).catch((err) => console.warn(`Closing PR #${pr.number} failed: ${describeError(err)}`))
+    await host.deleteBranch(branch).catch((err) => console.warn(`Deleting branch ${branch} failed: ${describeError(err)}`))
     return
   }
 

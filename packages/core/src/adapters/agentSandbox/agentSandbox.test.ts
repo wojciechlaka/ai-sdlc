@@ -21,7 +21,7 @@ function runThroughShell(command: string, input = BLOCKED_CALL) {
 const guardCommand = (hooksDir: string) => JSON.parse(hookSettings(hooksDir)).hooks.PreToolUse[0].hooks[0].command as string
 
 describe('createAgentSandbox', () => {
-  it('lädt nur die Nutzer-Einstellungen, setzt die Hooks und erlaubt nur lesende Werkzeuge', () => {
+  it('loads only user settings, sets the hooks and allows only read-only tools', () => {
     const { args } = createAgentSandbox({ hooksDir: HOOKS_DIR })
     const after = (flag: string) => args[args.indexOf(flag) + 1]
     expect(after('--setting-sources')).toBe('user')
@@ -33,7 +33,7 @@ describe('createAgentSandbox', () => {
 })
 
 describe('sandboxEnv', () => {
-  it('gibt nur freigegebene Variablen weiter, keine Secrets der App', () => {
+  it('passes only allowlisted variables, no app secrets', () => {
     const env = sandboxEnv({
       PATH: '/bin', HOME: '/home/u', USER: 'u', LANG: 'de_DE.UTF-8', TMPDIR: '/tmp', SHELL: '/bin/zsh',
       ANTHROPIC_API_KEY: 'sk', CLAUDE_CONFIG_DIR: '/c', CLAUDE_CODE_USE_BEDROCK: '1', HTTPS_PROXY: 'http://proxy',
@@ -47,7 +47,7 @@ describe('sandboxEnv', () => {
     })
   })
 
-  it('gibt die Zugangsdaten für Gateway, Bedrock und Vertex AI weiter, wenn gesetzt', () => {
+  it('passes gateway, Bedrock and Vertex AI credentials when set', () => {
     const provider = {
       ANTHROPIC_BASE_URL: 'https://gw', ANTHROPIC_AUTH_TOKEN: 't', ANTHROPIC_CUSTOM_HEADERS: 'X-A: 1', ANTHROPIC_MODEL: 'm',
       CLAUDE_CODE_USE_BEDROCK: '1', CLAUDE_CODE_USE_VERTEX: '1', AWS_REGION: 'eu-central-1', AWS_PROFILE: 'p',
@@ -60,7 +60,7 @@ describe('sandboxEnv', () => {
     expect(sandboxEnv({}, '/l')).toEqual({ REFINEMENT_HOOK_LOG: '/l', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' })
   })
 
-  it('liest die Umgebung des Prozesses, wenn keine übergeben wird', () => {
+  it('reads the process environment when none is given', () => {
     const sandbox = createAgentSandbox({ hooksDir: HOOKS_DIR })
     const env = sandbox.env('/tmp/x.jsonl')
     expect(env.PATH).toBe(process.env.PATH)
@@ -68,20 +68,20 @@ describe('sandboxEnv', () => {
   })
 })
 
-describe('Guard-Befehl über /bin/sh (fail closed)', () => {
-  it('lehnt mit dem echten Guard ab', () => {
+describe('guard command via /bin/sh (fail closed)', () => {
+  it('denies with the real guard', () => {
     const result = runThroughShell(guardCommand(HOOKS_DIR))
     expect(result.status).toBe(0)
     expect(JSON.parse(result.stdout).hookSpecificOutput.permissionDecision).toBe('deny')
   })
 
-  it('endet mit Exit-Code 2 (blockierend), wenn das Skript fehlt', () => {
+  it('exits with code 2 (blocking) when the script is missing', () => {
     const result = runThroughShell(guardCommand(path.join(os.tmpdir(), 'gibt-es-nicht')))
     expect(result.status).toBe(2)
     expect(result.stderr).toContain('Guard nicht ausführbar')
   })
 
-  it('lehnt ab, wenn die Regel nicht geladen werden kann', () => {
+  it('denies when the policy cannot be loaded', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'broken-hooks-'))
     tempDirs.push(dir)
     for (const file of ['guard.mjs', 'hookIo.mjs']) fs.copyFileSync(path.join(HOOKS_DIR, file), path.join(dir, file))
@@ -92,7 +92,7 @@ describe('Guard-Befehl über /bin/sh (fail closed)', () => {
     expect(JSON.parse(result.stdout).hookSpecificOutput).toMatchObject({ permissionDecision: 'deny', permissionDecisionReason: expect.stringContaining('Guard-Fehler') })
   })
 
-  it('lehnt ab, wenn hookIo fehlt', () => {
+  it('denies when hookIo is missing', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'broken-hooks-'))
     tempDirs.push(dir)
     fs.copyFileSync(path.join(HOOKS_DIR, 'guard.mjs'), path.join(dir, 'guard.mjs'))

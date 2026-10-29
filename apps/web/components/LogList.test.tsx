@@ -16,7 +16,7 @@ const LOG = [
 ]
 
 describe('LogList', () => {
-  it('fasst aufeinanderfolgende Werkzeugaufrufe in einer aufklappbaren Zeile zusammen', () => {
+  it('groups consecutive tool calls into one collapsible row', () => {
     render(<LogList log={LOG} />)
     const summary = screen.getByText('3 Werkzeugaufrufe')
     const details = summary.closest('details')!
@@ -26,7 +26,7 @@ describe('LogList', () => {
     expect(screen.getByText('1 Werkzeugaufruf')).toBeInTheDocument()
   })
 
-  it('hebt blockierte Aufrufe hervor', () => {
+  it('highlights blocked calls', () => {
     render(<LogList log={LOG} />)
     const text = screen.getByText('Blockiert: Bash `rm -rf docs` — Befehl rm ist nicht erlaubt')
     const row = text.closest('li')!
@@ -35,7 +35,7 @@ describe('LogList', () => {
     expect(text.closest('details')).toBeNull()
   })
 
-  it('zeigt einen Hinweis ohne Einträge', () => {
+  it('shows a hint when there are no entries', () => {
     render(<LogList log={[]} />)
     expect(screen.getByText('Noch keine Einträge.')).toBeInTheDocument()
   })

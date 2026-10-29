@@ -3,27 +3,27 @@ import path from 'path'
 import { describe, it, expect } from 'vitest'
 import { projectFiles } from 'archunit'
 
-// Architekturtests mit ArchUnitTS für den Hexagon in packages/core. Die ESLint-Regel (eslint.config.mjs)
-// gibt schnelles Feedback im Editor; diese Tests prüfen die vollständigen Abhängigkeitsregeln.
+// Architecture tests (ArchUnitTS) for the hexagon in packages/core. The ESLint rule (eslint.config.mjs)
+// gives fast feedback in the editor; these tests check the complete dependency rules.
 //
-// - Pfade sind relativ zu packages/core (Ort der tsconfig.json).
-// - `toPassAsync()` hängt `archunit` beim Import an das globale `expect` — daher `globals: true`
+// - Paths are relative to packages/core (location of tsconfig.json).
+// - `toPassAsync()` attaches `archunit` to the global `expect` on import — hence `globals: true`
 //   in vitest.config.ts.
-// - ArchUnitTS wertet `import`-Deklarationen aus (auch `import type`), keine `export … from`-Re-Exporte
-//   und keine dynamischen `import()`.
+// - ArchUnitTS evaluates `import` declarations (including `import type`), not `export … from` re-exports
+//   and not dynamic `import()`.
 
 const TSCONFIG = path.resolve(__dirname, '../tsconfig.json')
 
-/** Produktivcode: ohne *.test.ts. */
+/** Production code: without *.test.ts. */
 const PRODUCTION = { except: { withName: '*.test.ts' } }
 
-/** Glob für Dateien in den genannten Ordnern unter src/ bzw. für src/compose.ts. */
+/** Glob for files in the given folders under src/, or for src/compose.ts. */
 function targets(...parts: string[]): string {
   const globs = parts.map((part) => (part === 'compose' ? 'compose.ts' : `${part}/**`))
   return globs.length === 1 ? `src/${globs[0]}` : `src/{${globs.join(',')}}`
 }
 
-/** Jeder Ordner unter src/adapters/ — neue Adapter sind automatisch abgedeckt. */
+/** Every folder under src/adapters/ — new adapters are covered automatically. */
 const ADAPTERS = readdirSync(path.resolve(__dirname, 'adapters'), { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
   .map((entry) => entry.name)
@@ -32,8 +32,8 @@ function filesIn(folder: string) {
   return projectFiles(TSCONFIG).inFolder(`src/${folder}/**`, PRODUCTION)
 }
 
-describe('Architektur (packages/core)', () => {
-  it('domain hängt nur von sich selbst ab', async () => {
+describe('architecture (packages/core)', () => {
+  it('domain depends only on itself', async () => {
     const rule = filesIn('domain')
       .shouldNot()
       .dependOnFiles()
@@ -41,7 +41,7 @@ describe('Architektur (packages/core)', () => {
     await expect(rule).toPassAsync()
   })
 
-  it('ports hängen nur von domain ab', async () => {
+  it('ports depend only on domain', async () => {
     const rule = filesIn('ports')
       .shouldNot()
       .dependOnFiles()
@@ -49,7 +49,7 @@ describe('Architektur (packages/core)', () => {
     await expect(rule).toPassAsync()
   })
 
-  it('application hängt nicht von adapters, testing oder compose ab', async () => {
+  it('application does not depend on adapters, testing or compose', async () => {
     const rule = filesIn('application')
       .shouldNot()
       .dependOnFiles()
@@ -57,7 +57,7 @@ describe('Architektur (packages/core)', () => {
     await expect(rule).toPassAsync()
   })
 
-  it.each(ADAPTERS)('Adapter %s hängt nur von sich selbst, domain und ports ab', async (adapter) => {
+  it.each(ADAPTERS)('adapter %s depends only on itself, domain and ports', async (adapter) => {
     const rule = filesIn(`adapters/${adapter}`)
       .shouldNot()
       .dependOnFiles()
@@ -67,7 +67,7 @@ describe('Architektur (packages/core)', () => {
     await expect(rule).toPassAsync()
   })
 
-  it('kein Produktivcode hängt von src/testing ab', async () => {
+  it('no production code depends on src/testing', async () => {
     const rule = projectFiles(TSCONFIG)
       .inPath('src/**', { except: { withName: '*.test.ts', inPath: 'src/testing/**' } })
       .shouldNot()
@@ -76,15 +76,15 @@ describe('Architektur (packages/core)', () => {
     await expect(rule).toPassAsync()
   })
 
-  // hooks/ enthält eigenständige Node-Skripte (Guard/Audit, spec §13): Claude Code startet sie als Prozess,
-  // die Adapter kennen nur ihren Pfad (`hooksDir` aus compose). Sie dürfen nichts aus src laden und umgekehrt.
-  it('die Hook-Skripte liegen dort, wo die Regeln sie suchen', () => {
-    // Sonst würden die beiden folgenden Regeln leer und damit immer grün.
+  // hooks/ holds standalone Node scripts (guard/audit, spec §13): Claude Code starts them as processes,
+  // the adapters only know their path (`hooksDir` from compose). They must not load anything from src and vice versa.
+  it('the hook scripts are where the rules look for them', () => {
+    // Otherwise the next two rules would be empty and therefore always green.
     const hooks = readdirSync(path.resolve(__dirname, '../hooks'))
     expect(hooks).toEqual(expect.arrayContaining(['guard.mjs', 'audit.mjs', 'guardPolicy.mjs', 'hookIo.mjs']))
   })
 
-  it('die Hook-Skripte hängen nicht von src ab', async () => {
+  it('the hook scripts do not depend on src', async () => {
     const rule = projectFiles(TSCONFIG)
       .inFolder('hooks/**', { except: { withName: '*.test.ts' } })
       .shouldNot()
@@ -93,22 +93,22 @@ describe('Architektur (packages/core)', () => {
     await expect(rule).toPassAsync()
   })
 
-  it('kein Produktivcode in src importiert die Hook-Skripte', async () => {
+  it('no production code in src imports the hook scripts', async () => {
     const rule = projectFiles(TSCONFIG).inPath('src/**', PRODUCTION).shouldNot().dependOnFiles().inPath('hooks/**')
     await expect(rule).toPassAsync()
   })
 
-  // evals/ startet echte `claude`-Prozesse (npm run eval:guard) und darf src nutzen; src und hooks nie evals.
-  it('die Evals liegen dort, wo die Regel sie sucht', () => {
+  // evals/ starts real `claude` processes (npm run eval:guard) and may use src; src and hooks never use evals.
+  it('the evals are where the rule looks for them', () => {
     expect(readdirSync(path.resolve(__dirname, '../evals'))).toContain('guard.eval.ts')
   })
 
-  it('weder src noch die Hook-Skripte importieren die Evals', async () => {
+  it('neither src nor the hook scripts import the evals', async () => {
     const rule = projectFiles(TSCONFIG).inPath('{src,hooks}/**').shouldNot().dependOnFiles().inPath('evals/**')
     await expect(rule).toPassAsync()
   })
 
-  it('der Produktivcode in src ist frei von Zyklen', async () => {
+  it('production code in src has no cycles', async () => {
     const rule = projectFiles(TSCONFIG).inPath('src/**', PRODUCTION).should().haveNoCycles()
     await expect(rule).toPassAsync()
   })

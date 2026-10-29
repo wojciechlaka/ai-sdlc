@@ -36,14 +36,14 @@ const hookInput = (event: string, tool_name: string, tool_input: unknown, extra:
 })
 
 describe('guard.mjs (PreToolUse)', () => {
-  it('lässt lesende Aufrufe ohne Ausgabe durch und schreibt nichts ins Log', () => {
+  it('lets read-only calls through without output and logs nothing', () => {
     const result = runHook('guard.mjs', hookInput('PreToolUse', 'Bash', { command: 'git log -5' }))
     expect(result.status).toBe(0)
     expect(result.stdout).toBe('')
     expect(logLines()).toEqual([])
   })
 
-  it('lehnt verbotene Befehle mit Begründung ab und protokolliert sie', () => {
+  it('denies forbidden commands with a reason and logs them', () => {
     const result = runHook('guard.mjs', hookInput('PreToolUse', 'Bash', { command: 'rm -rf docs' }))
     expect(result.status).toBe(0)
     const output = JSON.parse(result.stdout)
@@ -54,12 +54,12 @@ describe('guard.mjs (PreToolUse)', () => {
     ])
   })
 
-  it('lehnt schreibende Werkzeuge ab, Pfad relativ zum Arbeitsordner', () => {
+  it('denies writing tools, path relative to the working directory', () => {
     runHook('guard.mjs', hookInput('PreToolUse', 'Write', { file_path: '/repo/src/app.ts', content: 'x' }))
     expect(logLines()).toEqual([expect.objectContaining({ kind: 'blocked', tool: 'Write', target: 'src/app.ts' })])
   })
 
-  it('lehnt im Fehlerfall ab (fail closed)', () => {
+  it('denies on errors (fail closed)', () => {
     const result = runHook('guard.mjs', 'kein json')
     expect(result.status).toBe(0)
     const output = JSON.parse(result.stdout)
@@ -68,14 +68,14 @@ describe('guard.mjs (PreToolUse)', () => {
     expect(logLines()).toEqual([expect.objectContaining({ kind: 'blocked', reason: expect.stringContaining('Guard-Fehler') })])
   })
 
-  it('entscheidet auch ohne Log-Datei', () => {
+  it('decides without a log file too', () => {
     const result = runHook('guard.mjs', hookInput('PreToolUse', 'Bash', { command: 'git push' }), { REFINEMENT_HOOK_LOG: undefined })
     expect(JSON.parse(result.stdout).hookSpecificOutput.permissionDecision).toBe('deny')
   })
 })
 
 describe('audit.mjs (PostToolUse)', () => {
-  it('hält Werkzeug und Ziel fest', () => {
+  it('records tool and target', () => {
     runHook('audit.mjs', hookInput('PostToolUse', 'Bash', { command: 'git log -5' }, { tool_response: { stdout: 'x', stderr: '', interrupted: false } }))
     runHook('audit.mjs', hookInput('PostToolUse', 'Read', { file_path: '/repo/src/app.ts' }, { tool_response: { type: 'text' } }))
     expect(logLines()).toEqual([
@@ -84,12 +84,12 @@ describe('audit.mjs (PostToolUse)', () => {
     ])
   })
 
-  it('kommt mit beliebigen Antworten zurecht', () => {
+  it('copes with any tool response', () => {
     runHook('audit.mjs', hookInput('PostToolUse', 'Bash', { command: 'ls' }, { tool_response: 'nur Text' }))
     expect(logLines()).toEqual([{ kind: 'used', tool: 'Bash', target: 'ls', at: expect.any(String) }])
   })
 
-  it('scheitert nie hart (fail open)', () => {
+  it('never fails hard (fail open)', () => {
     expect(runHook('audit.mjs', 'kein json').status).toBe(0)
     expect(runHook('audit.mjs', hookInput('PostToolUse', 'Read', { file_path: 'a' }), { REFINEMENT_HOOK_LOG: path.join(dir, 'fehlt', 'x.jsonl') }).status).toBe(0)
     expect(logLines()).toEqual([])

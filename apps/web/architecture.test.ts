@@ -3,33 +3,33 @@ import path from 'path'
 import { describe, it, expect } from 'vitest'
 import { projectFiles, type FileInfo } from 'archunit'
 
-// Architekturtest (ArchUnitTS) für apps/web; die Regeln für den Hexagon liegen in
+// Architecture test (ArchUnitTS) for apps/web; the hexagon rules live in
 // packages/core/src/architecture.test.ts.
 //
-// Pfade sind relativ zu apps/web (Ort der tsconfig.json). TypeScript löst `@refinement/core` über den
-// Workspace-Symlink zur echten Datei auf; jeder Import in den Core — ob über den Paketnamen, einen
-// tiefen Pfad (`@refinement/core/src/…`) oder relativ (`../../packages/core/…`) — endet daher als
-// Abhängigkeit auf `../../packages/core/…`. Erlaubt ist nur der Paket-Einstieg src/index.ts.
-// Ein relativer Import genau dieser Datei ist im Abhängigkeitsgraphen nicht vom Paketnamen zu
-// unterscheiden; dafür prüft eine zweite, eigene Regel die Import-Pfade im Quelltext.
+// Paths are relative to apps/web (location of tsconfig.json). TypeScript resolves `@refinement/core` via the
+// workspace symlink to the real file; every import into core — via the package name, a deep path
+// (`@refinement/core/src/…`) or a relative path (`../../packages/core/…`) — therefore ends up as a
+// dependency on `../../packages/core/…`. Only the package entry src/index.ts is allowed.
+// A relative import of exactly that file cannot be told apart from the package name in the dependency
+// graph; a second rule therefore checks the import specifiers in the source text.
 
 const TSCONFIG = path.resolve(__dirname, 'tsconfig.json')
 
-/** Eigene Dateien von apps/web: nichts außerhalb (`../`), keine Abhängigkeiten, kein Build, keine Tests. */
+/** Own files of apps/web: nothing outside (`../`), no dependencies, no build output, no tests. */
 const WEB_SOURCES = /^(?!\.\.\/|node_modules\/|\.next\/)/
 const NO_TESTS = { except: { withName: '*.test.{ts,tsx}' } }
 
-/** Modulpfade aus `import … from`, `export … from`, `import '…'` und `import('…')`. */
+/** Module specifiers of `import … from`, `export … from`, `import '…'` and `import('…')`. */
 const SPECIFIER = /(?:\bfrom\s*|\bimport\s*\(?\s*)['"]([^'"]+)['"]/g
 
-/** Kein Import in den Core an `@refinement/core` vorbei (tiefer Paketpfad oder relativer Pfad). */
+/** No import into core that bypasses `@refinement/core` (deep package path or relative path). */
 function importsCoreOnlyViaPackage(file: FileInfo): boolean {
   return [...file.content.matchAll(SPECIFIER)].every(([, specifier]) =>
     !specifier.startsWith('@refinement/core/') && !/^\.{1,2}\/.*packages\/core(\/|$)/.test(specifier))
 }
 
-describe('Architektur (apps/web)', () => {
-  it('web importiert den Core nur über den Paket-Einstieg @refinement/core', async () => {
+describe('architecture (apps/web)', () => {
+  it('web imports core only via the package entry @refinement/core', async () => {
     const rule = projectFiles(TSCONFIG)
       .inPath(WEB_SOURCES, NO_TESTS)
       .shouldNot()
@@ -40,7 +40,7 @@ describe('Architektur (apps/web)', () => {
     const specifiers = projectFiles(TSCONFIG)
       .inPath(WEB_SOURCES, NO_TESTS)
       .should()
-      .adhereTo(importsCoreOnlyViaPackage, 'Core nur über @refinement/core importieren, nicht über tiefe oder relative Pfade')
+      .adhereTo(importsCoreOnlyViaPackage, 'import core only via @refinement/core, not via deep or relative paths')
     await expect(specifiers).toPassAsync()
   })
 })

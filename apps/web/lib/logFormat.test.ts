@@ -46,7 +46,7 @@ describe('describeLogEvent', () => {
 })
 
 describe('groupLogEntries', () => {
-  it('fasst aufeinanderfolgende Werkzeugaufrufe zusammen, Blockiertes bleibt einzeln', () => {
+  it('groups consecutive tool calls, blocked calls stay single', () => {
     const log = [
       event('run_started', {}),
       event('tool_used', { tool: 'Read', target: 'a' }, 'agent'),

@@ -22,7 +22,7 @@ async function readMergedContent(deps: UseCaseDeps, path: string): Promise<strin
   try {
     return await deps.codeHost.readFile(path)
   } catch (err) {
-    console.warn(`[getTicket] ${path} nicht lesbar: ${describeError(err)}`)
+    console.warn(`[getTicket] ${path} not readable: ${describeError(err)}`)
     return null
   }
 }

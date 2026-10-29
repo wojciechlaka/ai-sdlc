@@ -24,7 +24,7 @@ function dropLegacySchema(sqlite: Database.Database): void {
   sqlite.transaction(() => {
     for (const table of LEGACY_TABLES) sqlite.exec(`DROP TABLE IF EXISTS "${table}"`)
   })()
-  console.warn('[db] Datenbank im alten Schema gefunden — neu aufgebaut')
+  console.warn('[db] Database in the old schema found — rebuilt')
 }
 
 /**
