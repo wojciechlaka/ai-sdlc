@@ -262,6 +262,7 @@ function reportSchemaError(rawOutput: string | undefined, message: string, onPro
   onProgress(`Schema-Validierungsfehler: ${message}`)
 }
 
+/** Usage of the run: duration since `startedAt`, tokens and cost of the given Claude call(s). */
 function buildMeta(model: string, startedAt: number, cliResult: ExtractedResult): AgentRunMeta {
   return {
     model,
@@ -298,6 +299,7 @@ export async function runAgent(
   options: ClaudeCliOptions,
 ): Promise<AgentRunResult> {
   const stageAgent = STAGE_AGENTS[input.stage]
+  // German: failStage shows this message on the ticket page.
   if (!stageAgent) throw new Error(`Für die Stufe ${input.stage} gibt es noch keinen Agent`)
   const agent = {
     skill: await fs.readFile(path.join(/*turbopackIgnore: true*/ options.skillsDir, stageAgent.skillFile), 'utf-8'),

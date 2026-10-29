@@ -42,6 +42,7 @@ const STATUS_HINT: Record<number, string> = {
   [HTTP_NOT_FOUND]: 'Bei GitHub nicht gefunden (404) — TARGET_REPO und den Repo-Zugriff des Tokens prüfen.',
 }
 
+/** HTTP status of an Octokit error; 0 for errors without one (network, timeout). */
 function statusOf(err: unknown): number {
   const status = (err as { status?: unknown } | null)?.status
   return typeof status === 'number' ? status : 0
@@ -57,6 +58,7 @@ function hintFor(status: number, detail: string): string {
   return `GitHub-Fehler: ${detail}`
 }
 
+/** Wraps any failure of a GitHub step into a CodeHostError whose message names the step and a German hint. */
 function toCodeHostError(err: unknown, action: string): CodeHostError {
   const status = statusOf(err)
   const detail = err instanceof Error ? err.message : String(err)

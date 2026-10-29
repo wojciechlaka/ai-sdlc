@@ -8,6 +8,7 @@ import { describeError } from './describeError'
 import { failStage } from './failStage'
 import { publishArtifact } from './publishArtifact'
 
+/** RunRequest plus what `runStage` prepared: the run id, the checkout and the codebase summary. */
 export interface ExecuteRunRequest extends RunRequest {
   /** The attempt's run, created by `beginRun`. */
   runId: string

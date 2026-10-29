@@ -30,6 +30,7 @@ export function runCostUsd(p: Payload): number {
     + (count(p, 'outputTokens') / TOKENS_PER_MILLION) * pricing.outputPerMtok
 }
 
+/** Dollar amount with more decimals for tiny costs; `—` for zero. */
 export function formatCost(usd: number): string {
   if (usd === 0) return '—'
   return `$${usd < 0.001 ? usd.toFixed(6) : usd < 0.01 ? usd.toFixed(4) : usd.toFixed(2)}`

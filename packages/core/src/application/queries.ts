@@ -12,6 +12,7 @@ function openArtifact(deps: UseCaseDeps, ticket: Ticket): Artifact | null {
   return stage ? deps.artifacts.findOpen(ticket.key, stage) : null
 }
 
+/** All tickets for the board, each with the PR of its current stage while in review. */
 export function listTickets(deps: UseCaseDeps): TicketDto[] {
   return deps.tickets.list().map((ticket) => toTicketDto(ticket, openArtifact(deps, ticket)))
 }
@@ -50,6 +51,7 @@ function pendingQuestion(deps: UseCaseDeps, ticket: Ticket): string | null {
   return output?.type === 'question' ? output.question : null
 }
 
+/** Ticket page data: stages (merged content read live), log and open question. @throws {NotFoundError} */
 export async function getTicket(deps: UseCaseDeps, key: string): Promise<TicketDetailDto> {
   const ticket = requireTicket(deps.tickets, key)
   const artifacts = deps.artifacts.listForTicket(ticket.key)
@@ -61,6 +63,7 @@ export async function getTicket(deps: UseCaseDeps, key: string): Promise<TicketD
   }
 }
 
+/** Target repo, base branch and whether a token is configured — for the sidebar. */
 export function getSettings(deps: UseCaseDeps): SettingsDto {
   return { repoUrl: deps.repoUrl, baseBranch: deps.baseBranch, tokenConfigured: deps.codeHost !== null }
 }

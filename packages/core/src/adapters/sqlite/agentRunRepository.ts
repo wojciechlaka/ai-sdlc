@@ -14,6 +14,7 @@ function toAgentRunInput(stored: AgentRunInput & { previousRuns?: QAPair[] }): A
   return { ...input, answeredQuestions: input.answeredQuestions ?? previousRuns ?? [] }
 }
 
+/** Domain AgentRun of a table row (input read tolerantly). */
 function toAgentRun(row: AgentRunRow): AgentRun {
   return { ...row, input: toAgentRunInput(row.input) }
 }

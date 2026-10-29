@@ -1,6 +1,7 @@
 import type { StageOutput } from '@refinement/shared'
 import type { ArtifactStage, QAPair } from '../domain/types'
 
+/** Everything one agent run needs: ticket, stage, local checkout, model and the Q&A history. */
 export interface AgentRunnerInput {
   /** Ticket key; also the handle for `stop`. */
   ticketKey: string
@@ -16,6 +17,7 @@ export interface AgentRunnerInput {
   answeredQuestions: QAPair[]
 }
 
+/** Usage of a run (summed over a schema retry), stored on the AgentRun and shown in the log. */
 export interface AgentRunMeta {
   model: string
   durationSeconds: number
@@ -26,6 +28,7 @@ export interface AgentRunMeta {
   costUsd: number
 }
 
+/** Validated stage output plus its usage. */
 export interface AgentRunResult {
   output: StageOutput
   meta: AgentRunMeta
@@ -52,6 +55,7 @@ export interface AgentRunCallbacks {
   onToolEvent(event: ToolEvent): void
 }
 
+/** Port of the agent that writes a stage's artifact (production: the `claude` CLI). */
 export interface AgentRunner {
   /**
    * Runs the agent of the stage and returns its validated output.

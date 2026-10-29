@@ -1,11 +1,13 @@
 import type { ArtifactStage, Stage, TicketDto, TicketState } from '@refinement/shared'
 
+/** Models offered in the model select, with display labels. */
 export const MODELS = [
   { value: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5' },
   { value: 'claude-sonnet-4-6', label: 'Sonnet 4.6' },
   { value: 'claude-opus-4-7', label: 'Opus 4.7' },
 ]
 
+/** Preselected model of a new stage run. */
 export const DEFAULT_MODEL = 'claude-sonnet-4-6'
 
 /** Board column and badge label per stage. */
@@ -21,6 +23,7 @@ export const ARTIFACT_STAGE_TITLE: Record<ArtifactStage, string> = {
   design: '2 Design · Spec',
 }
 
+/** Badge text per ticket state. */
 export const STATE_LABEL: Record<TicketState, string> = {
   ready:           'bereit',
   running:         'Agent läuft',
@@ -29,6 +32,7 @@ export const STATE_LABEL: Record<TicketState, string> = {
   failed:          'fehlgeschlagen',
 }
 
+/** Badge style per ticket state. */
 export const STATE_VARIANT: Record<TicketState, 'default' | 'secondary' | 'outline' | 'destructive'> = {
   ready:           'outline',
   running:         'secondary',
@@ -44,6 +48,7 @@ export function stateText(ticket: Pick<TicketDto, 'state' | 'openPr'>): string {
 
 // Anthropic provides no pricing API — values must be updated manually.
 // Last verified: 2026-06-26 — https://docs.anthropic.com/en/docs/about-claude/pricing
+/** USD per million input/output tokens; used to estimate costs the CLI did not report. */
 export const MODEL_PRICING: Record<string, { inputPerMtok: number; outputPerMtok: number }> = {
   'claude-haiku-4-5-20251001': { inputPerMtok: 1.00,  outputPerMtok:  5.00 },
   'claude-sonnet-4-6':         { inputPerMtok: 3.00,  outputPerMtok: 15.00 },
@@ -52,5 +57,6 @@ export const MODEL_PRICING: Record<string, { inputPerMtok: number; outputPerMtok
 
 /** Prices are quoted per million tokens. */
 export const TOKENS_PER_MILLION = 1_000_000
+/** Price factors of cache writes and cache reads relative to the input price. */
 export const CACHE_WRITE_MULTIPLIER = 1.25
 export const CACHE_READ_MULTIPLIER = 0.10

@@ -10,6 +10,7 @@ import type {
   TicketSource,
 } from '../ports'
 
+/** Ports and settings every use case receives; wired by compose.ts (production) or createTestContext (tests). */
 export interface UseCaseDeps {
   tickets: TicketRepository
   runs: AgentRunRepository

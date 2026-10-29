@@ -1,10 +1,12 @@
 import type { StageOutput } from '@refinement/shared'
 import type { SchemaValidationError } from './errors'
 
+/** `message` of an `assistant` stream-json line; only its content blocks are read. */
 export interface ClaudeStreamMessage {
   content?: Array<Record<string, unknown>>
 }
 
+/** `usage` of the stream-json `result` line. */
 export interface ClaudeTokenUsage {
   input_tokens?: number
   output_tokens?: number
@@ -12,6 +14,7 @@ export interface ClaudeTokenUsage {
   cache_creation_input_tokens?: number
 }
 
+/** Answer text and usage of one `claude` call, taken from its stream-json `result` line. */
 export interface ExtractedResult {
   text: string
   inputTokens: number
