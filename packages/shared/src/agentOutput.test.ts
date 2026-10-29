@@ -9,6 +9,9 @@ describe('QuestionOutputSchema', () => {
   it('accepts a question and rejects one without text', () => {
     expect(QuestionOutputSchema.parse({ type: 'question', question: 'Wer?' })).toEqual({ type: 'question', question: 'Wer?' })
     expect(QuestionOutputSchema.safeParse({ type: 'question' }).success).toBe(false)
+    const empty = QuestionOutputSchema.safeParse({ type: 'question', question: '' })
+    expect(empty.success).toBe(false)
+    expect(empty.error?.issues[0]?.message).toBe('darf nicht leer sein')
   })
 })
 

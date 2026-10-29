@@ -64,7 +64,7 @@ export function ChoicePanel({ ticketKey, choice, counter, onAnswered, onCancel, 
                   aria-describedby={`${baseId}-details`}
                   className="mt-1"
                 />
-                <span className="space-y-1">
+                <span className="block space-y-1">
                   <span id={`${baseId}-title`} className="font-medium">
                     Ansatz {option.id}: {option.title}
                     {recommended && <span className="ml-2 rounded bg-amber-200 px-1.5 py-0.5 text-xs">empfohlen</span>}

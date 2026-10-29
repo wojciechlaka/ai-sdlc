@@ -31,8 +31,8 @@ it without guessing.
    same decision again: build the spec on the pick and put the options not picked into `approach.alternatives`
    with the reason. The offered options appear in „Bisherige Rückfragen“ as „(Angeboten: …)“ after the question.
 4. **Blocking gap?** If a business rule is missing that no reasonable assumption can fill and the spec would be
-   wrong without it, return a **question** — one question per run, concrete and answerable. If a missing business rule and real alternatives both exist, ask
-   the question first: a choice presupposes that the rules are known.
+   wrong without it, return a **question** — one question per run, concrete and answerable. If a missing business
+   rule and real alternatives both exist, ask the question first: a choice presupposes that the rules are known.
 5. Otherwise write the **spec**:
    - Every success criterion of the intent is covered by at least one verifiable acceptance criterion.
    - YAGNI: nothing the intent does not ask for — no extra endpoints, options or refactorings.

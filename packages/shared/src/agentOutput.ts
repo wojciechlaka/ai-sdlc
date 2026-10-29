@@ -3,15 +3,15 @@ import { z } from 'zod'
 // Agent outputs that ask the human instead of delivering the stage result: a free-text question (every stage)
 // or a choice between 2–3 approaches (stage 2, Design).
 
+/** Message for empty texts of a question or choice; it reaches the agent's retry prompt. */
+const EMPTY = 'darf nicht leer sein'
+
 /** A blocking question of an agent; every stage may return it instead of its result. */
 export const QuestionOutputSchema = z.object({
   type: z.literal('question'),
-  question: z.string(),
+  question: z.string().min(1, EMPTY),
 })
 export type QuestionOutput = z.infer<typeof QuestionOutputSchema>
-
-/** Message for empty texts of a choice; it reaches the agent's retry prompt. */
-const EMPTY = 'darf nicht leer sein'
 
 /** Id of an option in a choice. */
 export const ChoiceIdSchema = z.enum(['A', 'B', 'C'])
