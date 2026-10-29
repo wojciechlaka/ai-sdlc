@@ -31,7 +31,11 @@ const CORE_DIR = path.resolve(__dirname, '..')
 const HOOKS_DIR = path.join(CORE_DIR, 'hooks')
 const SKILLS_DIR = path.join(CORE_DIR, 'skills')
 const FIXTURE_DIR = path.join(__dirname, 'fixtures', FIXTURE_NAME)
-/** The judge gets no tools: everything is in its prompt. The guard hooks and an empty cwd back this up. */
+/**
+ * The judge gets no tools: everything is in its prompt, and it reads untrusted spec text. Real isolation comes from
+ * `--tools ''` (no built-in tools) and `--strict-mcp-config` (no MCP servers, e.g. from the user settings, as we pass
+ * no --mcp-config). This deny list is only a backup, together with the guard hooks and an empty cwd.
+ */
 const JUDGE_DISALLOWED_TOOLS = 'Bash,Read,Glob,Grep,Edit,Write,NotebookEdit,WebFetch,WebSearch,Task'
 
 /** Outcome of one case for the report. */
@@ -89,12 +93,15 @@ async function runSpecAgent(evalCase: SpecEvalCase, repo: string, intentMarkdown
 
 /** Calls the judge model without tools; returns its verdict (or the error), its cost and whether it used tools. */
 async function judge(prompt: string): Promise<{ verdict: JudgeVerdict | null; detail: string; costUsd: number; toolCalls: number }> {
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'spec-judge-'))
-  const hookLog = await createHookLogFile()
+  let cwd: string | undefined
+  let hookLog: Awaited<ReturnType<typeof createHookLogFile>> | undefined
   try {
+    cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'spec-judge-'))
+    hookLog = await createHookLogFile()
     const args = [
       '--print', '--output-format', 'json', '--model', JUDGE_MODEL,
       '--setting-sources', 'user', '--settings', hookSettings(HOOKS_DIR), '--disallowedTools', JUDGE_DISALLOWED_TOOLS,
+      '--tools', '', '--strict-mcp-config',
     ]
     const proc = spawnSync('claude', args, { cwd, env: sandboxEnv(process.env, hookLog.path), input: prompt, encoding: 'utf-8', timeout: JUDGE_TIMEOUT_MS })
     const toolCalls = fs.readFileSync(hookLog.path, 'utf-8').split('\n').filter(Boolean).length
@@ -102,7 +109,7 @@ async function judge(prompt: string): Promise<{ verdict: JudgeVerdict | null; de
     try {
       result = JSON.parse(proc.stdout ?? '') as typeof result
     } catch {
-      return { verdict: null, detail: `Bewerter ohne gültige Ausgabe: ${(proc.stderr ?? '').slice(0, 300)}`, costUsd: 0, toolCalls }
+      return { verdict: null, detail: `Bewerter ohne gültige Ausgabe: ${[proc.error?.message, (proc.stderr ?? '').slice(0, 300)].filter(Boolean).join(' · ')}`, costUsd: 0, toolCalls }
     }
     const parsed = JudgeVerdictSchema.safeParse(safeJson(extractJsonString(result.result ?? '')))
     const costUsd = result.total_cost_usd ?? 0
@@ -111,8 +118,10 @@ async function judge(prompt: string): Promise<{ verdict: JudgeVerdict | null; de
     }
     return { verdict: parsed.data, detail: 'bewertet', costUsd, toolCalls }
   } finally {
-    fs.rmSync(cwd, { recursive: true, force: true })
-    await hookLog.cleanup()
+    if (cwd) {
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+    await hookLog?.cleanup()
   }
 }
 
@@ -127,16 +136,18 @@ function safeJson(text: string): unknown {
 
 async function runCase(evalCase: SpecEvalCase, files: string[]): Promise<CaseReport> {
   const started = Date.now()
-  const intentMarkdown = renderIntent({ key: evalCase.key, sourcePath: `examples/tickets/${evalCase.key.toLowerCase()}.md` }, evalCase.intent, [])
-  const repo = createTempRepo(evalCase, intentMarkdown)
+  const ticket = { key: evalCase.key, sourcePath: `examples/tickets/${evalCase.key.toLowerCase()}.md` }
+  const intentMarkdown = renderIntent(ticket, evalCase.intent, [])
+  let repo: string | undefined
   try {
+    repo = createTempRepo(evalCase, intentMarkdown)
     const agent = await runSpecAgent(evalCase, repo, intentMarkdown)
     const checks: CheckResult[] = [{ name: 'Spec direkt geliefert (Schema)', pass: agent.spec !== null, detail: agent.detail }]
     if (!agent.spec) {
       return { key: evalCase.key, checks, verdict: null, costUsd: agent.costUsd, seconds: Math.round((Date.now() - started) / 1000) }
     }
     checks.push(...fixedChecks(agent.spec, evalCase.intent, new Set(files)))
-    const specMarkdown = renderSpec({ key: evalCase.key, sourcePath: `examples/tickets/${evalCase.key.toLowerCase()}.md` }, agent.spec, [])
+    const specMarkdown = renderSpec(ticket, agent.spec, [])
     const judged = await judge(buildJudgePrompt({ intentMarkdown, specMarkdown, fixtureOverview: fixtureOverview(files) }))
     checks.push({ name: 'Bewertung gelesen', pass: judged.verdict !== null, detail: judged.detail })
     checks.push({ name: 'Bewerter ohne Werkzeuge', pass: judged.toolCalls === 0, detail: `${judged.toolCalls} Aufrufe` })
@@ -145,15 +156,22 @@ async function runCase(evalCase: SpecEvalCase, files: string[]): Promise<CaseRep
       costUsd: agent.costUsd + judged.costUsd, seconds: Math.round((Date.now() - started) / 1000),
     }
   } finally {
-    fs.rmSync(repo, { recursive: true, force: true })
+    if (repo) {
+      fs.rmSync(repo, { recursive: true, force: true })
+    }
   }
+}
+
+/** Fits a report cell: passing rows are shortened, failed ones stay complete. */
+function cell(text: string, pass: boolean): string {
+  return (pass ? text.slice(0, 60) : text).padEnd(62)
 }
 
 /** Prints the German report of one case; returns the number of failed checks and scores. */
 function printCase(report: CaseReport): number {
   console.log(`\n${report.key} · ${report.seconds} s · ${report.costUsd.toFixed(4)} USD`)
   for (const check of report.checks) {
-    console.log(`  ${check.name.padEnd(36)}${check.detail.slice(0, 60).padEnd(62)}${check.pass ? '✓' : '✗'}`)
+    console.log(`  ${check.name.padEnd(36)}${cell(check.detail, check.pass)}${check.pass ? '✓' : '✗'}`)
   }
   const failedChecks = report.checks.filter((check) => !check.pass).length
   if (!report.verdict) {
@@ -162,7 +180,7 @@ function printCase(report: CaseReport): number {
   const failed = failedScores(report.verdict, MIN_SCORE)
   for (const score of report.verdict.scores) {
     const pass = score.score >= MIN_SCORE
-    console.log(`  ${`Bewertung ${score.criterion}`.padEnd(36)}${`${score.score}/5 — ${score.reason}`.slice(0, 60).padEnd(62)}${pass ? '✓' : '✗'}`)
+    console.log(`  ${`Bewertung ${score.criterion}`.padEnd(36)}${cell(`${score.score}/5 — ${score.reason}`, pass)}${pass ? '✓' : '✗'}`)
   }
   for (const entry of report.verdict.coverage) {
     console.log(`    ${entry.successCriterion} → ${entry.acceptanceCriteria.join(' | ') || '—'}`)
@@ -190,6 +208,9 @@ async function main(): Promise<number> {
   return 0
 }
 
-void main().then((code) => {
+main().then((code) => {
   process.exitCode = code
+}, (err: unknown) => {
+  console.error(`Eval abgebrochen: ${describeError(err)}`)
+  process.exitCode = 1
 })
