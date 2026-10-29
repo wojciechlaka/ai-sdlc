@@ -1,7 +1,7 @@
 import fs from 'fs/promises'
 import path from 'path'
 import type { ZodType } from 'zod'
-import { IntentAgentOutputSchema, type StageOutput } from '@refinement/shared'
+import { IntentAgentOutputSchema, SpecAgentOutputSchema, type StageOutput } from '@refinement/shared'
 import type {
   AgentRunner, AgentRunnerInput, AgentRunMeta, AgentRunResult, AgentRunCallbacks, ClaudeProcessSandbox,
 } from '../../ports'
@@ -15,17 +15,16 @@ import type { ExtractedResult, ClaudeCallResult } from './types'
 
 const SCHEMA_ERROR_PREVIEW_CHARS = 120
 
-interface StageAgent {
+/** Skill file (in `skills/`) and output schema of one stage agent. */
+export interface StageAgent {
   skillFile: string
   schema: ZodType<StageOutput>
 }
 
-/**
- * Skill and output schema per stage. A stage without an entry cannot run yet
- * (see `STARTABLE_STAGES` in domain/rules).
- */
-const STAGE_AGENTS: Partial<Record<ArtifactStage, StageAgent>> = {
+/** Skill and output schema per stage; the spec eval (`evals/spec.eval.ts`) runs the design agent the same way. */
+export const STAGE_AGENTS: Record<ArtifactStage, StageAgent> = {
   plan: { skillFile: 'intent-agent.md', schema: IntentAgentOutputSchema },
+  design: { skillFile: 'spec-agent.md', schema: SpecAgentOutputSchema },
 }
 
 /** Skill text, output schema, sandbox and timeout of one run; the same for both of its Claude calls. */
@@ -52,7 +51,9 @@ async function runClaudeOnce(
     title: input.title,
     description: input.description,
     codebaseSummary: input.codebaseSummary,
+    intent: input.intent,
     answeredQuestions: input.answeredQuestions,
+    questionsRemaining: input.questionsRemaining,
     retryContext,
   })
 
@@ -129,7 +130,6 @@ export interface ClaudeCliOptions {
  * One automatic retry on a SchemaValidationError (the retry prompt quotes the malformed output);
  * terminate, timeout and CLI errors propagate immediately. Tokens and cost cover both calls.
  * Every call runs in the sandbox (guard and audit hooks, clean env); its tool calls reach `callbacks.onToolEvent`.
- * @throws {Error} if the stage has no agent yet.
  * @throws {AgentRunTerminatedError} if the process is killed via `stopAgent`.
  * @throws {AgentRunTimeoutError} if a Claude call exceeds `options.timeoutMs`.
  * @throws {CliError} if the Claude process exits with a non-zero code.
@@ -141,10 +141,6 @@ export async function runAgent(
   options: ClaudeCliOptions,
 ): Promise<AgentRunResult> {
   const stageAgent = STAGE_AGENTS[input.stage]
-  // German: failStage shows this message on the ticket page.
-  if (!stageAgent) {
-    throw new Error(`Für die Stufe ${input.stage} gibt es noch keinen Agent`)
-  }
   const agent: LoadedAgent = {
     skill: await fs.readFile(path.join(/*turbopackIgnore: true*/ options.skillsDir, stageAgent.skillFile), 'utf-8'),
     schema: stageAgent.schema,

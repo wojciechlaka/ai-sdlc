@@ -135,10 +135,53 @@ describe('runAgent (stage plan)', () => {
     await expect(runAgent(INPUT, callbacks(), { ...OPTIONS, timeoutMs: 50 })).rejects.toBeInstanceOf(AgentRunTimeoutError)
   })
 
-  it('rejects stages without an agent before spawning claude', async () => {
+})
+
+describe('runAgent (stage design)', () => {
+  const DESIGN_INPUT: AgentRunnerInput = {
+    ...INPUT, stage: 'design', intent: '# CB-2: Lesezeit anzeigen', questionsRemaining: 1,
+  }
+  const SPEC_OUTPUT = JSON.stringify({
+    type: 'spec',
+    result: {
+      title: 'Lesezeit', goal: 'Die API liefert eine Lesezeit.',
+      approach: { chosen: 'Im Service', rationale: 'keine Migration', alternatives: [{ name: 'Feld', reason: 'Migration' }] },
+      components: [], dataFlow: 'Route → Service', errorHandling: 'keine', acceptanceCriteria: ['Feld vorhanden'], tests: 'Unit',
+      affectedFiles: [{ path: 'src/app.js', change: 'Feld', isNew: false }], risks: [], openPoints: [],
+    },
+  })
+
+  it('maps design to the spec skill and its schema', async () => {
+    const { STAGE_AGENTS } = await import('./index')
+    const { SpecAgentOutputSchema } = await import('@refinement/shared')
+    expect(STAGE_AGENTS.design).toEqual({ skillFile: 'spec-agent.md', schema: SpecAgentOutputSchema })
+    expect(fs.existsSync(path.join(OPTIONS.skillsDir, 'spec-agent.md'))).toBe(true)
+  })
+
+  it('sends the spec skill, the intent and the remaining questions and returns the spec', async () => {
+    const proc = makeFakeProcess(resultLine(SPEC_OUTPUT), 0)
+    mockSpawn.mockReturnValue(proc)
     const { runAgent } = await import('./index')
-    await expect(runAgent({ ...INPUT, stage: 'design' }, callbacks(), OPTIONS)).rejects.toThrow('design')
-    expect(mockSpawn).not.toHaveBeenCalled()
+    const { output } = await runAgent(DESIGN_INPUT, callbacks(), OPTIONS)
+    const prompt = proc.stdin.write.mock.calls[0][0] as string
+    expect(prompt).toContain('# Spec Agent Skill')
+    expect(prompt).toContain('## Intent (gemergt auf showcase)\n\n# CB-2: Lesezeit anzeigen')
+    expect(prompt).toContain('Du hast noch 1 von 3 Rückfragen/Auswahlen.')
+    expect(output).toMatchObject({ type: 'spec', result: { title: 'Lesezeit' } })
+  })
+
+  it('accepts a choice and rejects an intent in stage design', async () => {
+    const choice = JSON.stringify({
+      type: 'choice', question: 'Wo?', recommended: 'A',
+      options: [{ id: 'A', title: 'a', description: 'd', pros: [], cons: [] }, { id: 'B', title: 'b', description: 'd', pros: [], cons: [] }],
+    })
+    mockSpawn.mockImplementationOnce(() => makeFakeProcess(resultLine(choice), 0))
+    const { runAgent } = await import('./index')
+    expect((await runAgent(DESIGN_INPUT, callbacks(), OPTIONS)).output.type).toBe('choice')
+
+    mockSpawn.mockImplementation(() => makeFakeProcess(resultLine(INTENT_OUTPUT), 0))
+    const { SchemaValidationError } = await import('./errors')
+    await expect(runAgent(DESIGN_INPUT, callbacks(), OPTIONS)).rejects.toBeInstanceOf(SchemaValidationError)
   })
 })
 
