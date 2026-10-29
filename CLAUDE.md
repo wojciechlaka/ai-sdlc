@@ -201,8 +201,11 @@ makes `startStage`/`answerQuestion` throw a `ConflictError`.
 - **New log event**: add `event('<type>', <payload schema>)` to `AuditEventSchema`
   (`packages/shared/src/auditEvents.ts`), write it with `record(...)`, add its `case` to `describeLogEvent`
   and its name to `FALLBACK_LABEL` (`apps/web/lib/logFormat.ts`; both are exhaustive)
-- **New UI**: `apps/web/components/`; mutations as Server Actions in `apps/web/app/actions.ts` using `runAction`;
+- **New UI**: `apps/web/components/`; mutations as Server Actions in `apps/web/app/actions.ts` using `runAction`,
+  called from client components via `useServerAction` (`hooks/`); display formats in `lib/format.ts`;
   UI primitives in `apps/web/components/ui/` (shadcn/Base UI)
+- **New model**: one entry (label, prices) in `MODELS` (`apps/web/lib/models.ts`); select, log and cost estimate
+  (`lib/pricing.ts`) read it
 - **New ticket**: Markdown file in `examples/tickets/`; appears after restart or reset
 - **New adapter**: a new folder under `packages/core/src/adapters/` is picked up by the architecture tests
   automatically (they loop over the folders); wire it only in `compose.ts`
