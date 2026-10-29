@@ -97,12 +97,29 @@ describe('TicketActions', () => {
     expect(screen.getByText(/Merge auf GitHub = Freigabe/)).toBeInTheDocument()
   })
 
-  it('keeps the design stage disabled until stage 2 exists', () => {
+  it('starts the design stage with the chosen model and explains what the agent does', async () => {
+    vi.mocked(startStageAction).mockResolvedValue({ ok: true, data: undefined })
     renderActions({ stage: 'design' })
     const start = screen.getByRole('button', { name: 'Design starten' })
-    expect(start).toBeDisabled()
-    expect(start).toHaveAccessibleDescription(/Stufe 1 ist abgeschlossen.*Stufe 2 \(Design\) ist noch nicht gebaut/)
-    expect(screen.queryByRole('combobox', { name: 'Modell' })).toBeNull()
+    expect(start).toHaveAccessibleDescription(
+      'Der Design-Agent liest den gemergten Intent und die Codebase; er stellt höchstens 3 Rückfragen oder Auswahlen.',
+    )
+    expect(screen.queryByText(/noch nicht gebaut/)).toBeNull()
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Modell' }), { target: { value: 'claude-opus-4-7' } })
+    fireEvent.click(start)
+    await waitFor(() => expect(startStageAction).toHaveBeenCalledWith('CB-2', { model: 'claude-opus-4-7' }))
+  })
+
+  it('offers a restart of a failed design stage and disables it without token', () => {
+    const { unmount } = renderActions({ stage: 'design', state: 'failed' })
+    expect(screen.getByText(/fehlgeschlagen — Details im Log/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Design starten' })).toBeEnabled()
+    unmount()
+
+    renderActions({ stage: 'design' }, false)
+    expect(screen.getByRole('button', { name: 'Design starten' })).toBeDisabled()
+    expect(screen.getByText(/GITHUB_TOKEN fehlt/)).toBeInTheDocument()
   })
 
   it('reports a finished ticket', () => {
