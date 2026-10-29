@@ -10,7 +10,7 @@ Eine lokale Next.js-App führt Tickets durch die Stufen des AI-Native SDLC Playb
 Artefakt der Stufe, die App legt es auf einem eigenen Branch im Ziel-Repo ab und öffnet einen PR; ein Mensch
 gibt per Merge frei. Die Inhalte liegen in Git, die App hält nur Stufe, Zustand, Verweise und Log (§3).
 **Stufe 1 (Plan → `intent.md`) läuft Ende zu Ende; Stufe 2 (Design → `spec.md`) ist modelliert, aber noch
-nicht startbar** (§5). Das Übersichtsbild: [architecture.png](architecture.png), erläutert in
+nicht startbar** (§6). Das Übersichtsbild: [architecture.png](architecture.png), erläutert in
 [architecture-annotated.png](architecture-annotated.png).
 
 ## 2. Prinzipien
@@ -72,17 +72,21 @@ Alles auf einer Maschine, **ein** Prozess (E2); nach außen spricht nur der GitH
   |              AuditLog . TicketSource . CodeHost . AgentRunner                |
   |              RepoProvider . EventPublisher                                   |
   |    adapters: sqlite (Drizzle) . markdownTickets . github (Octokit)           |
-  |              git (Repo-Cache) . claudeCli . nodeEvents                       |
+  |              git (Repo-Cache) . claudeCli . agentSandbox . nodeEvents        |
   |    |           |                |            |                  |            |
   |    v           v                v            v                  |            |
   |  SQLite   examples/tickets   Repo-Klon   "claude --print"       |            |
+  |                                          in der Sandbox:        |            |
+  |                                          hooks/guard.mjs (vor)  |            |
+  |                                          hooks/audit.mjs (nach) |            |
   |  Secrets: lokal (Claude-Login, GITHUB_TOKEN)                    |            |
   +=================================================================|============+
                                                                     v
                                                  GitHub API (Ziel-Repo, Branch showcase)
 ```
 
-*Abb. 1 — Ist-Architektur ([E2](decisions.md), [E3](decisions.md)).*
+*Abb. 1 — Ist-Architektur ([E2](decisions.md), [E3](decisions.md), [E6](decisions.md)). Jeder `claude`-Prozess läuft
+in der Sandbox aus `adapters/agentSandbox`; Guard und Audit sind die Hook-Skripte in `packages/core/hooks/`.*
 
 **Schichten.** `apps/web` ist der treibende Adapter: Server Components rufen Use Cases direkt auf, Server
 Actions schreiben, `app/api/events/route.ts` streamt Ereignisse. `packages/core` enthält die Fachlogik;
@@ -117,7 +121,8 @@ und ein `PostToolUse`-Hook (`hooks/audit.mjs`). Der Guard lässt `Read`/`Glob`/`
 `Bash` nur für wenige lesende git-Befehle ohne Sonderzeichen; im Zweifel lehnt er ab. Beide Hooks schreiben
 JSON-Zeilen in eine Datei pro Versuch, die der Claude-CLI-Adapter während des Laufs mitliest und als `ToolEvent` über
 `AgentRunner.run(input, { onProgress, onToolEvent })` meldet; der Kern schreibt daraus `guard_blocked`/`tool_used` ins
-Log, solange der Versuch aktuell ist. Der Agent schreibt nie in die DB — Zustände ändern nur die Use Cases.
+Log, solange der Versuch aktuell ist. Der Agent schreibt nie in die DB — Zustände ändern nur die Use Cases. Wie Skill,
+Hook und Eval zusammenspielen: §5.
 
 Jeder Hintergrundschritt prüft, ob sein Lauf noch der aktuelle ist. Stop, Neustart und Reset lassen so keinen
 veralteten Lauf Zustand schreiben; ein PR aus einem veralteten Lauf wird wieder geschlossen.
@@ -137,7 +142,25 @@ Tickets steht in [datenmodell.md](datenmodell.md).
 ([wojciechlaka/node-express-realworld-example-app](https://github.com/wojciechlaka/node-express-realworld-example-app)),
 Beispiel-Tickets → [`examples/tickets/`](../examples/tickets/README.md).
 
-## 5. Stand und nächster Schritt
+## 5. Governance als Code
+
+Das Playbook verlangt, dass Regeln für den Agent nicht nur im Prompt stehen, sondern geprüft und durchgesetzt
+werden. Für Stufe 1 gibt es dafür drei Bausteine, jeder als Code im Repo ([E6](decisions.md)):
+
+| Baustein | Was er tut | Wo |
+|---|---|---|
+| **Skill** | sagt dem Agent, was er tun soll: Intent schreiben oder zurückfragen, nur lesen | `packages/core/skills/intent-agent.md` |
+| **Hook** | setzt durch, was er darf: Guard vor jedem Werkzeugaufruf (lesen nur im Klon, Bash nur lesende git-Befehle), Audit danach; beides landet im Log des Tickets | `packages/core/hooks/` (Regel: `guardPolicy.mjs`), Sandbox: `src/adapters/agentSandbox/` |
+| **Eval** | prüft mit einem echten `claude` (Haiku), dass der Guard greift: `rm -rf`, Lesen außerhalb und `curl` blockiert, `git log` und Lesen im Repo erlaubt | `packages/core/evals/guard.eval.ts`, `npm run eval:guard` |
+
+Die Regel selbst ist zusätzlich mit Tabellentests abgedeckt (`hooks/guardPolicy.test.ts`, Teil von `npm test`);
+der Eval prüft das Zusammenspiel mit Claude Code, kostet etwa 5 Cent und läuft deshalb nur auf Aufruf.
+
+**Restrisiken.** Ein Hook, der in sein Zeitlimit läuft, blockiert nicht; das Bash-Werkzeug nutzt die Shell des
+Nutzers samt Startdateien; was der Agent im öffentlichen Klon liest, sieht er ganz. Details:
+[Spec §13](superpowers/specs/2026-10-28-playbook-stages-design.md#13-nachtrag-guard--und-audit-hooks-für-den-agent).
+
+## 6. Stand und nächster Schritt
 
 **Gebaut (Stufe 1):**
 
@@ -146,6 +169,7 @@ Beispiel-Tickets → [`examples/tickets/`](../examples/tickets/README.md).
 - Merge-Erkennung per Abfrage (Timer und Ticketseite), Übergang in Stufe 2, Inhalt live von `showcase`.
 - Log pro Ticket mit Läufen, Rückfragen, PRs, Übergängen, Kosten und Tokens.
 - Aufräumen beim Start, Showcase-Reset (Tag `showcase-base`, Reset-Button, `RESET_ON_START`).
+- Leitplanken des Agents: Sandbox, Guard- und Audit-Hooks, Eval (§5).
 
 **Offen:**
 
@@ -154,7 +178,7 @@ Beispiel-Tickets → [`examples/tickets/`](../examples/tickets/README.md).
 - **Klon auf `showcase`:** Der Agent liest heute den Klon des Default-Branches; für Stufe 2 muss er den Stand
   von `showcase` sehen (dort liegt das gemergte `intent.md`).
 
-## 6. Glossar
+## 7. Glossar
 
 | Begriff | Bedeutung |
 |---|---|
