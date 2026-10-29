@@ -1,13 +1,13 @@
 import type { AuditLogEntryDto } from '@refinement/shared'
+import { formatDateTime } from '@/lib/format'
 import { describeLogEvent, groupLogEntries } from '@/lib/logFormat'
 
 const ACTOR_LABEL: Record<AuditLogEntryDto['actor'], string> = { human: 'Mensch', agent: 'Agent', system: 'System' }
-const TIME = new Intl.DateTimeFormat('de-DE', { dateStyle: 'short', timeStyle: 'medium', timeZone: 'Europe/Berlin' })
 
 function Time({ at }: { at: Date }) {
   return (
     <time className="shrink-0 font-mono text-slate-400" dateTime={at.toISOString()}>
-      {TIME.format(at)}
+      {formatDateTime(at)}
     </time>
   )
 }

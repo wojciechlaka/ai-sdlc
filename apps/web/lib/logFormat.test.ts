@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { aLogEntry } from '@/test/fixtures'
-import { describeLogEvent, formatCost, formatTokens, groupLogEntries, runCostUsd } from './logFormat'
+import { describeLogEvent, groupLogEntries, runCostUsd } from './logFormat'
 
 describe('describeLogEvent', () => {
   it.each([
@@ -66,22 +66,9 @@ describe('groupLogEntries', () => {
 describe('cost and tokens', () => {
   const RUN = { runId: 'r1', status: 'succeeded' } as const
 
-  it('formats token counts', () => {
-    expect(formatTokens(999)).toBe('999')
-    expect(formatTokens(1500)).toBe('1.5K')
-    expect(formatTokens(2000)).toBe('2K')
-  })
-
   it('uses the reported cost and estimates it otherwise', () => {
     expect(runCostUsd({ ...RUN, costUsd: 0.5 })).toBe(0.5)
     expect(runCostUsd({ ...RUN, costUsd: 0, model: 'claude-sonnet-4-6', inputTokens: 1_000_000, outputTokens: 0 })).toBeCloseTo(3)
     expect(runCostUsd({ ...RUN, costUsd: 0, model: 'unknown' })).toBe(0)
-  })
-
-  it('formats costs', () => {
-    expect(formatCost(0)).toBe('—')
-    expect(formatCost(0.0005)).toBe('$0.000500')
-    expect(formatCost(0.005)).toBe('$0.0050')
-    expect(formatCost(1.234)).toBe('$1.23')
   })
 })

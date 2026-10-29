@@ -1,18 +1,9 @@
 import { AuditEventSchema, type AuditLogEntryDto, type AuditPayloads, type Stage } from '@refinement/shared'
 import { CACHE_READ_MULTIPLIER, CACHE_WRITE_MULTIPLIER, MODELS, MODEL_PRICING, TOKENS_PER_MILLION, STAGE_LABEL } from './constants'
-import { formatElapsed } from './utils'
-
-const TOKENS_PER_K = 1000
+import { formatCost, formatElapsed, formatTokens } from './format'
 
 const modelLabel = (model: string) => MODELS.find((m) => m.value === model)?.label ?? model
 const stageLabel = (stage: Stage) => STAGE_LABEL[stage] ?? stage
-
-/** 1500 → "1.5K" */
-export function formatTokens(n: number): string {
-  if (n < TOKENS_PER_K) return String(n)
-  const k = n / TOKENS_PER_K
-  return `${k % 1 === 0 ? k.toFixed(0) : k.toFixed(1)}K`
-}
 
 /** Cost of a run: the reported value, otherwise estimated from the pricing table; 0 if unknown. */
 export function runCostUsd(run: AuditPayloads['run_finished']): number {
@@ -24,12 +15,6 @@ export function runCostUsd(run: AuditPayloads['run_finished']): number {
     + ((run.cacheCreationTokens ?? 0) / TOKENS_PER_MILLION) * pricing.inputPerMtok * CACHE_WRITE_MULTIPLIER
     + ((run.cacheReadTokens ?? 0) / TOKENS_PER_MILLION) * pricing.inputPerMtok * CACHE_READ_MULTIPLIER
     + ((run.outputTokens ?? 0) / TOKENS_PER_MILLION) * pricing.outputPerMtok
-}
-
-/** Dollar amount with more decimals for tiny costs; `—` for zero. */
-export function formatCost(usd: number): string {
-  if (usd === 0) return '—'
-  return `$${usd < 0.001 ? usd.toFixed(6) : usd < 0.01 ? usd.toFixed(4) : usd.toFixed(2)}`
 }
 
 /** Tool call with its target; Bash commands in backticks. */

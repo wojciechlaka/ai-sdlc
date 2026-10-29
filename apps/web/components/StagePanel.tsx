@@ -1,11 +1,11 @@
 import ReactMarkdown from 'react-markdown'
 import type { PrState, StageViewDto } from '@refinement/shared'
 import { ARTIFACT_STAGE_TITLE } from '@/lib/constants'
+import { formatDate } from '@/lib/format'
 import { stripFrontMatter } from '@/lib/markdown'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 
 const PR_STATE: Record<PrState, string> = { open: 'offen', merged: 'gemergt', closed: 'geschlossen' }
-const DATE = new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium', timeZone: 'Europe/Berlin' })
 
 /** One artifact stage: done mark, links to file and PR, content (live from the base branch showcase) in a collapsible block. */
 export function StagePanel({ view }: { view: StageViewDto }) {
@@ -18,7 +18,7 @@ export function StagePanel({ view }: { view: StageViewDto }) {
             <span className="sr-only">{view.completed ? 'abgeschlossen' : 'offen'}</span>
           </span>
           {ARTIFACT_STAGE_TITLE[view.stage]}
-          {view.mergedAt && <span className="text-xs font-normal text-slate-400">gemergt am {DATE.format(view.mergedAt)}</span>}
+          {view.mergedAt && <span className="text-xs font-normal text-slate-400">gemergt am {formatDate(view.mergedAt)}</span>}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2 text-xs">

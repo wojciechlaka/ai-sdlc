@@ -1,4 +1,4 @@
-import { formatElapsed } from '@/lib/utils'
+import { formatElapsed } from '@/lib/format'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 
 interface Props {
