@@ -2,6 +2,7 @@ import type { AuditPayloads, StageOutput } from '@refinement/shared'
 import type { Ticket } from '../domain/types'
 import { renderIntent, renderSpec } from '../domain/render'
 import { describeError } from '../domain/errors'
+import { questionsRemaining } from '../domain/rules'
 import {
   AgentRunTerminatedError, AgentRunTimeoutError, type AgentRunMeta, type AgentRunnerInput, type RunCompletion,
   type ToolEvent,
@@ -12,6 +13,7 @@ import { createReporter, type Reporter } from './reporter'
 import { failStage } from './failStage'
 import { publishArtifact } from './publishArtifact'
 import { record } from './auditTrail'
+import { QUESTION_LIMIT_REACHED } from './messages'
 
 /** RunRequest plus what `runStage` prepared: the run id, the checkout, the codebase summary and the intent. */
 export interface ExecuteRunRequest extends RunRequest {
@@ -31,6 +33,8 @@ interface Attempt {
   request: ExecuteRunRequest
   /** True while this attempt is the ticket's current run (see `isCurrentRun`). */
   isCurrent: () => boolean
+  /** Questions and choices the agent may still ask; null for a stage without limit. */
+  questionsRemaining: number | null
 }
 
 /**
@@ -41,10 +45,11 @@ interface Attempt {
 export async function executeRun(deps: UseCaseDeps, ticket: Ticket, request: ExecuteRunRequest): Promise<void> {
   const reporter = createReporter(deps, ticket.key)
   const isCurrent = () => isCurrentRun(deps, ticket.key, request.runId)
-  const attempt: Attempt = { deps, ticket, reporter, request, isCurrent }
+  const remaining = questionsRemaining(request.stage, deps.runs.listForTicket(ticket.key, request.stage))
+  const attempt: Attempt = { deps, ticket, reporter, request, isCurrent, questionsRemaining: remaining }
 
   try {
-    const { output, meta } = await deps.agent.run(agentInput(ticket, request), {
+    const { output, meta } = await deps.agent.run(agentInput(ticket, request, remaining), {
       onProgress: reporter.logAndProgress,
       onToolEvent: toolEventRecorder(attempt),
     })
@@ -59,8 +64,8 @@ export async function executeRun(deps: UseCaseDeps, ticket: Ticket, request: Exe
   }
 }
 
-/** What the agent gets: ticket text, checkout, model, summary, intent (design) and the Q&A history. */
-function agentInput(ticket: Ticket, request: ExecuteRunRequest): AgentRunnerInput {
+/** What the agent gets: ticket text, checkout, model, summary, intent (design), the Q&A history and its question budget. */
+function agentInput(ticket: Ticket, request: ExecuteRunRequest, remaining: number | null): AgentRunnerInput {
   return {
     ticketKey: ticket.key,
     stage: request.stage,
@@ -71,6 +76,7 @@ function agentInput(ticket: Ticket, request: ExecuteRunRequest): AgentRunnerInpu
     codebaseSummary: request.codebaseSummary ?? undefined,
     intent: request.intent,
     answeredQuestions: request.answeredQuestions,
+    questionsRemaining: remaining ?? undefined,
   }
 }
 
@@ -133,8 +139,15 @@ function recordSucceededRun({ deps, ticket, reporter, request }: Attempt, output
   record(deps, ticket.key, 'agent', 'run_finished', { runId: request.runId, status: 'succeeded', ...runMetaPayload(meta) })
 }
 
-/** Question or choice → `awaiting_answer`; intent or spec → rendered Markdown published as branch + PR (`in_review`). */
-async function applyOutput({ deps, ticket, reporter, request }: Attempt, output: StageOutput): Promise<void> {
+/**
+ * Question or choice → `awaiting_answer`; intent or spec → rendered Markdown published as branch + PR (`in_review`).
+ * A question or choice after the agent used up its budget fails the stage (it can be started again).
+ */
+async function applyOutput({ deps, ticket, reporter, request, questionsRemaining: remaining }: Attempt, output: StageOutput): Promise<void> {
+  if ((output.type === 'question' || output.type === 'choice') && remaining === 0) {
+    failStage(deps, reporter, ticket.key, QUESTION_LIMIT_REACHED)
+    return
+  }
   switch (output.type) {
     case 'question':
       record(deps, ticket.key, 'agent', 'question_asked', { question: output.question })

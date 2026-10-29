@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { CodeHostError } from '../ports'
 import { SAMPLE_CHOICE_OUTPUT, SAMPLE_META, SAMPLE_SPEC_OUTPUT, createTestContext, seedTicket, type TestContext } from '../testing/fakes'
-import { startStage, stopRun } from './stageCommands'
+import { answerQuestion, startStage, stopRun } from './stageCommands'
 import { syncReviews } from './syncReviews'
 
 // Stage 2 (Design) end to end with fakes: start, choice, spec PR, merge → done, stop.
@@ -116,6 +116,58 @@ describe('design stage — choice', () => {
     })
     expect(ctx.events.published).toContainEqual({ type: 'question', ticketKey: 'CB-2', question: 'Wo wird die Lesezeit berechnet?' })
     expect(ctx.codeHost.pulls).toEqual([])
+  })
+})
+
+describe('design stage — question limit', () => {
+  const QUESTION = { output: { type: 'question' as const, question: 'Gilt das auch für Entwürfe?' }, meta: SAMPLE_META }
+
+  async function answer(ctx: TestContext, text: string): Promise<void> {
+    answerQuestion(ctx.deps, 'CB-2', { answer: text })
+    await ctx.settle()
+  }
+
+  it('tells the agent how many questions are left and fails when it asks after the third', async () => {
+    const ctx = setup()
+    ctx.agent.outcome = QUESTION
+    await start(ctx)
+    await answer(ctx, 'A1')
+    await answer(ctx, 'A2')
+    expect(ctx.deps.tickets.findByKey('CB-2')?.state).toBe('awaiting_answer')
+
+    await answer(ctx, 'A3')
+
+    expect(ctx.agent.calls.map((call) => call.questionsRemaining)).toEqual([3, 2, 1, 0])
+    expect(ctx.deps.tickets.findByKey('CB-2')?.state).toBe('failed')
+    expect(ctx.store.audit.at(-1)).toMatchObject({
+      type: 'error', payload: { message: 'Rückfragen-Grenze erreicht — der Agent hat keine Spec geliefert' },
+    })
+    expect(ctx.store.audit.filter((e) => e.type === 'question_asked')).toHaveLength(3)
+  })
+
+  it('starts again with the full budget after a stop', async () => {
+    const ctx = setup()
+    ctx.agent.outcome = { output: SAMPLE_CHOICE_OUTPUT, meta: SAMPLE_META }
+    await start(ctx)
+    stopRun(ctx.deps, 'CB-2')
+    ctx.agent.outcome = { output: SAMPLE_SPEC_OUTPUT, meta: SAMPLE_META }
+
+    expect(await start(ctx)).toMatchObject({ state: 'in_review' })
+    expect(ctx.agent.calls.map((call) => call.questionsRemaining)).toEqual([3, 3])
+  })
+
+  it('gives the plan agent no limit', async () => {
+    const ctx = createTestContext()
+    seedTicket(ctx, 'CB-3')
+    ctx.agent.outcome = QUESTION
+    startStage(ctx.deps, 'CB-3', MODEL)
+    await ctx.settle()
+    for (const text of ['A1', 'A2', 'A3', 'A4']) {
+      answerQuestion(ctx.deps, 'CB-3', { answer: text })
+      await ctx.settle()
+    }
+    expect(ctx.deps.tickets.findByKey('CB-3')?.state).toBe('awaiting_answer')
+    expect(ctx.agent.calls.every((call) => call.questionsRemaining === undefined)).toBe(true)
   })
 })
 

@@ -4,10 +4,14 @@ import {
   canAnswer,
   canStartStage,
   canStop,
+  countQuestionsAsked,
   currentArtifactStage,
   isStageCompleted,
   nextStage,
   planAnswerRun,
+  QUESTION_LIMIT,
+  questionLimit,
+  questionsRemaining,
   reconcile,
   stageFromRepo,
 } from './rules'
@@ -129,5 +133,52 @@ describe('planAnswerRun', () => {
     const asked = run({ id: 'r1', seq: 1, output: { type: 'question', question: 'Q1' } })
     const failed = run({ id: 'r2', seq: 2, output: null, status: 'failed' })
     expect(planAnswerRun([asked, failed], 'a')).toBeNull()
+  })
+})
+
+const CHOICE_OUTPUT = {
+  type: 'choice' as const, question: 'Wo?', recommended: 'A' as const,
+  options: [
+    { id: 'A' as const, title: 'Speichern', description: 'd', pros: [], cons: [] },
+    { id: 'B' as const, title: 'Lesen', description: 'd', pros: [], cons: [] },
+  ],
+}
+
+describe('question limit', () => {
+  it('limits only the design stage', () => {
+    expect(QUESTION_LIMIT).toBe(3)
+    expect(questionLimit('design')).toBe(3)
+    expect(questionLimit('plan')).toBeNull()
+  })
+
+  it('counts questions and choices since the latest start', () => {
+    const runs = [
+      run({ id: 'r1', seq: 1, stage: 'design', output: { type: 'question', question: 'Q0' } }),
+      run({ id: 'r2', seq: 2, stage: 'design', output: null, status: 'failed' }),
+      run({ id: 'r3', seq: 3, stage: 'design', output: { type: 'question', question: 'Q1' } }),
+      run({ id: 'r4', seq: 4, stage: 'design', trigger: 'answer', output: CHOICE_OUTPUT }),
+      run({ id: 'r5', seq: 5, stage: 'design', trigger: 'answer', output: null, status: 'running' }),
+    ]
+    expect(countQuestionsAsked(runs)).toBe(2)
+    expect(countQuestionsAsked(runs.slice(0, 1))).toBe(1)
+    expect(countQuestionsAsked([])).toBe(0)
+  })
+
+  it('counts from 0 after a new start', () => {
+    const runs = [
+      run({ id: 'r1', seq: 1, stage: 'design', output: { type: 'question', question: 'Q1' } }),
+      run({ id: 'r2', seq: 2, stage: 'design', trigger: 'answer', output: CHOICE_OUTPUT }),
+      run({ id: 'r3', seq: 3, stage: 'design', output: null, status: 'running' }),
+    ]
+    expect(countQuestionsAsked(runs)).toBe(0)
+  })
+
+  it('reports the remaining questions, never below 0', () => {
+    const asked = (n: number) => Array.from({ length: n }, (_, i) =>
+      run({ id: `r${i}`, seq: i + 1, stage: 'design', trigger: i === 0 ? 'initial' : 'answer', output: { type: 'question', question: `Q${i}` } }))
+    expect(questionsRemaining('design', [])).toBe(3)
+    expect(questionsRemaining('design', asked(2))).toBe(1)
+    expect(questionsRemaining('design', asked(4))).toBe(0)
+    expect(questionsRemaining('plan', asked(4))).toBeNull()
   })
 })

@@ -21,6 +21,8 @@ export interface AgentRunnerInput {
   intent?: string
   /** Answered questions of earlier runs of this stage. */
   answeredQuestions: QAPair[]
+  /** Questions and choices the agent may still ask in this attempt; absent for a stage without limit (plan). */
+  questionsRemaining?: number
 }
 
 /** Usage of a run (summed over a schema retry), stored on the AgentRun and shown in the log. */

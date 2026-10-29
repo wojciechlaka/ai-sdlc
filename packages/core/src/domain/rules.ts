@@ -62,6 +62,38 @@ export function reconcile(ticket: Pick<Ticket, 'stage' | 'state'>, repoStage: St
   return { stage: ticket.stage, state: ticket.state }
 }
 
+/** Questions and choices the design agent may ask per stage attempt; stage 1 (Plan) has no limit. */
+export const QUESTION_LIMIT = 3
+
+/** Question limit of a stage: `QUESTION_LIMIT` for design, null (no limit) for plan. */
+export function questionLimit(stage: ArtifactStage): number | null {
+  return stage === 'design' ? QUESTION_LIMIT : null
+}
+
+/**
+ * Questions and choices the agent asked since the stage was last started: outputs of type `question` or `choice`
+ * from the latest `initial` run on. A new start (also after a failure) counts from 0 again.
+ * @param runs - Runs of one ticket and stage in `seq` order.
+ */
+export function countQuestionsAsked(runs: AgentRun[]): number {
+  let start = 0
+  runs.forEach((run, index) => {
+    if (run.trigger === 'initial') {
+      start = index
+    }
+  })
+  return runs.slice(start).filter((run) => run.output?.type === 'question' || run.output?.type === 'choice').length
+}
+
+/**
+ * Questions and choices the agent may still ask in this attempt; null for a stage without limit.
+ * @param runs - Runs of one ticket and stage in `seq` order.
+ */
+export function questionsRemaining(stage: ArtifactStage, runs: AgentRun[]): number | null {
+  const limit = questionLimit(stage)
+  return limit === null ? null : Math.max(0, limit - countQuestionsAsked(runs))
+}
+
 /**
  * Finds the open question and builds the Q&A history for the answer run.
  * Only the latest run counts: a question followed by another run is no longer open.
