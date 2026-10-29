@@ -6,6 +6,7 @@ import {
   canStartStage,
   canStop,
   choiceAnswerText,
+  choiceQuestionText,
   countQuestionsAsked,
   currentArtifactStage,
   isStageCompleted,
@@ -150,7 +151,7 @@ describe('planAnswerRun', () => {
   it('turns a picked option into the answer text of the history', () => {
     const offered = run({ id: 'r1', seq: 1, stage: 'design', output: CHOICE_OUTPUT })
     const plan = planAnswerRun([offered], { choice: 'B', note: 'ohne Cache' })
-    expect(plan?.answeredQuestions).toEqual([{ question: 'Wo?', answer: 'Ansatz B: Lesen — Anmerkung: ohne Cache' }])
+    expect(plan?.answeredQuestions).toEqual([{ question: 'Wo? (Angeboten: A: Speichern; B: Lesen)', answer: 'Ansatz B: Lesen — Anmerkung: ohne Cache' }])
     expect(plan?.choice).toBe('B')
   })
 
@@ -208,5 +209,16 @@ describe('choiceAnswerText', () => {
     expect(choiceAnswerText({ id: 'B', title: 'Beim Lesen berechnen' })).toBe('Ansatz B: Beim Lesen berechnen')
     expect(choiceAnswerText({ id: 'B', title: 'Beim Lesen berechnen' }, ' ohne Cache ')).toBe('Ansatz B: Beim Lesen berechnen — Anmerkung: ohne Cache')
     expect(choiceAnswerText({ id: 'A', title: 'Speichern' }, '   ')).toBe('Ansatz A: Speichern')
+  })
+})
+
+describe('choiceQuestionText', () => {
+  it('appends the offered option titles to the question', () => {
+    expect(choiceQuestionText(CHOICE_OUTPUT)).toBe('Wo? (Angeboten: A: Speichern; B: Lesen)')
+  })
+
+  it('collapses whitespace and line breaks into plain one-line text', () => {
+    const choice = { question: ' Wo\nwird es? ', options: [{ ...CHOICE_OUTPUT.options[0]!, title: 'Beim\n  Speichern ' }, CHOICE_OUTPUT.options[1]!] }
+    expect(choiceQuestionText(choice)).toBe('Wo wird es? (Angeboten: A: Beim Speichern; B: Lesen)')
   })
 })

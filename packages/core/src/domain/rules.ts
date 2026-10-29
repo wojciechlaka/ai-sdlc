@@ -103,6 +103,17 @@ export function choiceAnswerText(option: Pick<ChoiceOption, 'id' | 'title'>, not
   return trimmedNote ? `${base} — Anmerkung: ${trimmedNote}` : base
 }
 
+/**
+ * Question text of a choice as the next run and `spec.md` see it: the question plus the offered options, so a fresh
+ * run still knows the options that were not picked, e.g. `Wo? (Angeboten: A: Beim Speichern; B: Beim Lesen)`.
+ * Whitespace and line breaks are collapsed to plain one-line text.
+ */
+export function choiceQuestionText(choice: Pick<ChoiceOutput, 'question' | 'options'>): string {
+  const oneLine = (text: string): string => text.replace(/\s+/g, ' ').trim()
+  const offered = choice.options.map((option) => `${option.id}: ${oneLine(option.title)}`).join('; ')
+  return `${oneLine(choice.question)} (Angeboten: ${offered})`
+}
+
 /** What `answerQuestion` continues with: the run that asked, the new Q&A history and the logged answer. */
 export interface AnswerPlan {
   /** The latest run of the stage; its output is the open question or choice. */
@@ -131,7 +142,8 @@ export function planAnswerRun(runs: AgentRun[], input: AnswerInput): AnswerPlan 
     return null
   }
   const { answer, choice } = answerFor(output, input)
-  const answeredQuestions = [...latest.input.answeredQuestions, { question: output.question, answer }]
+  const question = output.type === 'choice' ? choiceQuestionText(output) : output.question
+  const answeredQuestions = [...latest.input.answeredQuestions, { question, answer }]
   return choice ? { questionRun: latest, answeredQuestions, answer, choice } : { questionRun: latest, answeredQuestions, answer }
 }
 

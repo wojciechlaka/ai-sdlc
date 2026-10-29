@@ -154,10 +154,11 @@ describe('design stage — choice', () => {
     await ctx.settle()
 
     const answer = 'Ansatz A: Beim Speichern — Anmerkung: Migration ist ok'
+    const question = `Wo wird die Lesezeit berechnet? (Angeboten: ${SAMPLE_CHOICE_OUTPUT.options.map((o) => `${o.id}: ${o.title}`).join('; ')})`
     expect(ctx.deps.tickets.findByKey('CB-2')?.state).toBe('in_review')
-    expect(ctx.agent.calls[1]).toMatchObject({ answeredQuestions: [{ question: 'Wo wird die Lesezeit berechnet?', answer }], questionsRemaining: 2 })
+    expect(ctx.agent.calls[1]).toMatchObject({ answeredQuestions: [{ question, answer }], questionsRemaining: 2 })
     expect(ctx.store.audit.find((e) => e.type === 'answer_given')).toMatchObject({ actor: 'human', payload: { answer, choice: 'A' } })
-    expect(ctx.codeHost.branches.get('CB-2/spec')?.get('docs/work/CB-2/spec.md')).toContain(`**F:** Wo wird die Lesezeit berechnet?\\\n**A:** ${answer}`)
+    expect(ctx.codeHost.branches.get('CB-2/spec')?.get('docs/work/CB-2/spec.md')).toContain(`**F:** ${question}\\\n**A:** ${answer}`)
   })
 
   it('rejects an option that was not offered and a free-text answer to a choice', async () => {
