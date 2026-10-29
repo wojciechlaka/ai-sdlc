@@ -18,7 +18,7 @@ describe('buildPrompt', () => {
     expect(prompt).toContain('## Beschreibung\nLeser möchten')
   })
 
-  it('adds the codebase summary on the first attempt', () => {
+  it('adds the codebase summary on the first call', () => {
     expect(buildPrompt({ ...BASE, codebaseSummary: 'Express + Prisma' })).toContain('## Codebase-Übersicht\n\nExpress + Prisma')
   })
 

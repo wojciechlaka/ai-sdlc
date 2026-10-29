@@ -117,7 +117,7 @@ and hooks are never loaded), `--allowedTools Read,Glob,Grep,Bash`, `--settings` 
 parsing): Read/Glob/Grep only inside the realpath of the clone; Bash only `git log|show|diff|blame|ls-files|status|
 rev-parse` with allowlisted options, no shell special characters (`~`/`^` only inside a revision word), no absolute
 paths or `..`; every other tool denied. The clone is checked out with `core.symlinks=false` (`adapters/git`). The guard fails closed (modules loaded inside `try`; shell fallback `|| … exit 2` if node cannot run it);
-audit fails open. Both append JSON lines to `$REFINEMENT_HOOK_LOG`, a temp file per attempt that
+audit fails open. Both append JSON lines to `$REFINEMENT_HOOK_LOG`, a temp file per Claude call that
 `adapters/claudeCli/hookLog.ts` follows during the run and reports as `ToolEvent` (`{ kind: 'blocked' | 'used', tool,
 target, reason? }`) via `AgentRunner.run(input, { onProgress, onToolEvent })`. `executeRun` turns them into
 `guard_blocked` (system, plus a progress event) / `tool_used` (agent) log entries while the attempt is current. The
@@ -204,6 +204,9 @@ makes `startStage`/`answerQuestion` throw a `ConflictError`.
   and schema errors, missing stage agent). Purely internal errors (repository invariants such as "AgentRun … not
   found", summary-run failures that are only logged, `AgentRunTerminatedError` whose text `executeRun` replaces) are
   English.
+- **Attempt vs. Claude call:** an *attempt* is one `AgentRun` (identified by its run id, see `isCurrentRun`). One start
+  of the `claude` process is a *Claude call* (`runClaudeOnce` in `adapters/claudeCli`); a run makes up to two (one
+  retry on a schema error).
 
 ## Prerequisites & Environment
 

@@ -9,7 +9,7 @@ import type { AgentRunner, AgentRunnerInput, AgentRunMeta, AgentRunResult, Agent
 import type { ArtifactStage } from '../../domain/types'
 import { buildPrompt } from './prompt'
 import { openHookLog } from './hookLog'
-import type { ClaudeStreamMessage, ClaudeTokenUsage, ExtractedResult, AttemptResult } from './types'
+import type { ClaudeStreamMessage, ClaudeTokenUsage, ExtractedResult, ClaudeCallResult } from './types'
 
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000
 const SIGTERM_EXIT_CODE = 143
@@ -211,15 +211,15 @@ function parseAndValidate(raw: string, schema: ZodType<StageOutput>): StageOutpu
 }
 
 /**
- * One Claude attempt with its own hook log; schema failures are returned, all other errors are thrown.
- * Tool events are reported while the process runs; the rest is drained before the attempt returns.
+ * One `claude` call with its own hook log; schema failures are returned, all other errors are thrown.
+ * Tool events are reported while the process runs; the rest is drained before the call returns.
  */
-async function runAttempt(
+async function runClaudeOnce(
   agent: { skill: string; schema: ZodType<StageOutput>; sandbox: ClaudeSandbox },
   input: AgentRunnerInput,
   callbacks: AgentRunCallbacks,
   retryContext?: { previousOutput: string; schemaError: string },
-): Promise<AttemptResult> {
+): Promise<ClaudeCallResult> {
   const prompt = buildPrompt({
     skill: agent.skill,
     ticketKey: input.ticketKey,
@@ -241,14 +241,14 @@ async function runAttempt(
     await hookLog.close()
   }
   try {
-    return { ok: true, output: parseAndValidate(cliResult.text, agent.schema), cliResult } satisfies AttemptResult
+    return { ok: true, output: parseAndValidate(cliResult.text, agent.schema), cliResult } satisfies ClaudeCallResult
   } catch (err) {
-    if (err instanceof SchemaValidationError) return { ok: false, cliResult, error: err } satisfies AttemptResult
+    if (err instanceof SchemaValidationError) return { ok: false, cliResult, error: err } satisfies ClaudeCallResult
     throw err
   }
 }
 
-/** Sums tokens and cost of both attempts so the full run cost is reported. */
+/** Sums tokens and cost of both Claude calls so the full run cost is reported. */
 function aggregateCliResults(first: ExtractedResult, retry: ExtractedResult): ExtractedResult {
   return {
     text: retry.text,
@@ -289,13 +289,13 @@ export interface ClaudeCliOptions {
 /**
  * Runs the agent of `input.stage` and returns its validated output.
  * One automatic retry on a SchemaValidationError (the retry prompt quotes the malformed output);
- * terminate, timeout and CLI errors propagate immediately. Tokens and cost cover both attempts.
- * Every attempt runs in the sandbox (guard and audit hooks, clean env); its tool calls reach `callbacks.onToolEvent`.
+ * terminate, timeout and CLI errors propagate immediately. Tokens and cost cover both calls.
+ * Every call runs in the sandbox (guard and audit hooks, clean env); its tool calls reach `callbacks.onToolEvent`.
  * @throws {Error} if the stage has no agent yet.
  * @throws {AgentRunTerminatedError} if the process is killed via `stopAgent`.
  * @throws {AgentRunTimeoutError} if the run exceeds `REFINEMENT_TIMEOUT_MS`.
  * @throws {CliError} if the Claude process exits with a non-zero code.
- * @throws {SchemaValidationError} if both attempts produce invalid output.
+ * @throws {SchemaValidationError} if both calls produce invalid output.
  */
 export async function runAgent(
   input: AgentRunnerInput,
@@ -311,11 +311,11 @@ export async function runAgent(
   }
   const startedAt = Date.now()
 
-  const first = await runAttempt(agent, input, callbacks)
+  const first = await runClaudeOnce(agent, input, callbacks)
   if (first.ok) return { output: first.output, meta: buildMeta(input.model, startedAt, first.cliResult) }
 
   reportSchemaError(first.error.rawOutput, first.error.message, callbacks.onProgress)
-  const retry = await runAttempt(agent, input, callbacks, {
+  const retry = await runClaudeOnce(agent, input, callbacks, {
     previousOutput: first.error.rawOutput ?? first.error.message,
     schemaError: first.error.message,
   })

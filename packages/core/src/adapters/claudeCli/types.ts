@@ -21,6 +21,7 @@ export interface ExtractedResult {
   costUsd: number
 }
 
-export type AttemptResult =
+/** Outcome of one `claude` call: validated output, or the schema error to retry with. Other errors are thrown. */
+export type ClaudeCallResult =
   | { ok: true; output: StageOutput; cliResult: ExtractedResult }
   | { ok: false; cliResult: ExtractedResult; error: SchemaValidationError }

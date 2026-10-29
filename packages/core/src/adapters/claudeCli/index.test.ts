@@ -178,7 +178,7 @@ describe('runAgent — guard and audit hooks (spec §13)', () => {
     expect(fs.existsSync(logFile)).toBe(false)
   })
 
-  it('uses the hooks on the retry attempt as well, each with its own log file', async () => {
+  it('uses the hooks on the retry call as well, each with its own log file', async () => {
     const refinement = JSON.stringify({ type: 'refinement', result: {} })
     mockSpawn.mockImplementation(() => makeFakeProcess(resultLine(refinement), 0))
     const { runAgent } = await import('./index')
