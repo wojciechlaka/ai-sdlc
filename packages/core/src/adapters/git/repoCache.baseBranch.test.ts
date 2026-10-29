@@ -3,7 +3,7 @@ import { execFileSync } from 'child_process'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { ensureRepo } from './repoCache'
+import { ensureRepo, getRepoDir } from './repoCache'
 
 // Real git: the clone follows the base branch `showcase` of the remote, also after the app's reset force-moved it
 // to another commit (a `git pull` fails there). The default branch `master` is never checked out.
@@ -63,5 +63,29 @@ describe('ensureRepo — base branch', () => {
     expect(fs.existsSync(path.join(dir, 'docs/work/CB-1/spec.md'))).toBe(false)
     expect(fs.readFileSync(path.join(dir, 'codebase-summary-x.md'), 'utf-8')).toBe('bleibt')
     expect(git(dir, 'status', '--porcelain', '--untracked-files=no')).toBe('')
+  })
+
+  it('never touches a parent repository when the cache directory is inside it and the clone folder is broken', async () => {
+    const parent = path.join(base, 'parent')
+    fs.mkdirSync(parent)
+    git(parent, 'init', '-q', '-b', 'main')
+    fs.writeFileSync(path.join(parent, 'work.md'), 'wichtig')
+    git(parent, 'add', '.')
+    git(parent, 'commit', '-qm', 'work')
+    git(parent, 'remote', 'add', 'origin', 'https://example.invalid/parent.git')
+    const head = git(parent, 'rev-parse', 'HEAD')
+
+    const nestedCache = path.join(parent, 'cache')
+    const brokenDir = getRepoDir(source, nestedCache)
+    fs.mkdirSync(brokenDir, { recursive: true }) // empty: an interrupted clone
+
+    const dir = await ensureRepo(source, nestedCache, 'showcase')
+
+    expect(git(parent, 'rev-parse', 'HEAD')).toBe(head)
+    expect(git(parent, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('main')
+    expect(git(parent, 'remote', 'get-url', 'origin')).toBe('https://example.invalid/parent.git')
+    expect(fs.readFileSync(path.join(parent, 'work.md'), 'utf-8')).toBe('wichtig')
+    expect(git(dir, 'rev-parse', '--show-toplevel')).toBe(fs.realpathSync(dir))
+    expect(git(dir, 'rev-parse', 'HEAD')).toBe(git(source, 'rev-parse', 'showcase'))
   })
 })

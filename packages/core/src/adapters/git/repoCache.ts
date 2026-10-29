@@ -55,11 +55,13 @@ function freshClone(repoUrl: string, repoDir: string, cacheDir: string): void {
  * keep; untracked summaries survive).
  */
 function checkoutBaseBranch(repoUrl: string, repoDir: string, baseBranch: string): void {
-  const git = (args: string[]) => execFileSync('git', args, { cwd: repoDir, stdio: 'pipe' })
+  // The ceiling stops git from searching upward: a broken repoDir must fail, never act on a parent repository.
+  const env = { ...process.env, GIT_CEILING_DIRECTORIES: path.dirname(repoDir) }
+  const git = (args: string[]) => execFileSync('git', args, { cwd: repoDir, env, stdio: 'pipe' })
   // Strip any token an earlier version may have stored in the remote URL.
   git(['remote', 'set-url', 'origin', repoUrl])
   git(['config', 'core.symlinks', 'false'])
-  git(['fetch', '-q', 'origin', baseBranch])
+  git(['fetch', '-q', 'origin', `refs/heads/${baseBranch}`])
   git(['checkout', '-q', '-f', '-B', baseBranch, 'FETCH_HEAD'])
   git(['rm', '-r', '-q', '--cached', '.'])
   git(['reset', '-q', '--hard'])

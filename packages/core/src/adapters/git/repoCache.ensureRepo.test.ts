@@ -1,3 +1,4 @@
+import path from 'path'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const { mockExecFileSync, mockExistsSync, mockMkdirSync, mockRmSync } = vi.hoisted(() => ({
@@ -36,7 +37,7 @@ const CLONE = ['clone', '-c', 'core.symlinks=false', REPO_URL, expect.stringCont
 const CHECKOUT_SHOWCASE = [
   ['remote', 'set-url', 'origin', REPO_URL],
   ['config', 'core.symlinks', 'false'],
-  ['fetch', '-q', 'origin', 'showcase'],
+  ['fetch', '-q', 'origin', 'refs/heads/showcase'],
   ['checkout', '-q', '-f', '-B', 'showcase', 'FETCH_HEAD'],
   ['rm', '-r', '-q', '--cached', '.'],
   ['reset', '-q', '--hard'],
@@ -67,6 +68,16 @@ describe('ensureRepo', () => {
     expect(gitArgs()).toEqual(CHECKOUT_SHOWCASE)
     expect(mockExecFileSync.mock.calls[0]?.[2]).toEqual(expect.objectContaining({ cwd: expect.any(String), stdio: 'pipe' }))
     expect(gitArgs()).not.toContainEqual(['pull'])
+  })
+
+  it('confines every checkout git call to the cache directory via GIT_CEILING_DIRECTORIES', async () => {
+    mockExistsSync.mockReturnValue(true)
+    await ensureRepo(REPO_URL, CACHE_DIR, 'showcase')
+    expect(mockExecFileSync.mock.calls.length).toBe(CHECKOUT_SHOWCASE.length)
+    for (const call of mockExecFileSync.mock.calls) {
+      const options = call[2] as { cwd: string; env: Record<string, string> }
+      expect(options.env.GIT_CEILING_DIRECTORIES).toBe(path.dirname(options.cwd))
+    }
   })
 
   it('removes the broken directory and re-clones when the update fails', async () => {
