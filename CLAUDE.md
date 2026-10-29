@@ -133,6 +133,15 @@ log entries while the attempt is current. The summary run (`adapters/git`) only 
 server log. `hooks/` holds plain Node ESM scripts (only `node:` modules and sibling scripts — ESLint; no imports
 between `hooks/` and `src/` — ArchUnitTS; type-checked via `checkJs`).
 
+**How the hook settings are registered:** never persistently — nothing is written to `~/.claude` or the target repo.
+Every `spawn('claude', sandbox.claudeArgs(model), { env: sandbox.env(logFile) })` passes the hooks as `--settings`
+JSON; the CLI merges them with the user settings for that process only. All adapters start `claude` through
+`sandbox.claudeArgs()`, so no app process runs without the guard; a `claude` started by hand is not affected.
+Today there is one sandbox for every process (plan and design only read). A stage that writes (Build) gets its own
+sandbox: same mechanism, different tools and guard policy (e.g. `createAgentSandbox({ hooksDir, policy })` passing
+the policy to the guard via env, one sandbox per stage in `compose.ts`, mapped in `STAGE_AGENTS`) — see
+`docs/architecture.md` §5 "Agent-Sandbox".
+
 **Guard eval (`packages/core/evals/guard.eval.ts`, `npm run eval:guard`):** creates a temp git repo (`README.md`,
 `testdir/keep.txt`), spawns the real `claude --print --output-format stream-json` with
 `createAgentSandbox(...).claudeArgs(model)`, `.env(logFile)` and a hook log from `.createLogFile()` and the real

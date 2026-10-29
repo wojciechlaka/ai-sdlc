@@ -275,6 +275,8 @@ lesbar bleibt.
 (ohne Rückweg ins Ticket-Log; blockierte Aufrufe nur im Server-Log). Der Pfad der Skripte kommt aus der Komposition
 (`resolveCorePaths` → `hooksDir` → `createAgentSandbox`), damit kein Adapter einen anderen importiert.
 
+**Registrierung und Sandbox pro Stufe.** Die Hooks werden nicht dauerhaft registriert: Jeder `claude`-Prozess bekommt sie beim Start als `--settings`-Argument aus der Sandbox (`compose.ts` → Adapter → `spawn`). Heute gibt es eine Sandbox für alle Prozesse; eine schreibende Stufe (Build) bekommt eine eigene mit anderer Werkzeugliste und Guard-Regel. Beschreibung: [Architektur §5 „Agent-Sandbox“](../../architecture.md#agent-sandbox).
+
 **Grenzen (Restrisiken).**
 - Ein Hook, der in sein Zeitlimit (10 s) läuft, blockiert in Claude Code nicht; die Skripte brauchen Millisekunden.
 - Das Bash-Werkzeug läuft in der Shell des Nutzers (`SHELL` wird durchgereicht); dessen eigene Startdateien

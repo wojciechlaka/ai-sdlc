@@ -156,6 +156,63 @@ werden. Für Stufe 1 gibt es dafür drei Bausteine, jeder als Code im Repo ([E6]
 Die Regel selbst ist zusätzlich mit Tabellentests abgedeckt (`hooks/guardPolicy.test.ts`, Teil von `npm test`);
 der Eval prüft das Zusammenspiel mit Claude Code, kostet etwa 5 Cent und läuft deshalb nur auf Aufruf.
 
+### Agent-Sandbox
+
+Die Sandbox legt fest, **wie** ein `claude`-Prozess der App läuft: welche Einstellungen er lädt, welche Hooks
+seine Werkzeuge bewachen, welche Werkzeuge er überhaupt hat und welche Umgebung er sieht. Sie ist ein Port
+(`ports/claudeProcessSandbox.ts`) mit der Umsetzung `adapters/agentSandbox/agentSandbox.ts`.
+
+| Teil | Wert heute | Zweck |
+|---|---|---|
+| `--setting-sources user` | nur Nutzer-Einstellungen | Einstellungen und Hooks aus `.claude/` des fremden Klons werden nie geladen |
+| `--settings <JSON>` | `PreToolUse` → `hooks/guard.mjs`, `PostToolUse` → `hooks/audit.mjs` | Guard und Audit für **diesen** Prozess |
+| `--allowedTools` | `Read,Glob,Grep,Bash` | nur Werkzeuge zum Lesen |
+| Umgebung | Positivliste (`PATH`, `HOME`, Claude-Login, Proxy …) + `REFINEMENT_HOOK_LOG` + git ohne globale Konfiguration | keine Secrets der App (`GITHUB_TOKEN`) im Agent |
+| Log-Datei | eine pro Prozess (`createLogFile()`) | Rückweg der Hook-Ereignisse ins Ticket-Log |
+
+**Wie die Settings registriert werden.** Es gibt keine dauerhafte Registrierung — weder in `~/.claude` noch im
+Ziel-Repo. Die App gibt die Hooks bei **jedem Start** eines `claude`-Prozesses als Argument mit; mit dem Ende des
+Prozesses sind sie wieder weg:
+
+```text
+compose.ts            createAgentSandbox({ hooksDir })               einmal pro App-Prozess
+   |                    -> args: --setting-sources user
+   |                             --settings {"hooks":{PreToolUse: guard.mjs, PostToolUse: audit.mjs}}
+   |                             --allowedTools Read,Glob,Grep,Bash
+   |
+   +-- claudeCli       (Agent einer Stufe)          \
+   +-- git             (Codebase-Summary)            >  dieselbe Sandbox
+   +-- evals           (Guard-Eval)                 /
+          |
+          v
+spawn('claude', sandbox.claudeArgs(model), { cwd: Klon, env: sandbox.env(logFile) })
+          |
+          v
+claude CLI            liest --settings beim Start, führt sie mit den Nutzer-Einstellungen zusammen
+          |
+          v
+pro Werkzeugaufruf    /bin/sh -c "node guard.mjs || exit 2"   vorher  (ablehnen oder erlauben)
+                      /bin/sh -c "node audit.mjs"             nachher (festhalten)
+```
+
+Daraus folgt: Kein `claude`-Prozess der App startet ohne Guard, denn alle Adapter starten nur über
+`sandbox.claudeArgs()`. Ruft jemand `claude` selbst im Terminal auf, laufen diese Hooks nicht mit.
+
+**Eine Sandbox oder eine pro Stufe.** Heute gibt es genau **eine** Sandbox, denn Plan und Design sollen beide nur
+lesen. Pro Prozess neu ist nur die Log-Datei. Ab Stufe 3 (Build) schreibt der Agent Code; dann bekommt jede Stufe
+ihre eigene Sandbox — gleiche Mechanik, andere Werte:
+
+| | Plan / Design (heute) | Build (Ausblick) |
+|---|---|---|
+| Werkzeuge | `Read,Glob,Grep,Bash` | zusätzlich `Write,Edit` |
+| Guard-Regel | lesen nur im Klon, Bash nur lesende git-Befehle | schreiben nur im Arbeitszweig des Tickets, freigegebene Befehle wie `npm test` und `npm run lint`, kein Netz, kein `git push` |
+| Eval | „blockt Schreiben und Lesen außerhalb“ | „schreibt nur erlaubte Pfade, pusht nie“ |
+
+Umsetzung dann: `createAgentSandbox({ hooksDir, policy })` gibt die Regel per Umgebung an den Guard
+(`REFINEMENT_GUARD_POLICY`), `compose.ts` baut eine Sandbox je Stufe, und `STAGE_AGENTS` im Claude-CLI-Adapter
+ordnet jeder Stufe Skill, Ausgabeschema **und** Sandbox zu. Hooks, Log-Datei, Fail-Closed und der Weg ins
+Ticket-Log bleiben gleich.
+
 **Restrisiken.** Ein Hook, der in sein Zeitlimit läuft, blockiert nicht; das Bash-Werkzeug nutzt die Shell des
 Nutzers samt Startdateien; was der Agent im öffentlichen Klon liest, sieht er ganz. Details:
 [Spec §13](superpowers/specs/2026-10-28-playbook-stages-design.md#13-nachtrag-guard--und-audit-hooks-für-den-agent).
@@ -177,6 +234,7 @@ Nutzers samt Startdateien; was der Agent im öffentlichen Klon liest, sieht er g
   dazu Skill, Ausgabeschema und `design` in `STARTABLE_STAGES`.
 - **Klon auf `showcase`:** Der Agent liest heute den Klon des Default-Branches; für Stufe 2 muss er den Stand
   von `showcase` sehen (dort liegt das gemergte `intent.md`).
+- **Sandbox pro Stufe:** spätestens mit Stufe 3 (Build), siehe §5 „Agent-Sandbox“.
 
 ## 7. Glossar
 

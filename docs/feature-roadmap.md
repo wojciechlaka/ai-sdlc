@@ -65,7 +65,9 @@ Rückfragen, wo Regeln unklar sind. Der Product Owner gibt frei, bei höherem Ri
 Lead; markierte Bedenken gehen an den Policy-Owner.
 
 **Stufe 3 — Build (Ausblick).** Der Agent schreibt zuerst `plan.md`, nach Freigabe den Code und öffnet einen
-Code-PR. Team-Wissen liegt in `CLAUDE.md`, Skills und Hooks des Ziel-Repos.
+Code-PR. Team-Wissen liegt in `CLAUDE.md`, Skills und Hooks des Ziel-Repos. Weil der Agent hier schreibt, bekommt
+die Stufe eine eigene Sandbox mit Schreibrechten nur im Arbeitszweig und freigegebenen Befehlen wie `npm test`
+([Architektur §5](architecture.md#agent-sandbox)).
 
 **Stufe 4 — Test (Ausblick).** Der Agent prüft seine Arbeit selbst und liefert Testnachweise —
 Testergebnisse, Build-Logs, Screenshot-Diffs. Evals aus 20–50 echten Aufgaben sichern die Qualität; jeder
