@@ -1,15 +1,10 @@
 import 'server-only'
 import path from 'path'
 import { createRefinementEngine, resolveCorePaths, type UseCases } from '@refinement/core'
+import { positiveInt } from './env'
 
 /** Fork of the RealWorld example backend; override with `TARGET_REPO` in `apps/web/.env.local`. */
 const DEFAULT_TARGET_REPO = 'https://github.com/wojciechlaka/node-express-realworld-example-app'
-
-/** A positive integer from an env var; undefined (engine default) when unset or invalid. */
-function positiveInt(value: string | undefined): number | undefined {
-  const parsed = parseInt(value ?? '', 10)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
-}
 
 const globalForEngine = globalThis as typeof globalThis & { __refinementEngine?: UseCases }
 
