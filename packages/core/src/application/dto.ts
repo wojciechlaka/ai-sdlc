@@ -2,6 +2,7 @@ import type { AuditLogEntryDto, PullRequestRefDto, TicketDto } from '@refinement
 import type { Artifact, Ticket } from '../domain/types'
 import type { AuditLogEntry } from '../ports'
 
+/** PR number, link and state of an artifact for the UI. */
 export function toPullRequestRef(artifact: Artifact): PullRequestRefDto {
   return { number: artifact.prNumber, url: artifact.prUrl, state: artifact.prState }
 }

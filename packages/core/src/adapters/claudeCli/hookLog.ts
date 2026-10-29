@@ -37,6 +37,7 @@ export function parseToolEvent(line: string): ToolEvent | null {
   }
 }
 
+/** The hook log of one Claude call while it is followed. */
 export interface HookLog {
   /** Path the hooks write to (`sandbox.env(file)`). */
   file: string

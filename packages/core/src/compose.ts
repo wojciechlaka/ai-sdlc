@@ -13,6 +13,7 @@ import { createGitRepoProvider } from './adapters/git/repoCache'
 import { createNodeEventPublisher } from './adapters/nodeEvents/nodeEventPublisher'
 import { createAgentSandbox } from './adapters/agentSandbox/agentSandbox'
 
+/** What the app passes in: paths, target repository, token and optional overrides of the defaults. */
 export interface EngineConfig {
   /** SQLite file; parent directories are created. */
   dbPath: string

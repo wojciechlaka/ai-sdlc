@@ -1,3 +1,4 @@
+/** Stable code of a domain error; adapters map it to a response (e.g. HTTP status) via `errorCode`. */
 export type DomainErrorCode = 'NOT_FOUND' | 'CONFLICT' | 'VALIDATION'
 
 /** The requested ticket or run does not exist. */
