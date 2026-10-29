@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatCost, formatDate, formatDateTime, formatElapsed, formatRuns, formatTokens } from './format'
+import { formatCost, formatDate, formatDateTime, formatElapsed, formatRuns, formatTokens, questionCounter } from './format'
 
 describe('format', () => {
   it('formats date and time in German for Europe/Berlin', () => {
@@ -31,5 +31,12 @@ describe('format', () => {
     expect(formatRuns(0)).toBe('0 Läufe')
     expect(formatRuns(1)).toBe('1 Lauf')
     expect(formatRuns(4)).toBe('4 Läufe')
+  })
+})
+
+describe('questionCounter', () => {
+  it('counts against the limit and is null without one', () => {
+    expect(questionCounter(2, 3)).toBe('Rückfrage 2 von 3')
+    expect(questionCounter(1, null)).toBeNull()
   })
 })

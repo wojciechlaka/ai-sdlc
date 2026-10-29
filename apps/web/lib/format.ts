@@ -62,3 +62,8 @@ export function formatCost(usd: number): string {
 export function formatRuns(n: number): string {
   return n === 1 ? '1 Lauf' : `${n} Läufe`
 }
+
+/** Counter of the open question or choice, e.g. „Rückfrage 2 von 3“; null for a stage without limit. */
+export function questionCounter(asked: number, limit: number | null): string | null {
+  return limit === null ? null : `Rückfrage ${asked} von ${limit}`
+}

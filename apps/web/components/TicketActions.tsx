@@ -5,11 +5,13 @@ import { useRouter } from 'next/navigation'
 import type { TicketDetailDto } from '@refinement/shared'
 import { startStageAction, stopRunAction } from '@/app/actions'
 import { DEFAULT_MODEL } from '@/lib/models'
+import { questionCounter } from '@/lib/format'
 import { useSSE } from '@/hooks/useSSE'
 import { useElapsedSeconds } from '@/hooks/useElapsedSeconds'
 import { useServerAction } from '@/hooks/useServerAction'
 import { useAppState } from './AppStateProvider'
 import { AgentRunningCard } from './AgentRunningCard'
+import { ChoicePanel } from './ChoicePanel'
 import { QuestionPanel } from './QuestionPanel'
 import { StartStagePanel } from './StartStagePanel'
 import { Button, buttonVariants } from './ui/button'
@@ -22,7 +24,7 @@ interface Props {
 
 /**
  * The action area of the ticket page, one per state: start (ready, failed), progress and stop (running),
- * question and cancel (awaiting_answer), PR link (in_review); plus the error of the last action.
+ * question or choice and cancel (awaiting_answer), PR link (in_review); plus the error of the last action.
  * A client component: it holds the model choice and pending/error state and listens to the ticket's SSE stream.
  * Progress events feed the live log; state and question events refresh the server-rendered page,
  * which delivers the new state as props.
@@ -46,6 +48,7 @@ export function TicketActions({ ticket, tokenConfigured }: Props) {
   const elapsed = useElapsedSeconds(ticket.state === 'running')
 
   const stop = () => run(() => stopRunAction(ticket.key))
+  const counter = questionCounter(ticket.questionsAsked, ticket.questionLimit) ?? undefined
 
   const actionArea = (): ReactNode => {
     switch (ticket.state) {
@@ -75,10 +78,22 @@ export function TicketActions({ ticket, tokenConfigured }: Props) {
           </>
         )
       case 'awaiting_answer':
+        if (ticket.pendingChoice) {
+          return (
+            <ChoicePanel
+              ticketKey={ticket.key}
+              choice={ticket.pendingChoice}
+              counter={counter}
+              onAnswered={() => router.refresh()}
+              onCancel={stop}
+              cancelPending={pending}
+            />
+          )
+        }
         return (
           <>
             {ticket.pendingQuestion && (
-              <QuestionPanel ticketKey={ticket.key} question={ticket.pendingQuestion} onAnswered={() => router.refresh()} />
+              <QuestionPanel ticketKey={ticket.key} question={ticket.pendingQuestion} counter={counter} onAnswered={() => router.refresh()} />
             )}
             <StopButton label="Abbrechen" pending={pending} onStop={stop} />
             {!ticket.pendingQuestion && <SyncingNotice />}

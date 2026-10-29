@@ -11,12 +11,14 @@ interface Props {
   ticketKey: string
   /** Question asked by the agent. */
   question: string
+  /** „Rückfrage N von 3“; absent without limit. */
+  counter?: string
   /** Called after the answer was accepted. */
   onAnswered: () => void
 }
 
 /** Amber card with the agent's question and an answer field; a client component for the form state. */
-export function QuestionPanel({ ticketKey, question, onAnswered }: Props) {
+export function QuestionPanel({ ticketKey, question, counter, onAnswered }: Props) {
   const [answer, setAnswer] = useState('')
   const { run, pending: sending, error } = useServerAction()
 
@@ -34,6 +36,7 @@ export function QuestionPanel({ ticketKey, question, onAnswered }: Props) {
     <Card className="mt-4 border-amber-200 bg-amber-50">
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-semibold text-amber-900">Frage vom Agent</CardTitle>
+        {counter && <p className="text-xs text-amber-800">{counter}</p>}
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-sm">{question}</p>
