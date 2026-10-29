@@ -198,6 +198,10 @@ describe('design stage — question limit', () => {
       type: 'error', payload: { message: 'Rückfragen-Grenze erreicht — der Agent hat keine Spec geliefert' },
     })
     expect(ctx.store.audit.filter((e) => e.type === 'question_asked')).toHaveLength(3)
+    expect(ctx.store.runs.at(-1)).toMatchObject({ status: 'failed' })
+    expect(ctx.store.audit.filter((e) => e.type === 'run_finished').at(-1)).toMatchObject({
+      payload: { status: 'failed', reason: 'grenze', model: SAMPLE_META.model, costUsd: SAMPLE_META.costUsd },
+    })
   })
 
   it('starts again with the full budget after a stop', async () => {

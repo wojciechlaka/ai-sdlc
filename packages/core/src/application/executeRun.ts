@@ -57,6 +57,10 @@ export async function executeRun(deps: UseCaseDeps, ticket: Ticket, request: Exe
       discardStaleResult(attempt, meta)
       return
     }
+    if (exceedsQuestionLimit(attempt, output)) {
+      failOverLimit(attempt, meta)
+      return
+    }
     recordSucceededRun(attempt, output, meta)
     await applyOutput(attempt, output)
   } catch (err) {
@@ -132,6 +136,21 @@ function discardStaleResult({ deps, ticket, reporter, request }: Attempt, meta: 
   })
 }
 
+/** True if the agent asks a question or offers a choice although its budget for this start is used up. */
+function exceedsQuestionLimit({ questionsRemaining: remaining }: Attempt, output: StageOutput): boolean {
+  return (output.type === 'question' || output.type === 'choice') && remaining === 0
+}
+
+/** The run delivered nothing usable: it is stored as failed (usage kept in the log) and the stage fails. */
+function failOverLimit({ deps, ticket, reporter, request }: Attempt, meta: AgentRunMeta): void {
+  reporter.log(`Claude finished in ${meta.durationSeconds}s ($${meta.costUsd.toFixed(4)}), question limit reached`)
+  deps.runs.fail(request.runId, 'failed')
+  record(deps, ticket.key, 'system', 'run_finished', {
+    runId: request.runId, status: 'failed', reason: 'grenze', ...runMetaPayload(meta),
+  })
+  failStage(deps, reporter, ticket.key, QUESTION_LIMIT_REACHED)
+}
+
 /** Stores the validated output and usage on the run and logs the successful run. */
 function recordSucceededRun({ deps, ticket, reporter, request }: Attempt, output: StageOutput, meta: AgentRunMeta): void {
   reporter.log(`Claude finished in ${meta.durationSeconds}s ($${meta.costUsd.toFixed(4)})`)
@@ -141,13 +160,8 @@ function recordSucceededRun({ deps, ticket, reporter, request }: Attempt, output
 
 /**
  * Question or choice → `awaiting_answer`; intent or spec → rendered Markdown published as branch + PR (`in_review`).
- * A question or choice after the agent used up its budget fails the stage (it can be started again).
  */
-async function applyOutput({ deps, ticket, reporter, request, questionsRemaining: remaining }: Attempt, output: StageOutput): Promise<void> {
-  if ((output.type === 'question' || output.type === 'choice') && remaining === 0) {
-    failStage(deps, reporter, ticket.key, QUESTION_LIMIT_REACHED)
-    return
-  }
+async function applyOutput({ deps, ticket, reporter, request }: Attempt, output: StageOutput): Promise<void> {
   switch (output.type) {
     case 'question':
       record(deps, ticket.key, 'agent', 'question_asked', { question: output.question })
