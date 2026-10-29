@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { aLogEntry } from '@/test/fixtures'
-import { describeLogEvent, groupLogEntries, runCostUsd } from './logFormat'
+import { describeLogEvent, groupLogEntries } from './logFormat'
 
 describe('describeLogEvent', () => {
   it.each([
@@ -60,15 +60,5 @@ describe('groupLogEntries', () => {
       { kind: 'tools', events: [log[4]] },
       { kind: 'event', event: log[5] },
     ])
-  })
-})
-
-describe('cost and tokens', () => {
-  const RUN = { runId: 'r1', status: 'succeeded' } as const
-
-  it('uses the reported cost and estimates it otherwise', () => {
-    expect(runCostUsd({ ...RUN, costUsd: 0.5 })).toBe(0.5)
-    expect(runCostUsd({ ...RUN, costUsd: 0, model: 'claude-sonnet-4-6', inputTokens: 1_000_000, outputTokens: 0 })).toBeCloseTo(3)
-    expect(runCostUsd({ ...RUN, costUsd: 0, model: 'unknown' })).toBe(0)
   })
 })

@@ -23,7 +23,7 @@ vi.mock('@/hooks/useSSE', () => ({
 }))
 
 import { startStageAction, stopRunAction } from '@/app/actions'
-import { DEFAULT_MODEL } from '@/lib/constants'
+import { DEFAULT_MODEL } from '@/lib/models'
 import { AppStateProvider } from './AppStateProvider'
 import { aTicketDetail } from '@/test/fixtures'
 import { TicketActions } from './TicketActions'

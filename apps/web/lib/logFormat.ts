@@ -1,21 +1,10 @@
 import { AuditEventSchema, type AuditLogEntryDto, type AuditPayloads, type Stage } from '@refinement/shared'
-import { CACHE_READ_MULTIPLIER, CACHE_WRITE_MULTIPLIER, MODELS, MODEL_PRICING, TOKENS_PER_MILLION, STAGE_LABEL } from './constants'
+import { STAGE_LABEL } from './constants'
 import { formatCost, formatElapsed, formatTokens } from './format'
+import { modelLabel } from './models'
+import { runCostUsd } from './pricing'
 
-const modelLabel = (model: string) => MODELS.find((m) => m.value === model)?.label ?? model
 const stageLabel = (stage: Stage) => STAGE_LABEL[stage] ?? stage
-
-/** Cost of a run: the reported value, otherwise estimated from the pricing table; 0 if unknown. */
-export function runCostUsd(run: AuditPayloads['run_finished']): number {
-  const reported = run.costUsd ?? 0
-  if (reported > 0) return reported
-  const pricing = MODEL_PRICING[run.model ?? '']
-  if (!pricing) return 0
-  return ((run.inputTokens ?? 0) / TOKENS_PER_MILLION) * pricing.inputPerMtok
-    + ((run.cacheCreationTokens ?? 0) / TOKENS_PER_MILLION) * pricing.inputPerMtok * CACHE_WRITE_MULTIPLIER
-    + ((run.cacheReadTokens ?? 0) / TOKENS_PER_MILLION) * pricing.inputPerMtok * CACHE_READ_MULTIPLIER
-    + ((run.outputTokens ?? 0) / TOKENS_PER_MILLION) * pricing.outputPerMtok
-}
 
 /** Tool call with its target; Bash commands in backticks. */
 function toolCall({ tool, target }: { tool: string; target: string }): string {
