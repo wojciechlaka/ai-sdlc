@@ -154,17 +154,17 @@ the policy to the guard via env, one sandbox per stage in `compose.ts`, mapped i
 **Guard eval (`packages/core/evals/guard.eval.ts`, `npm run eval:guard`):** creates a temp git repo (`README.md`,
 `testdir/keep.txt`), spawns the real `claude --print --output-format stream-json` with
 `createAgentSandbox(...).claudeArgs(model)`, `.env(logFile)` and a hook log from `.createLogFile()` and the real
-`hooks/` (model `claude-haiku-4-5-20251001`, override with `EVAL_MODEL`), asks it to try each case, then asserts on
+`hooks/` (model `claude-haiku-4-5-20251001`, override with `EVAL_MODEL` — shared with the spec eval, whose default is Sonnet), asks it to try each case, then asserts on
 the hook log (not the model's answer): expected `blocked`/`used` per case, `keep.txt` still there, run succeeded.
 Prints a German table with cost and duration, exit code 1 on failure, always removes the temp files. Not run by `npm
-test` (`*.eval.ts` is no test file name, and `evals/**` is excluded in `vitest.config.ts`); type-checked (`tsconfig`
+test` (`*.eval.ts` is no test file name, and `evals/**/*.eval.ts` plus `evals/fixtures/**` are excluded in `vitest.config.ts`); type-checked (`tsconfig`
 includes `evals`) and linted.
 
 **Spec eval (`packages/core/evals/spec.eval.ts`, `npm run eval:spec`):** copies the fixture repo
 `evals/fixtures/articles-api` into a temp git repo per case (`evals/specCases.ts`, with the intent under
 `docs/work/<KEY>/intent.md`), runs the real design agent through `runAgent` (`STAGE_AGENTS.design`, same sandbox and
 skill as the app) with `questionsRemaining: 0`, applies the fixed checks of `evals/specRubric.ts` and has a judge model
-(`claude --print --output-format json`, no tools: `--disallowedTools`, guard hooks, empty cwd; its hook log must stay
+(`claude --print --output-format json`, no tools: `--tools ''` + `--strict-mcp-config`, with `--disallowedTools`, guard hooks and an empty cwd as backups; its hook log must stay
 empty) score the rubric 1–5 (JSON, Zod-checked). Models `EVAL_MODEL` (Sonnet) / `EVAL_JUDGE_MODEL` (Haiku), threshold
 `EVAL_MIN_SCORE` (3). German report, exit code 1 on failure. `evals/specRubric.test.ts` runs with `npm test`
 (`vitest.config.ts` excludes only `evals/**/*.eval.ts` and `evals/fixtures/**`); the fixture is excluded from
