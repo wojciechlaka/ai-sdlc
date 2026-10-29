@@ -1,6 +1,6 @@
 import 'server-only'
 import path from 'path'
-import { createRefinementEngine, resolveCorePaths, type UseCases } from '@refinement/core'
+import { createRefinementEngine, resolveCorePaths, type EngineConfig, type UseCases } from '@refinement/core'
 import { positiveInt } from './env'
 
 /** Fork of the RealWorld example backend; override with `TARGET_REPO` in `apps/web/.env.local`. */
@@ -18,7 +18,7 @@ export function getEngine(): UseCases {
   if (!globalForEngine.__refinementEngine) {
     // `next dev` / `next start` run with apps/web as working directory (npm -w).
     const rootDir = path.resolve(process.cwd(), '..', '..')
-    globalForEngine.__refinementEngine = createRefinementEngine({
+    const config: EngineConfig = {
       dbPath: process.env.DB_PATH ?? path.join(process.cwd(), 'data', 'refinement.db'),
       ...resolveCorePaths(path.join(rootDir, 'packages', 'core')),
       ticketsDir: path.join(rootDir, 'examples', 'tickets'),
@@ -27,7 +27,8 @@ export function getEngine(): UseCases {
       githubToken: process.env.GITHUB_TOKEN || undefined,
       agentTimeoutMs: positiveInt(process.env.REFINEMENT_TIMEOUT_MS),
       repoCacheDir: process.env.REPO_CACHE_DIR,
-    })
+    }
+    globalForEngine.__refinementEngine = createRefinementEngine(config)
   }
   return globalForEngine.__refinementEngine
 }
