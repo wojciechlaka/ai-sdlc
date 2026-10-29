@@ -51,6 +51,7 @@ export function ChoicePanel({ ticketKey, choice, counter, onAnswered, onCancel, 
           <legend className="mb-2 text-sm">{choice.question}</legend>
           {choice.options.map((option) => {
             const recommended = option.id === choice.recommended
+            const baseId = `choice-${ticketKey}-${option.id}`
             return (
               <label key={option.id} className="flex cursor-pointer gap-3 rounded-md border border-amber-200 bg-white p-3 text-sm">
                 <input
@@ -59,21 +60,22 @@ export function ChoicePanel({ ticketKey, choice, counter, onAnswered, onCancel, 
                   value={option.id}
                   checked={selected === option.id}
                   onChange={() => setSelected(option.id)}
-                  aria-describedby={`choice-${ticketKey}-${option.id}`}
+                  aria-labelledby={`${baseId}-title`}
+                  aria-describedby={`${baseId}-details`}
                   className="mt-1"
                 />
                 <span className="space-y-1">
-                  <span className="font-medium">
+                  <span id={`${baseId}-title`} className="font-medium">
                     Ansatz {option.id}: {option.title}
                     {recommended && <span className="ml-2 rounded bg-amber-200 px-1.5 py-0.5 text-xs">empfohlen</span>}
                   </span>
-                  <span id={`choice-${ticketKey}-${option.id}`} className="block space-y-1">
+                  <span id={`${baseId}-details`} className="block space-y-1">
                     <span className="block text-slate-700">{option.description}</span>
-                    {option.pros.map((pro) => (
-                      <span key={`+${pro}`} className="block text-emerald-700">+ {pro}</span>
+                    {option.pros.map((pro, index) => (
+                      <span key={index} className="block text-emerald-700">+ {pro}</span>
                     ))}
-                    {option.cons.map((con) => (
-                      <span key={`-${con}`} className="block text-red-700">− {con}</span>
+                    {option.cons.map((con, index) => (
+                      <span key={index} className="block text-red-700">− {con}</span>
                     ))}
                   </span>
                 </span>
@@ -94,7 +96,7 @@ export function ChoicePanel({ ticketKey, choice, counter, onAnswered, onCancel, 
           </p>
         )}
         <div className="flex gap-2">
-          <Button onClick={handleSubmit} disabled={sending || !selected} size="sm">
+          <Button onClick={handleSubmit} disabled={sending || cancelPending || !selected} size="sm">
             {sending ? 'Sende…' : 'Auswahl senden'}
           </Button>
           <Button variant="outline" size="sm" disabled={cancelPending || sending} onClick={onCancel}>

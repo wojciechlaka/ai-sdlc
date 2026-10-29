@@ -67,6 +67,30 @@ describe('ChoicePanel', () => {
     expect(props.onAnswered).not.toHaveBeenCalled()
   })
 
+  it('disables sending while the cancel action is pending', () => {
+    renderPanel({ cancelPending: true })
+    expect(screen.getByRole('button', { name: 'Auswahl senden' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Abbrechen' })).toBeDisabled()
+  })
+
+  it('names a radio by title and badge only, not by its description', () => {
+    renderPanel()
+    expect(screen.getByRole('radio', { name: /^Ansatz B: Beim Lesen\s*empfohlen$/ })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Ansatz A: Beim Speichern' })).toBeInTheDocument()
+  })
+
+  it('renders repeated pros without React key warnings', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const options = [
+      { ...CHOICE.options[0]!, pros: ['schnell', 'schnell'] },
+      CHOICE.options[1]!,
+    ]
+    renderPanel({ choice: { ...CHOICE, options } })
+    expect(screen.getAllByText('+ schnell')).toHaveLength(2)
+    expect(error).not.toHaveBeenCalled()
+    error.mockRestore()
+  })
+
   it('cancels through the parent', () => {
     const props = renderPanel()
     fireEvent.click(screen.getByRole('button', { name: 'Abbrechen' }))

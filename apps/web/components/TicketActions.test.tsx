@@ -113,6 +113,29 @@ describe('TicketActions', () => {
     await waitFor(() => expect(stopRunAction).toHaveBeenCalledWith('CB-2'))
   })
 
+  it('resets selection and note when a new choice arrives', () => {
+    const choice = (question: string) => ({
+      question, recommended: 'A' as const,
+      options: [
+        { id: 'A' as const, title: 'Beim Speichern', description: 'd', pros: [], cons: [] },
+        { id: 'B' as const, title: 'Beim Lesen', description: 'd', pros: [], cons: [] },
+      ],
+    })
+    const ui = (patch: Partial<TicketDetailDto>) => (
+      <AppStateProvider>
+        <TicketActions ticket={aTicketDetail({ stage: 'design', state: 'awaiting_answer', questionLimit: 3, ...patch })} tokenConfigured />
+      </AppStateProvider>
+    )
+    const { rerender } = render(ui({ questionsAsked: 1, pendingChoice: choice('Erste Wahl?') }))
+    fireEvent.click(screen.getByRole('radio', { name: /Ansatz B/ }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Anmerkung (optional)' }), { target: { value: 'alt' } })
+
+    rerender(ui({ questionsAsked: 2, pendingChoice: choice('Zweite Wahl?') }))
+
+    expect(screen.getByRole('radio', { name: /Ansatz A/ })).toBeChecked()
+    expect(screen.getByRole('textbox', { name: 'Anmerkung (optional)' })).toHaveValue('')
+  })
+
   it('lets the user cancel while waiting for an answer', async () => {
     vi.mocked(stopRunAction).mockResolvedValue({ ok: true, data: undefined })
     renderActions({ state: 'awaiting_answer', pendingQuestion: 'Frage?' })

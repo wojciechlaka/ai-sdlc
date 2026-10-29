@@ -32,7 +32,10 @@ export function StartStagePanel({ stage, failed, tokenConfigured, model, onModel
     return <p className="text-sm text-emerald-700">Alle Stufen abgeschlossen.</p>
   }
 
-  const describedBy = [tokenConfigured ? null : TOKEN_HINT_ID, stage === 'design' ? DESIGN_HINT_ID : null].filter(Boolean).join(' ')
+  const describedBy = [
+    tokenConfigured ? null : TOKEN_HINT_ID,
+    stage === 'design' ? DESIGN_HINT_ID : null,
+  ].filter(Boolean).join(' ')
   return (
     <div className="space-y-2">
       {failed && <p className="text-sm text-red-600">Letzter Versuch fehlgeschlagen — Details im Log.</p>}

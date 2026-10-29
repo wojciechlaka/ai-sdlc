@@ -81,6 +81,7 @@ export function TicketActions({ ticket, tokenConfigured }: Props) {
         if (ticket.pendingChoice) {
           return (
             <ChoicePanel
+              key={`${ticket.questionsAsked}:${ticket.pendingChoice.question}`}
               ticketKey={ticket.key}
               choice={ticket.pendingChoice}
               counter={counter}
