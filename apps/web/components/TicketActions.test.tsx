@@ -108,6 +108,17 @@ describe('TicketActions', () => {
     expect(screen.queryByRole('button')).toBeNull()
   })
 
+  it('waits for the sync while the state promises a question or PR the page does not have yet', () => {
+    const { unmount } = renderActions({ state: 'awaiting_answer', pendingQuestion: null })
+    expect(screen.getByText('Zustand wird abgeglichen …')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Abbrechen' })).toBeEnabled()
+    unmount()
+
+    renderActions({ state: 'in_review', openPr: null })
+    expect(screen.getByText('Zustand wird abgeglichen …')).toBeInTheDocument()
+    expect(screen.queryByRole('link')).toBeNull()
+  })
+
   it('refreshes the page on state and question events and after a reconnect', () => {
     renderActions({ state: 'running' })
     act(() => sse.handlers?.onMessage({ type: 'state', ticketKey: 'CB-2', stage: 'plan', state: 'in_review' }))
