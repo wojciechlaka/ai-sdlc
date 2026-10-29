@@ -7,7 +7,7 @@ import { RESET_RUNNING, TOKEN_MISSING } from './messages'
 import { parseInput } from './validation'
 import { requireTicket } from './requireTicket'
 import { createReporter } from './reporter'
-import { beginRun, type RunRequest } from './beginRun'
+import { beginRun, type RunRequest } from './runLifecycle'
 import { runStage } from './runStage'
 
 /** The reset empties the database and rewrites the repo; a run started meanwhile would act on stale state. */

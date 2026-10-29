@@ -2,7 +2,7 @@ import type { Ticket } from '../domain/types'
 import type { UseCaseDeps } from './deps'
 import { createReporter } from './reporter'
 import { describeError } from './describeError'
-import { finishRun, isCurrentRun, type RunRequest } from './beginRun'
+import { finishRun, isCurrentRun, type RunRequest } from './runLifecycle'
 import { executeRun } from './executeRun'
 import { failStage } from './failStage'
 
@@ -31,7 +31,7 @@ export async function runStage(deps: UseCaseDeps, ticket: Ticket, request: RunRe
     return
   }
 
-  const codebaseSummary = await deps.repos.ensureSummary(repoDir, request.model, reporter.report)
+  const codebaseSummary = await deps.repos.ensureSummary(repoDir, request.model, reporter.logAndProgress)
   if (!codebaseSummary) reporter.progress('Codebase-Analyse nicht verfügbar — Agent startet ohne Übersicht.')
   if (!isCurrentRun(deps, ticket.key, runId)) {
     finishRun(deps, ticket.key, runId, 'failed')

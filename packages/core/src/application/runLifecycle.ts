@@ -1,6 +1,9 @@
 import type { ArtifactStage, QAPair, RunTrigger, Ticket } from '../domain/types'
 import type { UseCaseDeps } from './deps'
 
+// Lifecycle of one attempt (one AgentRun): begin, check it is still current, finish it on failure.
+
+/** What a stage attempt runs with: stage, trigger, model and the Q&A history. */
 export interface RunRequest {
   stage: ArtifactStage
   trigger: RunTrigger

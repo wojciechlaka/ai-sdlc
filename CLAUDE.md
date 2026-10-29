@@ -133,7 +133,7 @@ there, run succeeded. Prints a German table with cost and duration, exit code 1 
 files. Not run by `npm test` (`*.eval.ts` is no test file name, and `evals/**` is excluded in `vitest.config.ts`); type-checked (`tsconfig`
 includes `evals`) and linted.
 
-**Attempt identity:** every background step checks `isCurrentRun` (`application/beginRun.ts`: ticket still
+**Attempt identity:** every background step checks `isCurrentRun` (`application/runLifecycle.ts`: ticket still
 `running` and this run is its latest). Stop, restart and reset therefore never let a stale job write state;
 a PR opened by a stale attempt is closed again.
 
@@ -156,7 +156,7 @@ makes `startStage`/`answerQuestion` throw a `ConflictError`.
 ### Key modules
 
 - `packages/core/src/application/createUseCases.ts` — the `UseCases` interface every adapter uses
-- `packages/core/src/application/{stageCommands,runStage,executeRun,publishArtifact,beginRun,syncReviews,startup,queries}.ts`
+- `packages/core/src/application/{stageCommands,runStage,executeRun,publishArtifact,runLifecycle,syncReviews,startup,queries}.ts`
 - `packages/core/src/domain/{rules,artifacts,render,ticketKey}.ts` — transitions, names/paths, Markdown, key ordering
 - `packages/core/src/domain/errors.ts` — `NotFoundError`/`ConflictError`/`ValidationError`; adapters check
   `errorCode(err)`, never `instanceof` (Next.js may duplicate modules across bundles)
