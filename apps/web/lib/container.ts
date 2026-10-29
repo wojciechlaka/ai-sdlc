@@ -5,6 +5,12 @@ import { createRefinementEngine, resolveCorePaths, type UseCases } from '@refine
 /** Fork of the RealWorld example backend; override with `TARGET_REPO` in `apps/web/.env.local`. */
 const DEFAULT_TARGET_REPO = 'https://github.com/wojciechlaka/node-express-realworld-example-app'
 
+/** A positive integer from an env var; undefined (engine default) when unset or invalid. */
+function positiveInt(value: string | undefined): number | undefined {
+  const parsed = parseInt(value ?? '', 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
+}
+
 const globalForEngine = globalThis as typeof globalThis & { __refinementEngine?: UseCases }
 
 /**
@@ -24,6 +30,7 @@ export function getEngine(): UseCases {
       rootDir,
       targetRepo: process.env.TARGET_REPO || DEFAULT_TARGET_REPO,
       githubToken: process.env.GITHUB_TOKEN || undefined,
+      agentTimeoutMs: positiveInt(process.env.REFINEMENT_TIMEOUT_MS),
     })
   }
   return globalForEngine.__refinementEngine

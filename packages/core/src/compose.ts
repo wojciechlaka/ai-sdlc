@@ -33,9 +33,13 @@ export interface EngineConfig {
   baseBranch?: string
   /** Tag the repo reset moves the base branch back to; default `BASELINE_TAG`. */
   baselineTag?: string
+  /** Maximum runtime of one Claude call in ms (`REFINEMENT_TIMEOUT_MS`); default `DEFAULT_AGENT_TIMEOUT_MS`. */
+  agentTimeoutMs?: number
 }
 
 const STOP_SETTLE_MS = 500
+/** Maximum runtime of one Claude call unless `agentTimeoutMs` is set: 10 minutes. */
+export const DEFAULT_AGENT_TIMEOUT_MS = 10 * 60 * 1000
 
 /** Branch the app works on; PRs target it, `master` stays untouched (spec §12). */
 export const SHOWCASE_BRANCH = 'showcase'
@@ -59,7 +63,7 @@ export function resolveCorePaths(coreDir: string): Pick<EngineConfig, 'migration
 export function createRefinementEngine(config: EngineConfig): UseCases {
   // Fail at start with the clear message, with or without token.
   parseGitHubRepoUrl(config.targetRepo)
-  const { baseBranch = SHOWCASE_BRANCH, baselineTag = BASELINE_TAG } = config
+  const { baseBranch = SHOWCASE_BRANCH, baselineTag = BASELINE_TAG, agentTimeoutMs = DEFAULT_AGENT_TIMEOUT_MS } = config
   // One sandbox for every `claude` process: user settings only, guard/audit hooks, read tools, clean env (spec §13).
   const sandbox = createAgentSandbox({ hooksDir: config.hooksDir })
   const db = createSqliteDatabase({ path: config.dbPath, migrationsFolder: config.migrationsFolder })
@@ -72,7 +76,7 @@ export function createRefinementEngine(config: EngineConfig): UseCases {
     codeHost: config.githubToken
       ? createGitHubCodeHost({ repoUrl: config.targetRepo, token: config.githubToken, baseBranch, baselineTag })
       : null,
-    agent: createClaudeCliAgentRunner({ skillsDir: config.skillsDir, sandbox }),
+    agent: createClaudeCliAgentRunner({ skillsDir: config.skillsDir, sandbox, timeoutMs: agentTimeoutMs }),
     repos: createGitRepoProvider({ sandbox }),
     events: createNodeEventPublisher(),
     repoUrl: config.targetRepo,

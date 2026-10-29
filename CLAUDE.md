@@ -167,6 +167,9 @@ makes `startStage`/`answerQuestion` throw a `ConflictError`.
   any thrown value into text with credentials redacted — use it instead of `${err}` in logs and messages
 - `packages/core/src/ports/codeHost.ts` + `adapters/github/githubCodeHost.ts` — GitHub via Octokit (15 s timeout,
   `CodeHostError` with user-facing German messages); base branch, `prepareBaseBranch`, `resetBaseBranch`
+- `packages/core/src/adapters/claudeCli/` — `index.ts` (`runAgent`: stage agent, one retry, usage; factory),
+  `claudeProcess.ts` (spawn in the sandbox, timeout, `stopAgent`), `streamJson.ts` (progress, result line),
+  `agentOutput.ts` (JSON extraction, schema validation), `hookLog.ts`, `prompt.ts`
 - `packages/core/src/adapters/sqlite/schema.ts` — Drizzle schema: `tickets`, `agent_runs`, `artifacts`, `audit_events`
 - `packages/core/src/testing/fakes.ts` — in-memory repositories, `FakeCodeHost` (GitHub-like semantics),
   `FakeTicketSource`, `FakeAgentRunner` (`hold()`/`stop()`, scripted `progress`/`toolEvents`, recorded `callbacks`),

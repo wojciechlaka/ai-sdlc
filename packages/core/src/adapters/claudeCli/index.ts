@@ -1,22 +1,19 @@
-import { spawn, ChildProcess } from 'child_process'
 import fs from 'fs/promises'
 import path from 'path'
 import type { ZodType } from 'zod'
 import { IntentAgentOutputSchema, type StageOutput } from '@refinement/shared'
-import { SchemaValidationError, CliError } from './errors'
-import { AgentRunTerminatedError, AgentRunTimeoutError } from '../../ports'
 import type {
   AgentRunner, AgentRunnerInput, AgentRunMeta, AgentRunResult, AgentRunCallbacks, ClaudeProcessSandbox,
 } from '../../ports'
 import type { ArtifactStage } from '../../domain/types'
+import { SchemaValidationError } from './errors'
 import { buildPrompt, type RetryContext } from './prompt'
 import { openHookLog } from './hookLog'
-import type { ClaudeStreamMessage, ClaudeTokenUsage, ExtractedResult, ClaudeCallResult } from './types'
+import { spawnClaude, stopAgent } from './claudeProcess'
+import { parseAndValidate } from './agentOutput'
+import type { ExtractedResult, ClaudeCallResult } from './types'
 
-const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000
-const SIGTERM_EXIT_CODE = 143
 const SCHEMA_ERROR_PREVIEW_CHARS = 120
-const MARKDOWN_CODE_BLOCK_RE = /```(?:json)?\s*([\s\S]*?)```/
 
 interface StageAgent {
   skillFile: string
@@ -30,171 +27,12 @@ const STAGE_AGENTS: Partial<Record<ArtifactStage, StageAgent>> = {
   plan: { skillFile: 'intent-agent.md', schema: IntentAgentOutputSchema },
 }
 
-const runningProcesses = new Map<string, ChildProcess>()
-
-/** Tools whose use means the agent is exploring the codebase; each switch to one of them shows ANALYSIS_PROGRESS. */
-const CODEBASE_TOOLS = new Set(['Read', 'Glob', 'Grep', 'Bash'])
-const ANALYSIS_PROGRESS = 'Codebase wird analysiert…'
-
-/**
- * Interprets the Claude process exit code and returns the extracted result, or throws an appropriate error.
- * @param code   - Process exit code, or null if the process was killed.
- * @param output - Full stdout of the Claude process.
- * @param stderr - Full stderr of the Claude process, included in CliError on non-zero exit.
- */
-function parseProcessExit(code: number | null, output: string, stderr: string): ExtractedResult {
-  if (code === SIGTERM_EXIT_CODE || code === null) throw new AgentRunTerminatedError()
-  if (code !== 0) throw new CliError(code, stderr)
-  return extractResult(output)
-}
-
-/**
- * Parses one stream-JSON line and emits a progress message if a new tool_use block is detected.
- * Returns the (possibly updated) last progress message to avoid emitting duplicates.
- */
-function handleLine(line: string, lastProgressMsg: string, onProgress: (msg: string) => void): string {
-  const trimmed = line.trim()
-  if (!trimmed) return lastProgressMsg
-  try {
-    const ev = JSON.parse(trimmed) as Record<string, unknown>
-    if (ev.type !== 'assistant') return lastProgressMsg
-    const content = (ev.message as ClaudeStreamMessage)?.content ?? []
-    for (const block of content) {
-      if (block.type !== 'tool_use') continue
-      if (!CODEBASE_TOOLS.has(block.name as string) || lastProgressMsg === ANALYSIS_PROGRESS) continue
-      lastProgressMsg = ANALYSIS_PROGRESS
-      onProgress(ANALYSIS_PROGRESS)
-    }
-  } catch { /* incomplete line */ }
-  return lastProgressMsg
-}
-
-/**
- * Sends SIGTERM to the running Claude process of the ticket. Returns false if none is running.
- * @param ticketKey - e.g. `CB-2`.
- */
-export function stopAgent(ticketKey: string): boolean {
-  const proc = runningProcesses.get(ticketKey)
-  if (!proc) return false
-  runningProcesses.delete(ticketKey)
-  proc.kill('SIGTERM')
-  return true
-}
-
-/** Sandbox plus the hook log file of one Claude process. */
-interface SandboxRun {
+/** Skill text, output schema, sandbox and timeout of one run; the same for both of its Claude calls. */
+interface LoadedAgent {
+  skill: string
+  schema: ZodType<StageOutput>
   sandbox: ClaudeProcessSandbox
-  logFile: string
-}
-
-/**
- * Spawns the Claude CLI, pipes the prompt via stdin and streams stdout line by line for progress events.
- * Rejects with AgentRunTimeoutError, AgentRunTerminatedError or CliError.
- */
-async function spawnClaude(
-  ticketKey: string,
-  prompt: string,
-  cwd: string,
-  model: string,
-  onProgress: (msg: string) => void,
-  { sandbox, logFile }: SandboxRun,
-): Promise<ExtractedResult> {
-  const parsedTimeout = parseInt(process.env['REFINEMENT_TIMEOUT_MS'] ?? '', 10)
-  const timeoutMs = Number.isFinite(parsedTimeout) && parsedTimeout > 0 ? parsedTimeout : DEFAULT_TIMEOUT_MS
-
-  return new Promise<ExtractedResult>((resolve, reject) => {
-    let settled = false
-    const settle = (fn: () => void) => { if (!settled) { settled = true; fn() } }
-
-    const proc = spawn('claude', sandbox.claudeArgs(model), {
-      cwd,
-      env: sandbox.env(logFile),
-      stdio: ['pipe', 'pipe', 'pipe'],
-    })
-
-    runningProcesses.set(ticketKey, proc)
-    const cleanup = () => { if (runningProcesses.get(ticketKey) === proc) runningProcesses.delete(ticketKey) }
-
-    let stderrBuf = ''
-
-    const timer = setTimeout(() => {
-      cleanup()
-      proc.kill('SIGTERM')
-      settle(() => reject(new AgentRunTimeoutError(timeoutMs)))
-    }, timeoutMs)
-
-    proc.stdin.write(prompt)
-    proc.stdin.end()
-
-    let output = ''
-    let stdoutBuf = ''
-    let lastProgressMsg = ''
-
-    proc.stdout.on('data', (d: Buffer) => {
-      const chunk = d.toString()
-      output += chunk
-      stdoutBuf += chunk
-      const lines = stdoutBuf.split('\n')
-      stdoutBuf = lines.pop() ?? ''
-      for (const line of lines) lastProgressMsg = handleLine(line, lastProgressMsg, onProgress)
-    })
-
-    proc.stderr.on('data', (d: Buffer) => { stderrBuf += d.toString() })
-
-    proc.on('close', (code) => {
-      clearTimeout(timer)
-      cleanup()
-      settle(() => {
-        try { resolve(parseProcessExit(code, output, stderrBuf)) }
-        catch (e) { reject(e as Error) }
-      })
-    })
-  })
-}
-
-/** Finds the `result`/`success` line of the stream-JSON output. @throws CliError if there is none. */
-function extractResult(raw: string): ExtractedResult {
-  for (const line of raw.split('\n')) {
-    try {
-      const obj = JSON.parse(line.trim()) as Record<string, unknown>
-      if (obj.type === 'result' && obj.subtype === 'success') {
-        const usage = obj.usage as ClaudeTokenUsage | undefined
-        return {
-          text: (obj.result as string) ?? '',
-          inputTokens: usage?.input_tokens ?? 0,
-          cacheCreationTokens: usage?.cache_creation_input_tokens ?? 0,
-          cacheReadTokens: usage?.cache_read_input_tokens ?? 0,
-          outputTokens: usage?.output_tokens ?? 0,
-          costUsd: typeof obj.total_cost_usd === 'number' ? obj.total_cost_usd : typeof obj.cost_usd === 'number' ? obj.cost_usd : 0,
-        } satisfies ExtractedResult
-      }
-    } catch { /* skip */ }
-  }
-  throw new CliError(-1, 'Kein Erfolgsergebnis in der stream-json-Ausgabe')
-}
-
-/** Strips a Markdown fence if present, otherwise takes the outermost `{...}`. */
-function extractJsonString(raw: string): string {
-  const s = raw.trim()
-  const fenceMatch = s.match(MARKDOWN_CODE_BLOCK_RE)
-  if (fenceMatch) return fenceMatch[1].trim()
-  const start = s.indexOf('{')
-  const end = s.lastIndexOf('}')
-  if (start !== -1 && end > start) return s.slice(start, end + 1)
-  return s
-}
-
-/** Parses the agent text and validates it against the stage schema. @throws SchemaValidationError */
-function parseAndValidate(raw: string, schema: ZodType<StageOutput>): StageOutput {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(extractJsonString(raw))
-  } catch {
-    throw new SchemaValidationError('invalid_json', [], raw)
-  }
-  const result = schema.safeParse(parsed)
-  if (!result.success) throw new SchemaValidationError('schema_mismatch', result.error.issues, raw)
-  return result.data
+  timeoutMs: number
 }
 
 /**
@@ -202,7 +40,7 @@ function parseAndValidate(raw: string, schema: ZodType<StageOutput>): StageOutpu
  * Tool events are reported while the process runs; the rest is drained before the call returns.
  */
 async function runClaudeOnce(
-  agent: { skill: string; schema: ZodType<StageOutput>; sandbox: ClaudeProcessSandbox },
+  agent: LoadedAgent,
   input: AgentRunnerInput,
   callbacks: AgentRunCallbacks,
   retryContext?: RetryContext,
@@ -220,9 +58,15 @@ async function runClaudeOnce(
   const hookLog = await openHookLog(callbacks.onToolEvent)
   let cliResult: ExtractedResult
   try {
-    cliResult = await spawnClaude(input.ticketKey, prompt, input.repoDir, input.model, callbacks.onProgress, {
+    cliResult = await spawnClaude({
+      ticketKey: input.ticketKey,
+      prompt,
+      cwd: input.repoDir,
+      model: input.model,
+      onProgress: callbacks.onProgress,
       sandbox: agent.sandbox,
       logFile: hookLog.file,
+      timeoutMs: agent.timeoutMs,
     })
   } finally {
     await hookLog.close()
@@ -267,11 +111,14 @@ function buildMeta(model: string, startedAt: number, cliResult: ExtractedResult)
   }
 }
 
+/** Configuration of the claudeCli adapter, passed in by compose.ts. */
 export interface ClaudeCliOptions {
   /** Absolute path to `packages/core/skills`. */
   skillsDir: string
   /** Settings sources, guard/audit hooks, allowed tools and environment of the `claude` process (spec §13). */
   sandbox: ClaudeProcessSandbox
+  /** Maximum runtime of one Claude call (`REFINEMENT_TIMEOUT_MS`, read by the app). */
+  timeoutMs: number
 }
 
 /**
@@ -281,7 +128,7 @@ export interface ClaudeCliOptions {
  * Every call runs in the sandbox (guard and audit hooks, clean env); its tool calls reach `callbacks.onToolEvent`.
  * @throws {Error} if the stage has no agent yet.
  * @throws {AgentRunTerminatedError} if the process is killed via `stopAgent`.
- * @throws {AgentRunTimeoutError} if the run exceeds `REFINEMENT_TIMEOUT_MS`.
+ * @throws {AgentRunTimeoutError} if a Claude call exceeds `options.timeoutMs`.
  * @throws {CliError} if the Claude process exits with a non-zero code.
  * @throws {SchemaValidationError} if both calls produce invalid output.
  */
@@ -293,10 +140,11 @@ export async function runAgent(
   const stageAgent = STAGE_AGENTS[input.stage]
   // German: failStage shows this message on the ticket page.
   if (!stageAgent) throw new Error(`Für die Stufe ${input.stage} gibt es noch keinen Agent`)
-  const agent = {
+  const agent: LoadedAgent = {
     skill: await fs.readFile(path.join(/*turbopackIgnore: true*/ options.skillsDir, stageAgent.skillFile), 'utf-8'),
     schema: stageAgent.schema,
     sandbox: options.sandbox,
+    timeoutMs: options.timeoutMs,
   }
   const startedAt = Date.now()
 

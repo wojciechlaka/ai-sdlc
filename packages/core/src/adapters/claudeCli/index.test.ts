@@ -6,7 +6,11 @@ import type { AgentRunnerInput } from '../../ports'
 import { createAgentSandbox } from '../agentSandbox/agentSandbox'
 
 const HOOKS_DIR = path.resolve(__dirname, '../../../hooks')
-const OPTIONS = { skillsDir: path.resolve(__dirname, '../../../skills'), sandbox: createAgentSandbox({ hooksDir: HOOKS_DIR }) }
+const OPTIONS = {
+  skillsDir: path.resolve(__dirname, '../../../skills'),
+  sandbox: createAgentSandbox({ hooksDir: HOOKS_DIR }),
+  timeoutMs: 10_000,
+}
 
 const callbacks = () => ({ onProgress: vi.fn(), onToolEvent: vi.fn() })
 
@@ -125,10 +129,9 @@ describe('runAgent (stage plan)', () => {
     proc.stderr = new EventEmitter()
     proc.kill = vi.fn()
     mockSpawn.mockReturnValue(proc)
-    vi.stubEnv('REFINEMENT_TIMEOUT_MS', '50')
     const { runAgent } = await import('./index')
     const { AgentRunTimeoutError } = await import('../../ports')
-    await expect(runAgent(INPUT, callbacks(), OPTIONS)).rejects.toBeInstanceOf(AgentRunTimeoutError)
+    await expect(runAgent(INPUT, callbacks(), { ...OPTIONS, timeoutMs: 50 })).rejects.toBeInstanceOf(AgentRunTimeoutError)
   })
 
   it('rejects stages without an agent before spawning claude', async () => {
