@@ -9,7 +9,7 @@ npm install          # install all workspace dependencies
 npm run dev          # Next.js dev server on :3000 (single process)
 npm run build        # tsc --noEmit for packages + next build
 npm test             # all workspace tests (Vitest)
-npm run lint         # hexagon dependency rule + hook scripts + evals (packages/core)
+npm run lint         # ESLint in all workspaces: control-flow style; core also hexagon rule + hook scripts
 npm run eval:guard   # guard eval: real `claude` (Haiku) in the app sandbox — costs ~5 cents, needs `claude login`
 
 npm test -w packages/core                       # core only
@@ -238,6 +238,12 @@ makes `startStage`/`answerQuestion` throw a `ConflictError`.
   and schema errors, missing stage agent). Purely internal errors (repository invariants such as "AgentRun … not
   found", summary-run failures that are only logged, `AgentRunTerminatedError` whose text `executeRun` replaces) are
   English.
+- **Control flow:** in production code `if`/`else`/`for`/`while`/`do` always use braces with the body on its own line —
+  no `if (!x) return null`, no `if (x) { return y }` on one line (ternaries and arrow expression bodies are fine; a
+  block body such as `(d) => { buf += d }` or `try { … }` also goes on its own line). Enforced by ESLint (`curly: all` +
+  `@stylistic/brace-style` without single-line blocks) in every workspace; tests,
+  `packages/core/src/testing/`, `apps/web/test/` and the generated shadcn primitives in `apps/web/components/ui/` are
+  exempt.
 - **Attempt vs. Claude call:** an *attempt* is one `AgentRun` (identified by its run id, see `isCurrentRun`). One start
   of the `claude` process is a *Claude call* (`runClaudeOnce` in `adapters/claudeCli`); a run makes up to two (one
   retry on a schema error).
