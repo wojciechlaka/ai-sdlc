@@ -43,7 +43,9 @@ export function useSSE(ticketKey: string | null, handlers: SSEHandlers) {
 
     es.onopen = () => {
       markConnected()
-      if (openedBefore) handlersRef.current.onReconnect?.()
+      if (openedBefore) {
+        handlersRef.current.onReconnect?.()
+      }
       openedBefore = true
     }
 
@@ -54,7 +56,9 @@ export function useSSE(ticketKey: string | null, handlers: SSEHandlers) {
     }
 
     es.onerror = () => {
-      if (intentionallyClosed) return
+      if (intentionallyClosed) {
+        return
+      }
       setConnected(false)
       console.warn('SSE error', ticketKey ?? 'all tickets')
     }

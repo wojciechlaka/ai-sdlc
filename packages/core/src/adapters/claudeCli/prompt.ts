@@ -43,7 +43,9 @@ function summarySection(input: PromptInput): string | null {
 }
 
 function answeredQuestionsSection(input: PromptInput): string | null {
-  if (!input.answeredQuestions.length) return null
+  if (!input.answeredQuestions.length) {
+    return null
+  }
   const pairs = input.answeredQuestions.map(({ question, answer }) => `**F:** ${question}\n**A:** ${answer}`).join('\n\n')
   return `## Bisherige Rückfragen (bereits beantwortet)\n\n${pairs}`
 }

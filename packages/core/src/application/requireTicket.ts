@@ -8,6 +8,8 @@ import { NotFoundError } from '../domain/errors'
  */
 export function requireTicket(tickets: TicketRepository, key: string): Ticket {
   const ticket = tickets.findByKey(key.trim().toUpperCase())
-  if (!ticket) throw new NotFoundError(`Ticket ${key} nicht gefunden`)
+  if (!ticket) {
+    throw new NotFoundError(`Ticket ${key} nicht gefunden`)
+  }
   return ticket
 }

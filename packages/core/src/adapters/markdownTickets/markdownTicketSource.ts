@@ -15,14 +15,19 @@ const README = 'README.md'
 export function parseTicketMarkdown(markdown: string, sourcePath: string): SourceTicket | null {
   const lines = markdown.replace(/^﻿/, '').replace(/\r\n/g, '\n').split('\n')
   const heading = HEADING_RE.exec(lines[0] ?? '')
-  if (!heading) return null
+  if (!heading) {
+    return null
+  }
 
   let priority: string | null = null
   const body: string[] = []
   for (const line of lines.slice(1)) {
     const match = PRIORITY_RE.exec(line)
-    if (match) priority = match[1]!
-    else body.push(line)
+    if (match) {
+      priority = match[1]!
+    } else {
+      body.push(line)
+    }
   }
   return { key: heading[1]!, title: heading[2]!, description: body.join('\n').trim(), priority, sourcePath }
 }
@@ -42,7 +47,9 @@ export interface MarkdownTicketSourceOptions {
 export function createMarkdownTicketSource(options: MarkdownTicketSourceOptions): TicketSource {
   return {
     list() {
-      if (!fs.existsSync(options.dir)) throw new Error(`Ticket-Ordner fehlt: ${options.dir}`)
+      if (!fs.existsSync(options.dir)) {
+        throw new Error(`Ticket-Ordner fehlt: ${options.dir}`)
+      }
       const tickets: SourceTicket[] = []
       const seen = new Set<string>()
       const names = fs.readdirSync(options.dir).filter((name) => name.endsWith('.md')).sort()
@@ -52,7 +59,9 @@ export function createMarkdownTicketSource(options: MarkdownTicketSourceOptions)
         const sourcePath = path.relative(options.rootDir, file).split(path.sep).join('/')
         const ticket = parseTicketMarkdown(fs.readFileSync(file, 'utf-8'), sourcePath)
         if (!ticket) {
-          if (name !== README) console.warn(`[tickets] ${sourcePath}: first line is not a heading "# KEY-n: Title" — skipped`)
+          if (name !== README) {
+            console.warn(`[tickets] ${sourcePath}: first line is not a heading "# KEY-n: Title" — skipped`)
+          }
           continue
         }
         if (seen.has(ticket.key)) {

@@ -17,7 +17,9 @@ export function GET(request: Request): Response {
   let closed = false
   let unsubscribe = () => {}
   const stop = () => {
-    if (closed) return
+    if (closed) {
+      return
+    }
     closed = true
     unsubscribe()
   }
@@ -27,16 +29,23 @@ export function GET(request: Request): Response {
       // Comment frame flushes proxy buffers; EventSource ignores it.
       controller.enqueue(encoder.encode(': ok\n\n'))
       unsubscribe = getEngine().subscribe(ticketKey, (event) => {
-        if (!closed) controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
+        if (!closed) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
+        }
       })
       const onAbort = () => {
-        if (closed) return
+        if (closed) {
+          return
+        }
         stop()
         controller.close()
       }
       // The client may already be gone before the listener exists — the abort event would never fire.
-      if (request.signal.aborted) onAbort()
-      else request.signal.addEventListener('abort', onAbort)
+      if (request.signal.aborted) {
+        onAbort()
+      } else {
+        request.signal.addEventListener('abort', onAbort)
+      }
     },
     cancel: stop,
   })

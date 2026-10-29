@@ -9,7 +9,9 @@ export function useElapsedSeconds(isRunning: boolean): number {
   const [elapsed, setElapsed] = useState(0)
 
   useEffect(() => {
-    if (!isRunning) return
+    if (!isRunning) {
+      return
+    }
     const startedAt = Date.now()
     const id = setInterval(() => setElapsed(Math.floor((Date.now() - startedAt) / MS_PER_SECOND)), MS_PER_SECOND)
     return () => {

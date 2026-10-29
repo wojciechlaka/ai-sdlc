@@ -29,6 +29,8 @@ try {
   // Allowed: no output, exit 0 — Claude Code continues with its normal permission handling (--allowedTools).
 } catch (err) {
   const reason = `Guard-Fehler, Aufruf abgelehnt: ${err instanceof Error ? err.message : String(err)}`
-  try { appendHookLog?.({ kind: 'blocked', tool: 'unbekannt', target: '', reason }) } catch { /* ignore */ }
+  try {
+    appendHookLog?.({ kind: 'blocked', tool: 'unbekannt', target: '', reason })
+  } catch { /* ignore */ }
   printDeny(reason)
 }

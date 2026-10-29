@@ -10,7 +10,9 @@ const globalForTimer = globalThis as typeof globalThis & { __reviewSyncTimer?: R
  * Then starts the review sync timer.
  */
 export async function register(): Promise<void> {
-  if (process.env.NEXT_RUNTIME !== 'nodejs') return
+  if (process.env.NEXT_RUNTIME !== 'nodejs') {
+    return
+  }
   const { getEngine } = await import('./lib/container')
   const engine = getEngine()
   try {
@@ -21,7 +23,9 @@ export async function register(): Promise<void> {
   }
 
   // register() may run again (dev reloads); one timer per process is enough.
-  if (globalForTimer.__reviewSyncTimer) return
+  if (globalForTimer.__reviewSyncTimer) {
+    return
+  }
   const timer = setInterval(() => {
     engine.syncReviews().catch((err) => console.warn('[sync] PR sync failed', err))
   }, SYNC_INTERVAL_MS)

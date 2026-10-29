@@ -25,8 +25,11 @@ export function useServerAction(): ServerActionState {
     startTransition(async () => {
       setError(null)
       const result = await action()
-      if (result.ok) onSuccess?.(result.data)
-      else setError(result.error)
+      if (result.ok) {
+        onSuccess?.(result.data)
+      } else {
+        setError(result.error)
+      }
     })
 
   return { run, pending, error }

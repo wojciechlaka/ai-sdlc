@@ -9,7 +9,9 @@ const insertionOrder = sql`rowid`
 /** `ArtifactRepository` on the `artifacts` table. @throws when an update hits no row (unknown id). */
 export function createSqliteArtifactRepository(db: SqliteDb): ArtifactRepository {
   const requireUpdated = (row: unknown, id: string) => {
-    if (!row) throw new Error(`Artifact ${id} not found`)
+    if (!row) {
+      throw new Error(`Artifact ${id} not found`)
+    }
   }
 
   return {

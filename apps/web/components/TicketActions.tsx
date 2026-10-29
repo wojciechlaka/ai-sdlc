@@ -35,8 +35,11 @@ export function TicketActions({ ticket, tokenConfigured }: Props) {
 
   const { connected, everConnected } = useSSE(ticket.key, {
     onMessage: (event) => {
-      if (event.type === 'progress') appendProgress(ticket.key, event.message)
-      else router.refresh()
+      if (event.type === 'progress') {
+        appendProgress(ticket.key, event.message)
+      } else {
+        router.refresh()
+      }
     },
     onReconnect: () => router.refresh(),
   })

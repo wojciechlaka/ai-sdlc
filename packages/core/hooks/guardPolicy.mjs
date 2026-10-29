@@ -96,25 +96,39 @@ const optionAllowed = (word, rules) => rules.some((rule) => (typeof rule === 'st
  * @returns {Decision}
  */
 export function decideBash(command) {
-  if (command.length > MAX_COMMAND_CHARS) return denyBash(`Befehl länger als ${MAX_COMMAND_CHARS} Zeichen`)
+  if (command.length > MAX_COMMAND_CHARS) {
+    return denyBash(`Befehl länger als ${MAX_COMMAND_CHARS} Zeichen`)
+  }
   const special = command.match(FORBIDDEN_CHARS)
   if (special) {
     const shown = /[\u0000-\u001f\u007f]/.test(special[0]) ? 'Steuerzeichen' : `„${special[0]}“`
     return denyBash(`Sonderzeichen ${shown} ist nicht erlaubt`)
   }
   const misplaced = command.match(REVISION_SUFFIX_MISPLACED)
-  if (misplaced) return denyBash(`„${misplaced[0].trim().slice(-1)}“ ist nur innerhalb einer Revision erlaubt (z. B. HEAD~1)`)
+  if (misplaced) {
+    return denyBash(`„${misplaced[0].trim().slice(-1)}“ ist nur innerhalb einer Revision erlaubt (z. B. HEAD~1)`)
+  }
   const words = command.trim().split(' ')
-  if (words.some((w) => w === '')) return denyBash('Leerer Befehl oder doppelte Leerzeichen')
-  if (words[0] !== 'git') return denyBash(`Befehl ${words[0]} ist nicht erlaubt`)
+  if (words.some((w) => w === '')) {
+    return denyBash('Leerer Befehl oder doppelte Leerzeichen')
+  }
+  if (words[0] !== 'git') {
+    return denyBash(`Befehl ${words[0]} ist nicht erlaubt`)
+  }
   const args = words[1] === '--no-pager' ? words.slice(2) : words.slice(1)
   const [sub, ...rest] = args
-  if (sub === undefined) return denyBash('git ohne Unterbefehl')
+  if (sub === undefined) {
+    return denyBash('git ohne Unterbefehl')
+  }
   const rules = Object.hasOwn(GIT_OPTIONS, sub) ? GIT_OPTIONS[sub] : undefined
-  if (!rules) return denyBash(`git ${sub} ist nicht erlaubt`)
+  if (!rules) {
+    return denyBash(`git ${sub} ist nicht erlaubt`)
+  }
   for (const word of rest) {
     if (word.startsWith('-')) {
-      if (!optionAllowed(word, rules)) return denyBash(`Option ${word} ist für git ${sub} nicht erlaubt`)
+      if (!optionAllowed(word, rules)) {
+        return denyBash(`Option ${word} ist für git ${sub} nicht erlaubt`)
+      }
     } else if (!PLAIN_WORD.test(word)) {
       return denyBash(`Argument ${word} enthält unerlaubte Zeichen`)
     } else if (word.startsWith('/') || word.includes('..')) {
@@ -138,7 +152,9 @@ function realPathOf(target) {
       return path.join(fs.realpathSync(current), ...missing.reverse())
     } catch {
       const parent = path.dirname(current)
-      if (parent === current) return target
+      if (parent === current) {
+        return target
+      }
       missing.push(path.basename(current))
       current = parent
     }
@@ -152,7 +168,9 @@ function realPathOf(target) {
  * @returns {string | null}
  */
 function outsideReason(value, cwd) {
-  if (value.startsWith('~')) return `${value} liegt außerhalb`
+  if (value.startsWith('~')) {
+    return `${value} liegt außerhalb`
+  }
   let root
   try {
     root = fs.realpathSync(cwd)
@@ -186,7 +204,9 @@ function globReason(pattern) {
  * @returns {Decision}
  */
 function decideFileTool(tool, input, cwd) {
-  if (typeof cwd !== 'string' || cwd === '') return denyPath('Arbeitsordner unbekannt')
+  if (typeof cwd !== 'string' || cwd === '') {
+    return denyPath('Arbeitsordner unbekannt')
+  }
   /** @type {(string | null)[]} */
   const reasons = []
   if (tool === 'Read') {
@@ -194,9 +214,13 @@ function decideFileTool(tool, input, cwd) {
     reasons.push(file ? outsideReason(file, cwd) : 'Datei fehlt')
   } else {
     const dir = optionalString(input, 'path')
-    if (dir !== undefined) reasons.push(outsideReason(dir, cwd))
+    if (dir !== undefined) {
+      reasons.push(outsideReason(dir, cwd))
+    }
     const pattern = optionalString(input, tool === 'Glob' ? 'pattern' : 'glob')
-    if (pattern !== undefined) reasons.push(globReason(pattern))
+    if (pattern !== undefined) {
+      reasons.push(globReason(pattern))
+    }
   }
   const reason = reasons.find((r) => r !== null)
   return reason ? denyPath(reason) : ALLOW
@@ -210,8 +234,12 @@ function decideFileTool(tool, input, cwd) {
 export function decide(call) {
   const tool = typeof call.tool_name === 'string' ? call.tool_name : ''
   const input = /** @type {Record<string, unknown>} */ (call.tool_input && typeof call.tool_input === 'object' ? call.tool_input : {})
-  if (tool === 'Read' || tool === 'Glob' || tool === 'Grep') return decideFileTool(tool, input, call.cwd)
-  if (tool === 'Bash') return typeof input.command === 'string' ? decideBash(input.command) : denyBash('Bash ohne Befehl')
+  if (tool === 'Read' || tool === 'Glob' || tool === 'Grep') {
+    return decideFileTool(tool, input, call.cwd)
+  }
+  if (tool === 'Bash') {
+    return typeof input.command === 'string' ? decideBash(input.command) : denyBash('Bash ohne Befehl')
+  }
   return deny(`Werkzeug ${tool || 'unbekannt'} ist nicht erlaubt (nur Read, Glob, Grep und lesende git-Befehle)`)
 }
 
@@ -221,8 +249,12 @@ export function decide(call) {
  * @param {unknown} cwd
  */
 function relativeTo(value, cwd) {
-  if (typeof cwd !== 'string' || cwd === '') return value
-  if (value === cwd) return '.'
+  if (typeof cwd !== 'string' || cwd === '') {
+    return value
+  }
+  if (value === cwd) {
+    return '.'
+  }
   const prefix = cwd.endsWith('/') ? cwd : `${cwd}/`
   return value.startsWith(prefix) ? value.slice(prefix.length) : value
 }
@@ -242,12 +274,19 @@ export function toolTarget(call, maxChars = DEFAULT_TARGET_CHARS) {
   const file = stringOrEmpty(input, 'file_path') || stringOrEmpty(input, 'notebook_path')
   const url = stringOrEmpty(input, 'url')
   let target
-  if (command) target = command
-  else if (pattern) target = dir ? `${pattern} in ${relativeTo(dir, call.cwd)}` : pattern
-  else if (file) target = relativeTo(file, call.cwd)
-  else if (dir) target = relativeTo(dir, call.cwd)
-  else if (url) target = url
-  else target = Object.keys(input).length > 0 ? JSON.stringify(input) : ''
+  if (command) {
+    target = command
+  } else if (pattern) {
+    target = dir ? `${pattern} in ${relativeTo(dir, call.cwd)}` : pattern
+  } else if (file) {
+    target = relativeTo(file, call.cwd)
+  } else if (dir) {
+    target = relativeTo(dir, call.cwd)
+  } else if (url) {
+    target = url
+  } else {
+    target = Object.keys(input).length > 0 ? JSON.stringify(input) : ''
+  }
   target = target.replace(/\s*\n\s*/g, ' ')
   return target.length > maxChars ? `${target.slice(0, maxChars - 1)}…` : target
 }

@@ -20,10 +20,14 @@ const LEGACY_TABLES = ['review_decisions', 'audit_events', 'agent_runs', 'ticket
  */
 function dropLegacySchema(sqlite: Database.Database): void {
   const legacy = sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'review_decisions'").get()
-  if (!legacy) return
+  if (!legacy) {
+    return
+  }
   sqlite.pragma('foreign_keys = OFF')
   sqlite.transaction(() => {
-    for (const table of LEGACY_TABLES) sqlite.exec(`DROP TABLE IF EXISTS "${table}"`)
+    for (const table of LEGACY_TABLES) {
+      sqlite.exec(`DROP TABLE IF EXISTS "${table}"`)
+    }
   })()
   console.warn('[db] Database in the old schema found — rebuilt')
 }

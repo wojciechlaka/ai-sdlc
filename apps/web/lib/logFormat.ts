@@ -8,14 +8,18 @@ const stageLabel = (stage: Stage) => STAGE_LABEL[stage] ?? stage
 
 /** Tool call with its target; Bash commands in backticks. */
 function toolCall({ tool, target }: { tool: string; target: string }): string {
-  if (!target) return tool
+  if (!target) {
+    return tool
+  }
   return tool === 'Bash' ? `${tool} \`${target}\`` : `${tool} ${target}`
 }
 
 /** " · tokens↑ tokens↓ · cost" of a run; '' without usage (stop, restart, error before Claude answered). */
 function usageSuffix(run: AuditPayloads['run_finished']): string {
   const inputTokens = run.inputTokens ?? 0
-  if (inputTokens === 0) return ''
+  if (inputTokens === 0) {
+    return ''
+  }
   // Claude reports uncached input, cache writes and cache reads separately. Writes are new context the model
   // processed; reads are the same prompt prefix re-read on every turn and would inflate the count many times over.
   const tokensIn = inputTokens + (run.cacheCreationTokens ?? 0)
@@ -25,8 +29,12 @@ function usageSuffix(run: AuditPayloads['run_finished']): string {
 /** German line for a finished run: timeout, failure (with reason) or success (with duration), plus usage. */
 function describeRunFinished(run: AuditPayloads['run_finished']): string {
   const usage = usageSuffix(run)
-  if (run.status === 'timeout') return `Agent-Zeitlimit überschritten${usage}`
-  if (run.status !== 'succeeded') return `Agent-Lauf fehlgeschlagen${run.reason ? ` (${run.reason})` : ''}${usage}`
+  if (run.status === 'timeout') {
+    return `Agent-Zeitlimit überschritten${usage}`
+  }
+  if (run.status !== 'succeeded') {
+    return `Agent-Lauf fehlgeschlagen${run.reason ? ` (${run.reason})` : ''}${usage}`
+  }
   return `Agent fertig in ${formatElapsed(run.durationSeconds ?? 0)}${usage}`
 }
 
@@ -63,7 +71,9 @@ function describeUnparsed(type: string): string {
  */
 export function describeLogEvent(entry: AuditLogEntryDto): string {
   const parsed = AuditEventSchema.safeParse(entry)
-  if (!parsed.success) return describeUnparsed(entry.type)
+  if (!parsed.success) {
+    return describeUnparsed(entry.type)
+  }
   const event = parsed.data
   switch (event.type) {
     case 'ticket_imported':
@@ -105,9 +115,13 @@ export function groupLogEntries(log: AuditLogEntryDto[]): LogRow[] {
   const rows: LogRow[] = []
   for (const event of log) {
     const last = rows.at(-1)
-    if (event.type !== 'tool_used') rows.push({ kind: 'event', event })
-    else if (last?.kind === 'tools') last.events.push(event)
-    else rows.push({ kind: 'tools', events: [event] })
+    if (event.type !== 'tool_used') {
+      rows.push({ kind: 'event', event })
+    } else if (last?.kind === 'tools') {
+      last.events.push(event)
+    } else {
+      rows.push({ kind: 'tools', events: [event] })
+    }
   }
   return rows
 }

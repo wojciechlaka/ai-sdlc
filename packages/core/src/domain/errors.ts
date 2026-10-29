@@ -40,7 +40,9 @@ const DOMAIN_CODES: readonly DomainErrorCode[] = ['NOT_FOUND', 'CONFLICT', 'VALI
  * @param err - Any thrown value.
  */
 export function errorCode(err: unknown): DomainErrorCode | null {
-  if (typeof err !== 'object' || err === null) return null
+  if (typeof err !== 'object' || err === null) {
+    return null
+  }
   const code = (err as { code?: unknown }).code
   return DOMAIN_CODES.includes(code as DomainErrorCode) ? (code as DomainErrorCode) : null
 }

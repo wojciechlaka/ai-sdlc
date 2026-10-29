@@ -13,16 +13,22 @@ const READ_CHUNK_BYTES = 64 * 1024
 /** Parses one log line of the hook scripts; null for anything that is not a tool event. */
 export function parseToolEvent(line: string): ToolEvent | null {
   const trimmed = line.trim()
-  if (!trimmed) return null
+  if (!trimmed) {
+    return null
+  }
   let raw: unknown
   try {
     raw = JSON.parse(trimmed)
   } catch {
     return null
   }
-  if (!raw || typeof raw !== 'object') return null
+  if (!raw || typeof raw !== 'object') {
+    return null
+  }
   const { kind, tool, target, reason } = raw as Record<string, unknown>
-  if ((kind !== 'blocked' && kind !== 'used') || typeof tool !== 'string') return null
+  if ((kind !== 'blocked' && kind !== 'used') || typeof tool !== 'string') {
+    return null
+  }
   return {
     kind,
     tool,
@@ -63,7 +69,9 @@ export async function openHookLog(
 
   const emit = (line: string) => {
     const event = parseToolEvent(line)
-    if (!event) return
+    if (!event) {
+      return
+    }
     try {
       onEvent(event)
     } catch (err) {
@@ -74,13 +82,17 @@ export async function openHookLog(
   const readNew = async () => {
     for (;;) {
       const { bytesRead } = await handle.read(buffer, 0, buffer.length, offset)
-      if (bytesRead === 0) break
+      if (bytesRead === 0) {
+        break
+      }
       offset += bytesRead
       pending += decoder.write(buffer.subarray(0, bytesRead))
     }
     const lines = pending.split('\n')
     pending = lines.pop() ?? ''
-    for (const line of lines) emit(line)
+    for (const line of lines) {
+      emit(line)
+    }
   }
 
   // Reads are chained so polls never overlap.

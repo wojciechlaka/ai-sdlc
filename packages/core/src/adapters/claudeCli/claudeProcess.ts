@@ -36,7 +36,9 @@ export interface SpawnClaudeOptions {
  */
 export function stopAgent(ticketKey: string): boolean {
   const proc = runningProcesses.get(ticketKey)
-  if (!proc) return false
+  if (!proc) {
+    return false
+  }
   runningProcesses.delete(ticketKey)
   proc.kill('SIGTERM')
   return true
@@ -49,8 +51,12 @@ export function stopAgent(ticketKey: string): boolean {
  * @param stderr - Full stderr of the Claude process, included in CliError on non-zero exit.
  */
 function parseProcessExit(code: number | null, output: string, stderr: string): ExtractedResult {
-  if (code === SIGTERM_EXIT_CODE || code === null) throw new AgentRunTerminatedError()
-  if (code !== 0) throw new CliError(code, stderr)
+  if (code === SIGTERM_EXIT_CODE || code === null) {
+    throw new AgentRunTerminatedError()
+  }
+  if (code !== 0) {
+    throw new CliError(code, stderr)
+  }
   return extractResult(output)
 }
 
@@ -63,7 +69,12 @@ export function spawnClaude(options: SpawnClaudeOptions): Promise<ExtractedResul
 
   return new Promise<ExtractedResult>((resolve, reject) => {
     let settled = false
-    const settle = (fn: () => void) => { if (!settled) { settled = true; fn() } }
+    const settle = (fn: () => void) => {
+      if (!settled) {
+        settled = true
+        fn()
+      }
+    }
 
     const proc = spawn('claude', sandbox.claudeArgs(model), {
       cwd,
@@ -72,7 +83,11 @@ export function spawnClaude(options: SpawnClaudeOptions): Promise<ExtractedResul
     })
 
     runningProcesses.set(ticketKey, proc)
-    const cleanup = () => { if (runningProcesses.get(ticketKey) === proc) runningProcesses.delete(ticketKey) }
+    const cleanup = () => {
+      if (runningProcesses.get(ticketKey) === proc) {
+        runningProcesses.delete(ticketKey)
+      }
+    }
 
     let stderrBuf = ''
 
@@ -95,17 +110,24 @@ export function spawnClaude(options: SpawnClaudeOptions): Promise<ExtractedResul
       stdoutBuf += chunk
       const lines = stdoutBuf.split('\n')
       stdoutBuf = lines.pop() ?? ''
-      for (const line of lines) lastProgressMsg = handleLine(line, lastProgressMsg, onProgress)
+      for (const line of lines) {
+        lastProgressMsg = handleLine(line, lastProgressMsg, onProgress)
+      }
     })
 
-    proc.stderr.on('data', (d: Buffer) => { stderrBuf += d.toString() })
+    proc.stderr.on('data', (d: Buffer) => {
+      stderrBuf += d.toString()
+    })
 
     proc.on('close', (code) => {
       clearTimeout(timer)
       cleanup()
       settle(() => {
-        try { resolve(parseProcessExit(code, output, stderrBuf)) }
-        catch (e) { reject(e as Error) }
+        try {
+          resolve(parseProcessExit(code, output, stderrBuf))
+        } catch (e) {
+          reject(e as Error)
+        }
       })
     })
   })

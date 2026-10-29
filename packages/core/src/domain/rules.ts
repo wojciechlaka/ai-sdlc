@@ -38,8 +38,12 @@ export function isStageCompleted(ticket: Pick<Ticket, 'stage'>, stage: ArtifactS
 
 /** Stage implied by the artifacts found on the base branch (showcase). */
 export function stageFromRepo(files: { hasIntent: boolean; hasSpec: boolean }): Stage {
-  if (files.hasSpec) return 'done'
-  if (files.hasIntent) return 'design'
+  if (files.hasSpec) {
+    return 'done'
+  }
+  if (files.hasIntent) {
+    return 'design'
+  }
   return 'plan'
 }
 
@@ -49,8 +53,12 @@ export function stageFromRepo(files: { hasIntent: boolean; hasSpec: boolean }): 
  * every open PR of the app; other states (e.g. `awaiting_answer`) survive a restart.
  */
 export function reconcile(ticket: Pick<Ticket, 'stage' | 'state'>, repoStage: Stage): { stage: Stage; state: TicketState } {
-  if (repoStage !== ticket.stage) return { stage: repoStage, state: 'ready' }
-  if (ticket.state === 'in_review') return { stage: ticket.stage, state: 'ready' }
+  if (repoStage !== ticket.stage) {
+    return { stage: repoStage, state: 'ready' }
+  }
+  if (ticket.state === 'in_review') {
+    return { stage: ticket.stage, state: 'ready' }
+  }
   return { stage: ticket.stage, state: ticket.state }
 }
 
@@ -66,6 +74,8 @@ export function planAnswerRun(
 ): { questionRun: AgentRun; answeredQuestions: QAPair[] } | null {
   const latest = runs[runs.length - 1]
   const output = latest?.output
-  if (!latest || output?.type !== 'question') return null
+  if (!latest || output?.type !== 'question') {
+    return null
+  }
   return { questionRun: latest, answeredQuestions: [...latest.input.answeredQuestions, { question: output.question, answer }] }
 }

@@ -19,7 +19,9 @@ export function listTickets(deps: UseCaseDeps): TicketDto[] {
 
 /** Content of a merged artifact, read live from the base branch; null without token or on errors. */
 async function readMergedContent(deps: UseCaseDeps, path: string): Promise<string | null> {
-  if (!deps.codeHost) return null
+  if (!deps.codeHost) {
+    return null
+  }
   try {
     return await deps.codeHost.readFile(path)
   } catch (err) {
@@ -46,7 +48,9 @@ async function stageView(deps: UseCaseDeps, ticket: Ticket, artifacts: Artifact[
 /** The agent's question while the ticket waits for an answer. */
 function pendingQuestion(deps: UseCaseDeps, ticket: Ticket): string | null {
   const stage = currentArtifactStage(ticket)
-  if (ticket.state !== 'awaiting_answer' || !stage) return null
+  if (ticket.state !== 'awaiting_answer' || !stage) {
+    return null
+  }
   const output = deps.runs.listForTicket(ticket.key, stage).at(-1)?.output
   return output?.type === 'question' ? output.question : null
 }

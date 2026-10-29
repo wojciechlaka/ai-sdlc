@@ -18,11 +18,15 @@ const NOT_FOUND = 404
 export async function syncReviews(deps: UseCaseDeps, key?: string): Promise<void> {
   const host = deps.codeHost
   const tickets = key ? [requireTicket(deps.tickets, key)] : deps.tickets.list()
-  if (!host) return
+  if (!host) {
+    return
+  }
 
   for (const ticket of tickets) {
     const stage = currentArtifactStage(ticket)
-    if (ticket.state !== 'in_review' || !stage) continue
+    if (ticket.state !== 'in_review' || !stage) {
+      continue
+    }
     const artifact = deps.artifacts.findOpen(ticket.key, stage)
     if (!artifact) {
       record(deps, ticket.key, 'system', 'error', { message: 'Kein offener PR zur Stufe gefunden' })
@@ -38,8 +42,12 @@ async function syncOne(deps: UseCaseDeps, host: CodeHost, ticket: Ticket, stage:
   const fetched = await fetchPullRequest(host, artifact.prNumber)
 
   // A concurrent sync (timer and page) may have handled the ticket while we waited.
-  if (deps.tickets.findByKey(ticket.key)?.state !== 'in_review') return
-  if (deps.artifacts.findOpen(ticket.key, stage)?.id !== artifact.id) return
+  if (deps.tickets.findByKey(ticket.key)?.state !== 'in_review') {
+    return
+  }
+  if (deps.artifacts.findOpen(ticket.key, stage)?.id !== artifact.id) {
+    return
+  }
 
   if ('error' in fetched) {
     const failure = fetched.error

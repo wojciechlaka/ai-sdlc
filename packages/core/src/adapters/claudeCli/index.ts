@@ -75,7 +75,9 @@ async function runClaudeOnce(
   try {
     return { ok: true, output: parseAndValidate(cliResult.text, agent.schema), cliResult } satisfies ClaudeCallResult
   } catch (err) {
-    if (err instanceof SchemaValidationError) return { ok: false, cliResult, error: err } satisfies ClaudeCallResult
+    if (err instanceof SchemaValidationError) {
+      return { ok: false, cliResult, error: err } satisfies ClaudeCallResult
+    }
     throw err
   }
 }
@@ -140,7 +142,9 @@ export async function runAgent(
 ): Promise<AgentRunResult> {
   const stageAgent = STAGE_AGENTS[input.stage]
   // German: failStage shows this message on the ticket page.
-  if (!stageAgent) throw new Error(`Für die Stufe ${input.stage} gibt es noch keinen Agent`)
+  if (!stageAgent) {
+    throw new Error(`Für die Stufe ${input.stage} gibt es noch keinen Agent`)
+  }
   const agent: LoadedAgent = {
     skill: await fs.readFile(path.join(/*turbopackIgnore: true*/ options.skillsDir, stageAgent.skillFile), 'utf-8'),
     schema: stageAgent.schema,
@@ -150,7 +154,9 @@ export async function runAgent(
   const startedAt = Date.now()
 
   const first = await runClaudeOnce(agent, input, callbacks)
-  if (first.ok) return { output: first.output, meta: buildMeta(input.model, startedAt, first.cliResult) }
+  if (first.ok) {
+    return { output: first.output, meta: buildMeta(input.model, startedAt, first.cliResult) }
+  }
 
   reportSchemaError(first.error.rawOutput, first.error.message, callbacks.onProgress)
   const retry = await runClaudeOnce(agent, input, callbacks, {
@@ -158,7 +164,9 @@ export async function runAgent(
     reason: first.error.reason,
     schemaError: first.error.message,
   })
-  if (!retry.ok) throw retry.error
+  if (!retry.ok) {
+    throw retry.error
+  }
 
   return { output: retry.output, meta: buildMeta(input.model, startedAt, aggregateCliResults(first.cliResult, retry.cliResult)) }
 }

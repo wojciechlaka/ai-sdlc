@@ -11,7 +11,9 @@ export function BoardLive() {
   const router = useRouter()
   useSSE(null, {
     onMessage: (event) => {
-      if (event.type === 'state') router.refresh()
+      if (event.type === 'state') {
+        router.refresh()
+      }
     },
     onReconnect: () => router.refresh(),
   })

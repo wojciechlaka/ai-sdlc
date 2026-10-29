@@ -30,7 +30,9 @@ export function createSqliteTicketRepository(db: SqliteDb): TicketRepository {
 
     update(key, patch) {
       const row = db.update(tickets).set({ ...patch, updatedAt: new Date() }).where(eq(tickets.key, key)).returning().get()
-      if (!row) throw new Error(`Ticket ${key} not found`)
+      if (!row) {
+        throw new Error(`Ticket ${key} not found`)
+      }
       return row
     },
 

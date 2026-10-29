@@ -21,7 +21,9 @@ export function QuestionPanel({ ticketKey, question, onAnswered }: Props) {
   const { run, pending: sending, error } = useServerAction()
 
   const handleSubmit = () => {
-    if (!answer.trim()) return
+    if (!answer.trim()) {
+      return
+    }
     run(() => answerQuestionAction(ticketKey, { answer }), () => {
       setAnswer('')
       onAnswered()

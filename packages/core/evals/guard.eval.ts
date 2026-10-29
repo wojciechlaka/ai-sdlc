@@ -70,15 +70,21 @@ function createTempRepo(): string {
 }
 
 function readHookLog(file: string): HookLogEntry[] {
-  if (!fs.existsSync(file)) return []
+  if (!fs.existsSync(file)) {
+    return []
+  }
   return fs.readFileSync(file, 'utf-8').split('\n').filter(Boolean).map((line) => JSON.parse(line) as HookLogEntry)
 }
 
 /** `blocked`/`used` when the log shows the case unambiguously; otherwise a (German) description of the finding. */
 function actualOutcome(c: EvalCase, log: HookLogEntry[]): string {
   const kinds = new Set(log.filter((e) => e.tool === c.tool && c.matches(e.target)).map((e) => e.kind))
-  if (kinds.size === 0) return 'nicht aufgerufen'
-  if (kinds.size > 1) return 'blocked + used'
+  if (kinds.size === 0) {
+    return 'nicht aufgerufen'
+  }
+  if (kinds.size > 1) {
+    return 'blocked + used'
+  }
   return [...kinds][0]!
 }
 
@@ -87,7 +93,9 @@ function parseResult(stdout: string): { ok: boolean; costUsd?: number; text?: st
   for (const line of stdout.split('\n').reverse()) {
     try {
       const msg = JSON.parse(line) as { type?: string; subtype?: string; is_error?: boolean; total_cost_usd?: number; result?: string }
-      if (msg.type === 'result') return { ok: msg.subtype === 'success' && !msg.is_error, costUsd: msg.total_cost_usd, text: msg.result }
+      if (msg.type === 'result') {
+        return { ok: msg.subtype === 'success' && !msg.is_error, costUsd: msg.total_cost_usd, text: msg.result }
+      }
     } catch { /* not a JSON line */ }
   }
   return { ok: false }
@@ -118,18 +126,28 @@ async function main(): Promise<number> {
 
     console.log(`Guard-Eval · Modell ${MODEL}\n`)
     console.log(`${'Fall'.padEnd(28)}${'erwartet'.padEnd(18)}${'tatsächlich'.padEnd(18)}`)
-    for (const row of rows) console.log(`${row.name.padEnd(28)}${row.expected.padEnd(18)}${row.actual.padEnd(18)}${row.pass ? '✓' : '✗'}`)
+    for (const row of rows) {
+      console.log(`${row.name.padEnd(28)}${row.expected.padEnd(18)}${row.actual.padEnd(18)}${row.pass ? '✓' : '✗'}`)
+    }
     const cost = result.costUsd === undefined ? 'unbekannt' : `${result.costUsd.toFixed(4)} USD`
     console.log(`\nKosten: ${cost} · Dauer: ${seconds} s · Hook-Log: ${log.length} Einträge`)
 
     const failed = rows.filter((row) => !row.pass).length
     if (failed > 0) {
       console.log(`\n${failed} Prüfung(en) fehlgeschlagen.`)
-      if (proc.error) console.log(`Prozessfehler: ${proc.error.message}`)
-      if (!result.ok) console.log(`stderr: ${(proc.stderr ?? '').slice(0, 500)}`)
+      if (proc.error) {
+        console.log(`Prozessfehler: ${proc.error.message}`)
+      }
+      if (!result.ok) {
+        console.log(`stderr: ${(proc.stderr ?? '').slice(0, 500)}`)
+      }
       console.log('Hook-Log:')
-      for (const e of log) console.log(`  ${e.kind.padEnd(8)}${e.tool} ${e.target}${e.reason ? ` — ${e.reason}` : ''}`)
-      if (result.text) console.log(`Antwort des Agents:\n${result.text}`)
+      for (const e of log) {
+        console.log(`  ${e.kind.padEnd(8)}${e.tool} ${e.target}${e.reason ? ` — ${e.reason}` : ''}`)
+      }
+      if (result.text) {
+        console.log(`Antwort des Agents:\n${result.text}`)
+      }
       return 1
     }
     console.log('\nAlle Prüfungen bestanden.')

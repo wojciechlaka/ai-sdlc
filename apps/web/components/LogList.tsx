@@ -59,7 +59,9 @@ function EventRow({ event }: { event: AuditLogEntryDto }) {
  * (`<details>`, no client state, so it stays a server component); calls blocked by the guard are highlighted.
  */
 export function LogList({ log }: { log: AuditLogEntryDto[] }) {
-  if (log.length === 0) return <p className="text-xs text-slate-400">Noch keine Einträge.</p>
+  if (log.length === 0) {
+    return <p className="text-xs text-slate-400">Noch keine Einträge.</p>
+  }
   return (
     <ol className="space-y-1">
       {groupLogEntries(log).map((row, index) =>

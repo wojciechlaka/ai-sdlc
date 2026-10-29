@@ -26,8 +26,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const clearProgress = useCallback((ticketKey?: string) => {
-    if (ticketKey === undefined) setProgressLogs({})
-    else setProgressLogs(({ [ticketKey]: _dropped, ...rest }) => rest)
+    if (ticketKey === undefined) {
+      setProgressLogs({})
+    } else {
+      setProgressLogs(({ [ticketKey]: _dropped, ...rest }) => rest)
+    }
   }, [])
 
   const value = useMemo(() => ({ progressLogs, appendProgress, clearProgress }), [progressLogs, appendProgress, clearProgress])
@@ -38,6 +41,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 /** The `AppState` of the surrounding provider. @throws outside `<AppStateProvider>` */
 export function useAppState(): AppState {
   const ctx = useContext(AppStateContext)
-  if (!ctx) throw new Error('useAppState must be used inside <AppStateProvider>')
+  if (!ctx) {
+    throw new Error('useAppState must be used inside <AppStateProvider>')
+  }
   return ctx
 }

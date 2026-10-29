@@ -21,7 +21,9 @@ export function ModelSelect({ value, onChange, disabled = false, size = 'md' }: 
       value={value}
       disabled={disabled}
       onChange={(e) => {
-        if (isModelId(e.target.value)) onChange(e.target.value)
+        if (isModelId(e.target.value)) {
+          onChange(e.target.value)
+        }
       }}
       className={className}
     >

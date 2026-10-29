@@ -55,12 +55,16 @@ export function createSqliteAgentRunRepository(db: SqliteDb): AgentRunRepository
         outputTokens: result.outputTokens,
         finishedAt: new Date(),
       }).where(eq(agentRuns.id, id)).returning().get()
-      if (!row) throw new Error(`AgentRun ${id} not found`)
+      if (!row) {
+        throw new Error(`AgentRun ${id} not found`)
+      }
     },
 
     fail(id, status) {
       const row = db.update(agentRuns).set({ status, finishedAt: new Date() }).where(eq(agentRuns.id, id)).returning().get()
-      if (!row) throw new Error(`AgentRun ${id} not found`)
+      if (!row) {
+        throw new Error(`AgentRun ${id} not found`)
+      }
     },
 
     listForTicket: (ticketKey, stage) =>

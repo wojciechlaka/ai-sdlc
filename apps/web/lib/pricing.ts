@@ -11,9 +11,13 @@ const CACHE_READ_MULTIPLIER = 0.10
 /** Cost of a run: the reported value, otherwise estimated from the model table; 0 if unknown. */
 export function runCostUsd(run: AuditPayloads['run_finished']): number {
   const reported = run.costUsd ?? 0
-  if (reported > 0) return reported
+  if (reported > 0) {
+    return reported
+  }
   const model = modelInfo(run.model)
-  if (!model) return 0
+  if (!model) {
+    return 0
+  }
   const millions = (tokens: number | undefined) => (tokens ?? 0) / TOKENS_PER_MILLION
   return millions(run.inputTokens) * model.inputPerMtok
     + millions(run.cacheCreationTokens) * model.inputPerMtok * CACHE_WRITE_MULTIPLIER

@@ -58,7 +58,9 @@ async function warnBlockedCalls(logFile: string): Promise<void> {
   for (const line of content.split('\n')) {
     try {
       const entry = JSON.parse(line) as Record<string, unknown>
-      if (entry.kind === 'blocked') console.warn(`[codebaseSummary] Blocked: ${entry.tool} ${entry.target} — ${entry.reason}`)
+      if (entry.kind === 'blocked') {
+        console.warn(`[codebaseSummary] Blocked: ${entry.tool} ${entry.target} — ${entry.reason}`)
+      }
     } catch { /* empty or partial line */ }
   }
 }
@@ -119,7 +121,9 @@ export async function ensureRepoSummary(
     }
 
     const existing = inFlight.get(summaryPath)
-    if (existing) return existing
+    if (existing) {
+      return existing
+    }
 
     const job = generateAndCache(summaryPath, repoDir, model, onProgress, options)
     inFlight.set(summaryPath, job)
@@ -139,7 +143,9 @@ export async function ensureRepoSummary(
 function extractStreamJsonResult(raw: string): string {
   for (const line of raw.split('\n')) {
     const trimmed = line.trim()
-    if (!trimmed) continue
+    if (!trimmed) {
+      continue
+    }
     try {
       const obj = JSON.parse(trimmed) as Record<string, unknown>
       if (obj.type === 'result' && obj.subtype === 'success') {
@@ -189,11 +195,18 @@ function spawnSummary(cwd: string, model: string, sandbox: ClaudeProcessSandbox,
 
     let output = ''
     let stderr = ''
-    proc.stdout.on('data', (d: Buffer) => { output += d.toString() })
-    proc.stderr.on('data', (d: Buffer) => { stderr += d.toString() })
+    proc.stdout.on('data', (d: Buffer) => {
+      output += d.toString()
+    })
+    proc.stderr.on('data', (d: Buffer) => {
+      stderr += d.toString()
+    })
     proc.on('close', (code) => {
-      if (code === 0) resolve(extractStreamJsonResult(output))
-      else reject(new Error(`claude summary exited with code ${code}\nstderr: ${stderr.slice(0, STDERR_PREVIEW_CHARS)}`))
+      if (code === 0) {
+        resolve(extractStreamJsonResult(output))
+      } else {
+        reject(new Error(`claude summary exited with code ${code}\nstderr: ${stderr.slice(0, STDERR_PREVIEW_CHARS)}`))
+      }
     })
   })
 }

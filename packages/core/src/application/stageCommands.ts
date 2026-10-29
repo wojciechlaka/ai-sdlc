@@ -13,14 +13,18 @@ import { record } from './auditTrail'
 
 /** The reset empties the database and rewrites the repo; a run started meanwhile would act on stale state. */
 function rejectDuringReset(deps: UseCaseDeps): void {
-  if (deps.resetState.resetting) throw new ConflictError(RESET_RUNNING)
+  if (deps.resetState.resetting) {
+    throw new ConflictError(RESET_RUNNING)
+  }
 }
 
 /** Validates, sets `running` and hands the stage to the background. Returns immediately. */
 export function startStage(deps: UseCaseDeps, key: string, raw: unknown): void {
   rejectDuringReset(deps)
   const ticket = requireTicket(deps.tickets, key)
-  if (!deps.codeHost) throw new ConflictError(TOKEN_MISSING)
+  if (!deps.codeHost) {
+    throw new ConflictError(TOKEN_MISSING)
+  }
   const stage = currentArtifactStage(ticket)
   if (!stage || !canStartStage(ticket)) {
     throw new ConflictError(`Stufe kann im Zustand ${ticket.stage}/${ticket.state} nicht gestartet werden`)
@@ -40,11 +44,17 @@ export function answerQuestion(deps: UseCaseDeps, key: string, raw: unknown): vo
   rejectDuringReset(deps)
   const ticket = requireTicket(deps.tickets, key)
   const stage = currentArtifactStage(ticket)
-  if (!stage || !canAnswer(ticket)) throw new ConflictError('Ticket wartet nicht auf eine Antwort')
-  if (!deps.codeHost) throw new ConflictError(TOKEN_MISSING)
+  if (!stage || !canAnswer(ticket)) {
+    throw new ConflictError('Ticket wartet nicht auf eine Antwort')
+  }
+  if (!deps.codeHost) {
+    throw new ConflictError(TOKEN_MISSING)
+  }
   const { answer } = parseInput(AnswerInputSchema, raw)
   const plan = planAnswerRun(deps.runs.listForTicket(ticket.key, stage), answer)
-  if (!plan) throw new ConflictError('Keine offene Rückfrage gefunden')
+  if (!plan) {
+    throw new ConflictError('Keine offene Rückfrage gefunden')
+  }
 
   record(deps, ticket.key, 'human', 'answer_given', { answer })
   createReporter(deps, ticket.key).setState('running')
@@ -61,10 +71,14 @@ export function stopRun(deps: UseCaseDeps, key: string): void {
   try {
     ticket = requireTicket(deps.tickets, key)
   } catch (err) {
-    if (errorCode(err) === 'NOT_FOUND') return
+    if (errorCode(err) === 'NOT_FOUND') {
+      return
+    }
     throw err
   }
-  if (!canStop(ticket)) return
+  if (!canStop(ticket)) {
+    return
+  }
   deps.agent.stop(ticket.key)
   createReporter(deps, ticket.key).setState('ready')
 }

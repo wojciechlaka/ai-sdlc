@@ -24,7 +24,9 @@ interface Props {
  * No `'use client'`: it takes function props, so it is rendered only inside TicketActions.
  */
 export function StartStagePanel({ stage, failed, tokenConfigured, model, onModelChange, pending, onStart }: Props) {
-  if (stage === 'done') return <p className="text-sm text-emerald-700">Alle Stufen abgeschlossen.</p>
+  if (stage === 'done') {
+    return <p className="text-sm text-emerald-700">Alle Stufen abgeschlossen.</p>
+  }
 
   if (stage === 'design') {
     return (

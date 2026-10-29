@@ -11,7 +11,9 @@ export async function runAction<T>(fn: () => T | Promise<T>): Promise<ActionResu
   try {
     return { ok: true, data: await fn() }
   } catch (err) {
-    if (errorCode(err)) return { ok: false, error: (err as Error).message }
+    if (errorCode(err)) {
+      return { ok: false, error: (err as Error).message }
+    }
     throw err
   }
 }

@@ -11,7 +11,9 @@ async function loadTicket(key: string): Promise<TicketDetailDto> {
     await engine.syncReviews(key)
     return await engine.getTicket(key)
   } catch (err) {
-    if (errorCode(err) === 'NOT_FOUND') notFound()
+    if (errorCode(err) === 'NOT_FOUND') {
+      notFound()
+    }
     throw err
   }
 }

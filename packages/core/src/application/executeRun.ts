@@ -77,7 +77,9 @@ function agentInput(ticket: Ticket, request: ExecuteRunRequest): AgentRunnerInpu
  */
 function toolEventRecorder({ deps, ticket, reporter, isCurrent }: Attempt): (event: ToolEvent) => void {
   return ({ kind, tool, target, reason }) => {
-    if (!isCurrent()) return
+    if (!isCurrent()) {
+      return
+    }
     if (kind === 'blocked') {
       record(deps, ticket.key, 'system', 'guard_blocked', { tool, target, reason })
       reporter.logAndProgress(`Blockiert: ${tool} ${target}`)
@@ -112,7 +114,9 @@ function runMetaPayload(meta: AgentRunMeta): RunUsagePayload {
  */
 function discardStaleResult({ deps, ticket, reporter, request }: Attempt, meta: AgentRunMeta): void {
   reporter.log('Agent result discarded: the attempt is no longer current')
-  if (deps.runs.findById(request.runId)?.status !== 'running') return
+  if (deps.runs.findById(request.runId)?.status !== 'running') {
+    return
+  }
   deps.runs.fail(request.runId, 'failed')
   record(deps, ticket.key, 'system', 'run_finished', {
     runId: request.runId, status: 'failed', reason: 'verworfen', ...runMetaPayload(meta),

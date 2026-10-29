@@ -38,6 +38,8 @@ export function parseAppBranch(
   knownKeys: ReadonlySet<string>,
 ): { key: string; stage: ArtifactStage } | null {
   const match = APP_BRANCH_RE.exec(branch)
-  if (!match || !knownKeys.has(match[1]!)) return null
+  if (!match || !knownKeys.has(match[1]!)) {
+    return null
+  }
   return { key: match[1]!, stage: match[2] === 'intent' ? 'plan' : 'design' }
 }

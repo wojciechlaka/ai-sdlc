@@ -12,6 +12,8 @@ export function isTicketKey(value: string): boolean {
 export function compareTicketKeys(a: string, b: string): number {
   const ma = KEY_RE.exec(a)
   const mb = KEY_RE.exec(b)
-  if (!ma || !mb) return a.localeCompare(b)
+  if (!ma || !mb) {
+    return a.localeCompare(b)
+  }
   return ma[1]!.localeCompare(mb[1]!) || Number(ma[2]) - Number(mb[2])
 }

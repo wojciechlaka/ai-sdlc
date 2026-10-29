@@ -36,7 +36,9 @@ export function isCurrentRun(deps: UseCaseDeps, ticketKey: string, runId: string
 
 /** Ends a run as failed/timeout if it is still `running`; tolerant of runs removed by a reset. */
 export function finishRun(deps: UseCaseDeps, ticketKey: string, runId: string, status: 'failed' | 'timeout'): void {
-  if (deps.runs.findById(runId)?.status !== 'running') return
+  if (deps.runs.findById(runId)?.status !== 'running') {
+    return
+  }
   deps.runs.fail(runId, status)
   record(deps, ticketKey, 'system', 'run_finished', { runId, status })
 }

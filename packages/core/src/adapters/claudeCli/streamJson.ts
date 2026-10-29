@@ -13,14 +13,22 @@ const ANALYSIS_PROGRESS = 'Codebase wird analysiert…'
  */
 export function handleLine(line: string, lastProgressMsg: string, onProgress: (msg: string) => void): string {
   const trimmed = line.trim()
-  if (!trimmed) return lastProgressMsg
+  if (!trimmed) {
+    return lastProgressMsg
+  }
   try {
     const ev = JSON.parse(trimmed) as Record<string, unknown>
-    if (ev.type !== 'assistant') return lastProgressMsg
+    if (ev.type !== 'assistant') {
+      return lastProgressMsg
+    }
     const content = (ev.message as ClaudeStreamMessage)?.content ?? []
     for (const block of content) {
-      if (block.type !== 'tool_use') continue
-      if (!CODEBASE_TOOLS.has(block.name as string) || lastProgressMsg === ANALYSIS_PROGRESS) continue
+      if (block.type !== 'tool_use') {
+        continue
+      }
+      if (!CODEBASE_TOOLS.has(block.name as string) || lastProgressMsg === ANALYSIS_PROGRESS) {
+        continue
+      }
       lastProgressMsg = ANALYSIS_PROGRESS
       onProgress(ANALYSIS_PROGRESS)
     }
@@ -51,6 +59,8 @@ export function extractResult(raw: string): ExtractedResult {
 
 /** `total_cost_usd` of newer CLI versions, `cost_usd` of older ones, otherwise 0. */
 function reportedCost(result: Record<string, unknown>): number {
-  if (typeof result.total_cost_usd === 'number') return result.total_cost_usd
+  if (typeof result.total_cost_usd === 'number') {
+    return result.total_cost_usd
+  }
   return typeof result.cost_usd === 'number' ? result.cost_usd : 0
 }

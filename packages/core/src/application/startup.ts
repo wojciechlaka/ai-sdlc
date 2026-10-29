@@ -49,7 +49,9 @@ export async function startup(deps: UseCaseDeps, { resetRepo = false }: StartupO
     // Settles PRs merged or closed since the last start, so no artifact stays open (also before a reset).
     await syncReviews(deps)
     await closeOpenPullRequests(deps, host, warn)
-    if (resetRepo) await resetRepository(deps, host, warn)
+    if (resetRepo) {
+      await resetRepository(deps, host, warn)
+    }
     await deriveStages(deps, host, warn)
   } catch (err) {
     warn(`GitHub-Abgleich fehlgeschlagen, weiter mit DB-Stand: ${describeError(err)}`)
@@ -63,7 +65,9 @@ export async function startup(deps: UseCaseDeps, { resetRepo = false }: StartupO
  * @throws {ConflictError} while another reset runs.
  */
 export async function resetSystem(deps: UseCaseDeps): Promise<StartupReport> {
-  if (deps.resetState.resetting) throw new ConflictError(RESET_RUNNING)
+  if (deps.resetState.resetting) {
+    throw new ConflictError(RESET_RUNNING)
+  }
   deps.resetState.resetting = true
   try {
     let stopped = 0
@@ -73,7 +77,9 @@ export async function resetSystem(deps: UseCaseDeps): Promise<StartupReport> {
         stopped++
       }
     }
-    if (stopped > 0) await sleep(deps.stopSettleMs)
+    if (stopped > 0) {
+      await sleep(deps.stopSettleMs)
+    }
     deps.tickets.clear()
     return await startup(deps, { resetRepo: true })
   } finally {
@@ -84,9 +90,15 @@ export async function resetSystem(deps: UseCaseDeps): Promise<StartupReport> {
 /** Creates the baseline tag and the base branch if they are missing. */
 async function prepareBaseBranch(deps: UseCaseDeps, host: CodeHost, warn: Warn): Promise<void> {
   const { createdTag, createdBranch, baselineHasWork } = await host.prepareBaseBranch()
-  if (createdTag) console.log('[startup] Baseline tag created on the default branch')
-  if (createdBranch) console.log(`[startup] Branch ${deps.baseBranch} created at the baseline tag`)
-  if (baselineHasWork) warn(`Ausgangsstand ${deps.baselineTag} enthält bereits ${WORK_DIR} — diese Tickets starten nicht in Stufe 1`)
+  if (createdTag) {
+    console.log('[startup] Baseline tag created on the default branch')
+  }
+  if (createdBranch) {
+    console.log(`[startup] Branch ${deps.baseBranch} created at the baseline tag`)
+  }
+  if (baselineHasWork) {
+    warn(`Ausgangsstand ${deps.baselineTag} enthält bereits ${WORK_DIR} — diese Tickets starten nicht in Stufe 1`)
+  }
 }
 
 /**
@@ -119,7 +131,9 @@ function endInterruptedRuns(deps: UseCaseDeps): void {
     record(deps, run.ticketKey, 'system', 'run_finished', { runId: run.id, status: 'failed', reason: 'Neustart' })
   }
   for (const ticket of deps.tickets.list()) {
-    if (ticket.state === 'running') deps.tickets.update(ticket.key, { state: 'ready' })
+    if (ticket.state === 'running') {
+      deps.tickets.update(ticket.key, { state: 'ready' })
+    }
   }
 }
 
@@ -139,12 +153,16 @@ async function closeOpenPullRequests(deps: UseCaseDeps, host: CodeHost, warn: Wa
   const keys = new Set(deps.tickets.list().map((t) => t.key))
   for (const pr of await host.listOpenPullRequests()) {
     const owner = parseAppBranch(pr.headBranch, keys)
-    if (!owner) continue
+    if (!owner) {
+      continue
+    }
     try {
       await host.closePullRequest(pr.number)
       await host.deleteBranch(pr.headBranch)
       const artifact = deps.artifacts.findOpen(owner.key, owner.stage)
-      if (artifact) deps.artifacts.markClosed(artifact.id)
+      if (artifact) {
+        deps.artifacts.markClosed(artifact.id)
+      }
       record(deps, owner.key, 'system', 'cleanup', { prNumber: pr.number, branch: pr.headBranch })
     } catch (err) {
       warn(`PR #${pr.number} (${pr.headBranch}) nicht aufgeräumt: ${describeError(err)}`)
@@ -162,9 +180,13 @@ async function deriveStages(deps: UseCaseDeps, host: CodeHost, warn: Warn): Prom
       ])
       // A run may have started while we waited for GitHub.
       const current = deps.tickets.findByKey(key)
-      if (!current || current.state === 'running') continue
+      if (!current || current.state === 'running') {
+        continue
+      }
       const next = reconcile(current, stageFromRepo({ hasIntent: intent !== null, hasSpec: spec !== null }))
-      if (next.stage === current.stage && next.state === current.state) continue
+      if (next.stage === current.stage && next.state === current.state) {
+        continue
+      }
       if (next.stage !== current.stage) {
         record(deps, key, 'system', 'stage_changed', { from: current.stage, to: next.stage })
       }

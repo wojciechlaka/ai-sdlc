@@ -60,7 +60,9 @@ export function sandboxEnv(baseEnv: NodeJS.ProcessEnv, logFile: string): NodeJS.
   // Built from scratch on purpose; the cast only drops type augmentations (e.g. Next.js requires NODE_ENV).
   const env = {} as NodeJS.ProcessEnv
   for (const [key, value] of Object.entries(baseEnv)) {
-    if (value !== undefined && (ENV_ALLOWLIST.has(key) || key.startsWith(ENV_ALLOWED_PREFIX))) env[key] = value
+    if (value !== undefined && (ENV_ALLOWLIST.has(key) || key.startsWith(ENV_ALLOWED_PREFIX))) {
+      env[key] = value
+    }
   }
   env[HOOK_LOG_ENV] = logFile
   env.GIT_CONFIG_NOSYSTEM = '1'

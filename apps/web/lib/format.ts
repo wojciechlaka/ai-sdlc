@@ -28,22 +28,32 @@ export function formatDate(at: Date): string {
 export function formatElapsed(totalSeconds: number): string {
   const minutes = Math.floor(totalSeconds / SECONDS_PER_MINUTE)
   const seconds = totalSeconds % SECONDS_PER_MINUTE
-  if (minutes === 0) return `${seconds}s`
+  if (minutes === 0) {
+    return `${seconds}s`
+  }
   return `${minutes}m ${seconds.toString().padStart(2, '0')}s`
 }
 
 /** Token count in thousands from 1000 on: 999 → "999", 1500 → "1.5K", 2000 → "2K". */
 export function formatTokens(n: number): string {
-  if (n < TOKENS_PER_K) return String(n)
+  if (n < TOKENS_PER_K) {
+    return String(n)
+  }
   const k = n / TOKENS_PER_K
   return `${Number.isInteger(k) ? k.toFixed(0) : k.toFixed(1)}K`
 }
 
 /** Dollar amount with more decimals for tiny costs; `—` for zero (no usage known). */
 export function formatCost(usd: number): string {
-  if (usd === 0) return '—'
+  if (usd === 0) {
+    return '—'
+  }
   // Enough decimals that a tiny cost still shows its first significant digits; cents otherwise.
-  if (usd < MICRO_COST_USD) return `$${usd.toFixed(6)}`
-  if (usd < SMALL_COST_USD) return `$${usd.toFixed(4)}`
+  if (usd < MICRO_COST_USD) {
+    return `$${usd.toFixed(6)}`
+  }
+  if (usd < SMALL_COST_USD) {
+    return `$${usd.toFixed(4)}`
+  }
   return `$${usd.toFixed(2)}`
 }

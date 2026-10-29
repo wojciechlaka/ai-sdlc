@@ -26,7 +26,9 @@ export function ResetButton({ baseBranch, baselineTag }: { baseBranch: string; b
   const [warnings, setWarnings] = useState<string[]>([])
 
   const handleReset = () => {
-    if (!window.confirm(`${effect}?`)) return
+    if (!window.confirm(`${effect}?`)) {
+      return
+    }
     setWarnings([])
     run(resetSystemAction, (data) => {
       setWarnings(data.warnings)

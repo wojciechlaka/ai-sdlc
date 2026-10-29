@@ -11,9 +11,13 @@ export const HOOK_LOG_ENV = 'REFINEMENT_HOOK_LOG'
 export async function readHookInput() {
   /** @type {Buffer[]} */
   const chunks = []
-  for await (const chunk of process.stdin) chunks.push(/** @type {Buffer} */ (chunk))
+  for await (const chunk of process.stdin) {
+    chunks.push(/** @type {Buffer} */ (chunk))
+  }
   const parsed = JSON.parse(Buffer.concat(chunks).toString('utf-8'))
-  if (!parsed || typeof parsed !== 'object') throw new Error('Hook-Eingabe ist kein JSON-Objekt')
+  if (!parsed || typeof parsed !== 'object') {
+    throw new Error('Hook-Eingabe ist kein JSON-Objekt')
+  }
   return parsed
 }
 
@@ -24,6 +28,8 @@ export async function readHookInput() {
  */
 export function appendHookLog(entry) {
   const file = process.env[HOOK_LOG_ENV]
-  if (!file) return
+  if (!file) {
+    return
+  }
   fs.appendFileSync(file, `${JSON.stringify({ ...entry, at: new Date().toISOString() })}\n`)
 }

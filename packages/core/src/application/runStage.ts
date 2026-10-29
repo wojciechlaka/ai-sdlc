@@ -22,15 +22,23 @@ export async function runStage(deps: UseCaseDeps, ticket: Ticket, request: RunRe
   } catch (err) {
     const current = isCurrentRun(deps, ticket.key, runId)
     finishRun(deps, ticket.key, runId, 'failed')
-    if (current) failStage(deps, reporter, ticket.key, `Repository konnte nicht geladen werden. (${describeError(err)})`)
+    if (current) {
+      failStage(deps, reporter, ticket.key, `Repository konnte nicht geladen werden. (${describeError(err)})`)
+    }
     return
   }
 
-  if (!stillCurrentOrFinish(deps, ticket.key, runId)) return
+  if (!stillCurrentOrFinish(deps, ticket.key, runId)) {
+    return
+  }
 
   const codebaseSummary = await deps.repos.ensureSummary(repoDir, request.model, reporter.logAndProgress)
-  if (!codebaseSummary) reporter.progress('Codebase-Analyse nicht verfügbar — Agent startet ohne Übersicht.')
-  if (!stillCurrentOrFinish(deps, ticket.key, runId)) return
+  if (!codebaseSummary) {
+    reporter.progress('Codebase-Analyse nicht verfügbar — Agent startet ohne Übersicht.')
+  }
+  if (!stillCurrentOrFinish(deps, ticket.key, runId)) {
+    return
+  }
 
   reporter.progress('Agent wird gestartet…')
   await executeRun(deps, ticket, { ...request, repoDir, codebaseSummary })
@@ -41,7 +49,9 @@ export async function runStage(deps: UseCaseDeps, ticket: Ticket, request: RunRe
  * (the stop, restart or reset that made it stale already set the ticket state).
  */
 function stillCurrentOrFinish(deps: UseCaseDeps, ticketKey: string, runId: string): boolean {
-  if (isCurrentRun(deps, ticketKey, runId)) return true
+  if (isCurrentRun(deps, ticketKey, runId)) {
+    return true
+  }
   finishRun(deps, ticketKey, runId, 'failed')
   return false
 }

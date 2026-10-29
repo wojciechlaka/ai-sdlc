@@ -23,13 +23,17 @@ export async function publishArtifact(
   runId: string,
 ): Promise<void> {
   const host = deps.codeHost
-  if (!host) throw new Error(TOKEN_MISSING)
+  if (!host) {
+    throw new Error(TOKEN_MISSING)
+  }
 
   const branch = branchName(ticket.key, stage)
   const path = artifactPath(ticket.key, stage)
   const title = artifactTitle(ticket.key, stage)
 
-  if (!isCurrentRun(deps, ticket.key, runId)) return
+  if (!isCurrentRun(deps, ticket.key, runId)) {
+    return
+  }
   await host.deleteBranch(branch)
   await host.createBranch(branch)
   await host.commitFile({ branch, path, content: artifact.markdown, message: title })
