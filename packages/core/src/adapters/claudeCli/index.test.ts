@@ -24,16 +24,22 @@ const INTENT_OUTPUT = JSON.stringify({
 const resultLine = (result: string, extra: Record<string, unknown> = {}) =>
   JSON.stringify({ type: 'result', subtype: 'success', result, ...extra })
 
+/**
+ * Fake `claude` process that answers once the code under test has sent the whole prompt (`stdin.end()`),
+ * so the answer never races the setup of the stdout/close listeners.
+ */
 function makeFakeProcess(stdout: string, exitCode: number) {
   const proc = new EventEmitter() as any
-  proc.stdin = { write: vi.fn(), end: vi.fn() }
   proc.stdout = new EventEmitter()
   proc.stderr = new EventEmitter()
   proc.kill = vi.fn()
-  setTimeout(() => {
-    proc.stdout.emit('data', Buffer.from(stdout + '\n'))
-    proc.emit('close', exitCode)
-  }, 10)
+  proc.stdin = {
+    write: vi.fn(),
+    end: vi.fn(() => setImmediate(() => {
+      proc.stdout.emit('data', Buffer.from(stdout + '\n'))
+      proc.emit('close', exitCode)
+    })),
+  }
   return proc
 }
 
