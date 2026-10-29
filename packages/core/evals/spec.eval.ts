@@ -63,15 +63,21 @@ function fixtureOverview(files: string[]): string {
 /** Temp git repo: the fixture plus the merged intent under `docs/work/<KEY>/intent.md`; realpath like the guard's. */
 function createTempRepo(evalCase: SpecEvalCase, intentMarkdown: string): string {
   const repo = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'spec-eval-')))
-  fs.cpSync(FIXTURE_DIR, repo, { recursive: true })
-  const intentFile = path.join(repo, artifactPath(evalCase.key, 'plan'))
-  fs.mkdirSync(path.dirname(intentFile), { recursive: true })
-  fs.writeFileSync(intentFile, intentMarkdown)
-  const git = (...args: string[]) => execFileSync('git', ['-c', 'user.name=eval', '-c', 'user.email=eval@example.com', ...args], { cwd: repo })
-  git('init', '-q')
-  git('add', '.')
-  git('commit', '-qm', 'init')
-  return repo
+  try {
+    fs.cpSync(FIXTURE_DIR, repo, { recursive: true })
+    const intentFile = path.join(repo, artifactPath(evalCase.key, 'plan'))
+    fs.mkdirSync(path.dirname(intentFile), { recursive: true })
+    fs.writeFileSync(intentFile, intentMarkdown)
+    const git = (...args: string[]) => execFileSync('git', ['-c', 'user.name=eval', '-c', 'user.email=eval@example.com', ...args], { cwd: repo })
+    git('init', '-q')
+    git('add', '.')
+    git('commit', '-qm', 'init')
+    return repo
+  } catch (err) {
+    // The caller never receives the path of a half-built repo, so it must be removed here.
+    fs.rmSync(repo, { recursive: true, force: true })
+    throw err
+  }
 }
 
 /** Runs the design agent like the app does, with no questions left; returns its spec or null plus the cost. */
