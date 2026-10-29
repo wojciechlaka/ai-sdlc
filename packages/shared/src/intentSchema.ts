@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { QuestionOutputSchema } from './refinementSchema'
+import { QuestionOutputSchema } from './agentOutput'
 
 /** Result of stage 1 (Plan): what the problem is, not how to solve it. */
 export const IntentSchema = z.object({
@@ -22,11 +22,11 @@ export const IntentSchema = z.object({
 })
 export type Intent = z.infer<typeof IntentSchema>
 
+/** The intent as agent output. */
+export const IntentOutputSchema = z.object({ type: z.literal('intent'), result: IntentSchema })
+
 /** Agent output of stage 1: a blocking question or the intent. */
-export const IntentAgentOutputSchema = z.discriminatedUnion('type', [
-  QuestionOutputSchema,
-  z.object({ type: z.literal('intent'), result: IntentSchema }),
-])
+export const IntentAgentOutputSchema = z.discriminatedUnion('type', [QuestionOutputSchema, IntentOutputSchema])
 export type IntentAgentOutput = z.infer<typeof IntentAgentOutputSchema>
 
 /** Everything an agent run may return, across all stages. Part B adds the spec output of stage 2. */
