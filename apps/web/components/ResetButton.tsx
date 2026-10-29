@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { resetSystemAction } from '@/app/actions'
+import { useServerAction } from '@/hooks/useServerAction'
 import { useAppState } from './AppStateProvider'
 
 /** What the reset does; shown as tooltip and, as a question, in the confirmation dialog. */
@@ -20,22 +21,14 @@ export function ResetButton({ baseBranch, baselineTag }: { baseBranch: string; b
   const effect = resetEffect(baseBranch, baselineTag)
   const router = useRouter()
   const { clearProgress } = useAppState()
-  const [pending, startTransition] = useTransition()
-
-  const [error, setError] = useState<string | null>(null)
+  const { run, pending, error } = useServerAction()
   const [warnings, setWarnings] = useState<string[]>([])
 
   const handleReset = () => {
     if (!window.confirm(`${effect}?`)) return
-    startTransition(async () => {
-      setError(null)
-      setWarnings([])
-      const result = await resetSystemAction()
-      if (!result.ok) {
-        setError(result.error)
-        return
-      }
-      setWarnings(result.data.warnings)
+    setWarnings([])
+    run(resetSystemAction, (data) => {
+      setWarnings(data.warnings)
       clearProgress()
       router.push('/')
     })

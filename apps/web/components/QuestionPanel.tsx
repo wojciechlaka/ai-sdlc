@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState } from 'react'
 import { answerQuestionAction } from '@/app/actions'
+import { useServerAction } from '@/hooks/useServerAction'
 import { Button } from './ui/button'
 import { Textarea } from './ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
@@ -14,21 +15,14 @@ interface Props {
   onAnswered: () => void
 }
 
-/** Amber card shown while the agent waits for a human answer. */
+/** Amber card with the agent's question and an answer field; a client component for the form state. */
 export function QuestionPanel({ ticketKey, question, onAnswered }: Props) {
   const [answer, setAnswer] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [sending, startTransition] = useTransition()
+  const { run, pending: sending, error } = useServerAction()
 
   const handleSubmit = () => {
     if (!answer.trim()) return
-    startTransition(async () => {
-      setError(null)
-      const result = await answerQuestionAction(ticketKey, { answer })
-      if (!result.ok) {
-        setError(result.error)
-        return
-      }
+    run(() => answerQuestionAction(ticketKey, { answer }), () => {
       setAnswer('')
       onAnswered()
     })
