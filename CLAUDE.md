@@ -80,8 +80,8 @@ changing Next-specific code.
   `question_asked`, `answer_given`, `pr_opened`, `pr_merged`, `pr_closed`, `stage_changed`, `cleanup`, `error`,
   `guard_blocked`, `tool_used`). Contract in `packages/shared/src/auditEvents.ts`: `AuditEventSchema` (discriminated
   union on `type`, one payload schema per type) and `AuditPayloads`. The core writes via `record(deps, ticketKey,
-  actor, type, payload)` (`application/auditTrail.ts`; `AuditLog.append` is typed by the map, so a wrong payload
-  does not compile); `apps/web/lib/logFormat.ts` parses each stored entry with `safeParse` and falls back to a
+  actor, type, payload)` (`application/auditTrail.ts`; `AuditLog.append` is typed by the map via `PayloadOf`, so a wrong
+  payload does not compile, not even with a union type); `apps/web/lib/logFormat.ts` parses each stored entry with `safeParse` and falls back to a
   German type name (`FALLBACK_LABEL`, else `Eintrag <type>`) for rows that do not match (old versions).
 
 ### Transitions (`domain/rules.ts`)

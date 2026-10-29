@@ -1,7 +1,7 @@
 export type { TicketRepository } from './ticketRepository'
 export type { AgentRunRepository, RunCompletion } from './agentRunRepository'
 export type { ArtifactRepository } from './artifactRepository'
-export type { AuditLog, AuditActor, AuditEventType, AuditLogEntry, AuditPayloads, NewAuditEvent } from './auditLog'
+export type { AuditLog, AuditActor, AuditEventType, AuditLogEntry, AuditPayloads, NewAuditEvent, PayloadOf } from './auditLog'
 export type { TicketSource } from './ticketSource'
 export type { BaseBranchPreparation, CodeHost, PullRequest } from './codeHost'
 export { CodeHostError } from './codeHost'
