@@ -35,19 +35,14 @@ export async function syncReviews(deps: UseCaseDeps, key?: string): Promise<void
 
 async function syncOne(deps: UseCaseDeps, host: CodeHost, ticket: Ticket, stage: ArtifactStage, artifact: Artifact): Promise<void> {
   const reporter = createReporter(deps, ticket.key)
-  let pr: PullRequest | null = null
-  let failure: unknown = null
-  try {
-    pr = await host.getPullRequest(artifact.prNumber)
-  } catch (err) {
-    failure = err
-  }
+  const fetched = await fetchPullRequest(host, artifact.prNumber)
 
   // A concurrent sync (timer and page) may have handled the ticket while we waited.
   if (deps.tickets.findByKey(ticket.key)?.state !== 'in_review') return
   if (deps.artifacts.findOpen(ticket.key, stage)?.id !== artifact.id) return
 
-  if (!pr) {
+  if ('error' in fetched) {
+    const failure = fetched.error
     if (failure instanceof CodeHostError && failure.status === NOT_FOUND) {
       deps.artifacts.markClosed(artifact.id)
       record(deps, ticket.key, 'system', 'error', { message: `PR #${artifact.prNumber} gibt es nicht mehr` })
@@ -58,6 +53,7 @@ async function syncOne(deps: UseCaseDeps, host: CodeHost, ticket: Ticket, stage:
     return
   }
 
+  const { pr } = fetched
   if (pr.state === 'merged') {
     deps.artifacts.markMerged(artifact.id, pr.mergedAt ?? new Date())
     record(deps, ticket.key, 'human', 'pr_merged', { prNumber: pr.number })
@@ -73,5 +69,14 @@ async function syncOne(deps: UseCaseDeps, host: CodeHost, ticket: Ticket, stage:
     } catch (err) {
       console.warn(`[syncReviews] ${ticket.key}: branch ${artifact.branch} not deleted: ${describeError(err)}`)
     }
+  }
+}
+
+/** The PR, or the error the code host threw; the caller decides after re-checking the ticket. */
+async function fetchPullRequest(host: CodeHost, prNumber: number): Promise<{ pr: PullRequest } | { error: unknown }> {
+  try {
+    return { pr: await host.getPullRequest(prNumber) }
+  } catch (error) {
+    return { error }
   }
 }

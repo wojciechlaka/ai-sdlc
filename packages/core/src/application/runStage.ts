@@ -26,18 +26,22 @@ export async function runStage(deps: UseCaseDeps, ticket: Ticket, request: RunRe
     return
   }
 
-  if (!isCurrentRun(deps, ticket.key, runId)) {
-    finishRun(deps, ticket.key, runId, 'failed')
-    return
-  }
+  if (!stillCurrentOrFinish(deps, ticket.key, runId)) return
 
   const codebaseSummary = await deps.repos.ensureSummary(repoDir, request.model, reporter.logAndProgress)
   if (!codebaseSummary) reporter.progress('Codebase-Analyse nicht verfügbar — Agent startet ohne Übersicht.')
-  if (!isCurrentRun(deps, ticket.key, runId)) {
-    finishRun(deps, ticket.key, runId, 'failed')
-    return
-  }
+  if (!stillCurrentOrFinish(deps, ticket.key, runId)) return
 
   reporter.progress('Agent wird gestartet…')
   await executeRun(deps, ticket, { ...request, repoDir, codebaseSummary })
+}
+
+/**
+ * Checkpoint between two background steps: true while the attempt is current; otherwise ends its run as failed
+ * (the stop, restart or reset that made it stale already set the ticket state).
+ */
+function stillCurrentOrFinish(deps: UseCaseDeps, ticketKey: string, runId: string): boolean {
+  if (isCurrentRun(deps, ticketKey, runId)) return true
+  finishRun(deps, ticketKey, runId, 'failed')
+  return false
 }
