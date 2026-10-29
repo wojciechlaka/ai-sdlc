@@ -95,6 +95,16 @@ describe('runAgent (stage plan)', () => {
     expect(mockSpawn).toHaveBeenCalledTimes(2)
   })
 
+  it('tells the retry prompt that the output was no JSON at all', async () => {
+    mockSpawn
+      .mockImplementationOnce(() => makeFakeProcess(resultLine('Ich habe das Ticket gelesen.'), 0))
+      .mockImplementationOnce(() => makeFakeProcess(resultLine(INTENT_OUTPUT), 0))
+    const { runAgent } = await import('./index')
+    await runAgent(INPUT, callbacks(), OPTIONS)
+    const retry = mockSpawn.mock.results[1]?.value as { stdin: { write: { mock: { calls: string[][] } } } }
+    expect(retry.stdin.write.mock.calls[0]?.[0]).toContain('kein gültiges JSON')
+  })
+
   it('throws CliError on a non-zero exit code', async () => {
     mockSpawn.mockReturnValue(makeFakeProcess('', 1))
     const { runAgent } = await import('./index')

@@ -10,7 +10,11 @@ import type { RepoProvider } from '../../ports'
 const CACHE_ROOT = process.env.REPO_CACHE_DIR ?? path.join(os.tmpdir(), 'repo-cache')
 
 const HASH_PREFIX_LENGTH = 12
+// Same values as in adapters/claudeCli (errors.ts, hookLog.ts); adapters must not import each other
+// (architecture test), so each keeps its own copy.
 const STDERR_PREVIEW_CHARS = 200
+const HOOK_LOG_DIR_PREFIX = 'refinement-hooks-'
+const HOOK_LOG_FILE_NAME = 'tools.jsonl'
 
 /** Sandbox of the `claude` processes (built in compose.ts by `adapters/agentSandbox`, spec §13). */
 export interface SummarySandbox {
@@ -244,8 +248,8 @@ function extractStreamJsonResult(raw: string): string {
  * @throws If the Claude process exits with a non-zero code or no success result is found.
  */
 async function runSummaryJob(cwd: string, model: string, options: RepoCacheOptions): Promise<string> {
-  const logDir = await fsPromises.mkdtemp(path.join(/*turbopackIgnore: true*/ os.tmpdir(), 'refinement-hooks-'))
-  const logFile = path.join(/*turbopackIgnore: true*/ logDir, 'tools.jsonl')
+  const logDir = await fsPromises.mkdtemp(path.join(/*turbopackIgnore: true*/ os.tmpdir(), HOOK_LOG_DIR_PREFIX))
+  const logFile = path.join(/*turbopackIgnore: true*/ logDir, HOOK_LOG_FILE_NAME)
   try {
     return await spawnSummary(cwd, model, options.sandbox, logFile)
   } finally {

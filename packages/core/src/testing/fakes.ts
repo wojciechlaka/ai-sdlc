@@ -2,6 +2,7 @@ import type { Intent, IntentAgentOutput, TicketEvent } from '@refinement/shared'
 import type { AgentRun, Artifact, SourceTicket, Stage, Ticket, TicketState } from '../domain/types'
 import { compareTicketKeys } from '../domain/ticketKey'
 import { errorCode } from '../domain/errors'
+import { WORK_DIR } from '../domain/artifacts'
 import {
   AgentRunTerminatedError,
   CodeHostError,
@@ -333,7 +334,7 @@ export class FakeCodeHost implements CodeHost {
     this.enter('prepareBaseBranch')
     const createdTag = this.baselineFiles === null
     this.baselineFiles ??= new Map(this.defaultBranchFiles)
-    const baselineHasWork = createdTag && [...this.baselineFiles.keys()].some((path) => path.startsWith('docs/work/'))
+    const baselineHasWork = createdTag && [...this.baselineFiles.keys()].some((path) => path.startsWith(`${WORK_DIR}/`))
     const createdBranch = !this.baseBranchExists
     if (createdBranch) {
       this.replaceFiles(this.baselineFiles)

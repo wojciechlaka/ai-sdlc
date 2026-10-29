@@ -1,20 +1,18 @@
 import { spawn, ChildProcess } from 'child_process'
 import fs from 'fs/promises'
 import path from 'path'
-import type { ZodIssue, ZodType } from 'zod'
+import type { ZodType } from 'zod'
 import { IntentAgentOutputSchema, type StageOutput } from '@refinement/shared'
 import { SchemaValidationError, CliError } from './errors'
 import { AgentRunTerminatedError, AgentRunTimeoutError } from '../../ports'
 import type { AgentRunner, AgentRunnerInput, AgentRunMeta, AgentRunResult, AgentRunCallbacks } from '../../ports'
 import type { ArtifactStage } from '../../domain/types'
-import { buildPrompt } from './prompt'
+import { buildPrompt, type RetryContext } from './prompt'
 import { openHookLog } from './hookLog'
 import type { ClaudeStreamMessage, ClaudeTokenUsage, ExtractedResult, ClaudeCallResult } from './types'
 
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000
 const SIGTERM_EXIT_CODE = 143
-const MS_PER_SECOND = 1000
-const UTF8 = 'utf-8' as const
 const SCHEMA_ERROR_PREVIEW_CHARS = 120
 const MARKDOWN_CODE_BLOCK_RE = /```(?:json)?\s*([\s\S]*?)```/
 
@@ -32,12 +30,9 @@ const STAGE_AGENTS: Partial<Record<ArtifactStage, StageAgent>> = {
 
 const runningProcesses = new Map<string, ChildProcess>()
 
-const TOOL_PROGRESS_MESSAGE: Record<string, string> = {
-  Read: 'Codebase wird analysiert...',
-  Glob: 'Codebase wird analysiert...',
-  Grep: 'Codebase wird analysiert...',
-  Bash: 'Codebase wird analysiert...',
-}
+/** Tools whose use means the agent is exploring the codebase; each switch to one of them shows ANALYSIS_PROGRESS. */
+const CODEBASE_TOOLS = new Set(['Read', 'Glob', 'Grep', 'Bash'])
+const ANALYSIS_PROGRESS = 'Codebase wird analysiert...'
 
 /**
  * Interprets the Claude process exit code and returns the extracted result, or throws an appropriate error.
@@ -64,8 +59,9 @@ function handleLine(line: string, lastProgressMsg: string, onProgress: (msg: str
     const content = (ev.message as ClaudeStreamMessage)?.content ?? []
     for (const block of content) {
       if (block.type !== 'tool_use') continue
-      const msg = TOOL_PROGRESS_MESSAGE[block.name as string]
-      if (msg && msg !== lastProgressMsg) { lastProgressMsg = msg; onProgress(msg) }
+      if (!CODEBASE_TOOLS.has(block.name as string) || lastProgressMsg === ANALYSIS_PROGRESS) continue
+      lastProgressMsg = ANALYSIS_PROGRESS
+      onProgress(ANALYSIS_PROGRESS)
     }
   } catch { /* incomplete line */ }
   return lastProgressMsg
@@ -202,13 +198,10 @@ function parseAndValidate(raw: string, schema: ZodType<StageOutput>): StageOutpu
   try {
     parsed = JSON.parse(extractJsonString(raw))
   } catch {
-    throw new SchemaValidationError(
-      [{ message: 'Agent output is not valid JSON', path: [], code: 'custom', input: undefined }] as ZodIssue[],
-      raw,
-    )
+    throw new SchemaValidationError('invalid_json', [], raw)
   }
   const result = schema.safeParse(parsed)
-  if (!result.success) throw new SchemaValidationError(result.error.issues, raw)
+  if (!result.success) throw new SchemaValidationError('schema_mismatch', result.error.issues, raw)
   return result.data
 }
 
@@ -220,7 +213,7 @@ async function runClaudeOnce(
   agent: { skill: string; schema: ZodType<StageOutput>; sandbox: ClaudeSandbox },
   input: AgentRunnerInput,
   callbacks: AgentRunCallbacks,
-  retryContext?: { previousOutput: string; schemaError: string },
+  retryContext?: RetryContext,
 ): Promise<ClaudeCallResult> {
   const prompt = buildPrompt({
     skill: agent.skill,
@@ -272,7 +265,7 @@ function reportSchemaError(rawOutput: string | undefined, message: string, onPro
 function buildMeta(model: string, startedAt: number, cliResult: ExtractedResult): AgentRunMeta {
   return {
     model,
-    durationSeconds: Math.round((Date.now() - startedAt) / MS_PER_SECOND),
+    durationSeconds: Math.round((Date.now() - startedAt) / 1000),
     inputTokens: cliResult.inputTokens,
     cacheCreationTokens: cliResult.cacheCreationTokens,
     cacheReadTokens: cliResult.cacheReadTokens,
@@ -307,7 +300,7 @@ export async function runAgent(
   const stageAgent = STAGE_AGENTS[input.stage]
   if (!stageAgent) throw new Error(`Für die Stufe ${input.stage} gibt es noch keinen Agent`)
   const agent = {
-    skill: await fs.readFile(path.join(/*turbopackIgnore: true*/ options.skillsDir, stageAgent.skillFile), UTF8),
+    skill: await fs.readFile(path.join(/*turbopackIgnore: true*/ options.skillsDir, stageAgent.skillFile), 'utf-8'),
     schema: stageAgent.schema,
     sandbox: options.sandbox,
   }
@@ -319,6 +312,7 @@ export async function runAgent(
   reportSchemaError(first.error.rawOutput, first.error.message, callbacks.onProgress)
   const retry = await runClaudeOnce(agent, input, callbacks, {
     previousOutput: first.error.rawOutput ?? first.error.message,
+    reason: first.error.reason,
     schemaError: first.error.message,
   })
   if (!retry.ok) throw retry.error

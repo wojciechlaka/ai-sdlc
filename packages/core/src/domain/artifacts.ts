@@ -4,13 +4,16 @@ import { TICKET_KEY_PATTERN } from './ticketKey'
 /** Stages that produce an artifact in the target repo. */
 export const ARTIFACT_STAGES: readonly ArtifactStage[] = ['plan', 'design']
 
+/** Folder of the target repo that holds the artifacts, one subfolder per ticket. */
+export const WORK_DIR = 'docs/work'
+
 const FILE_NAME: Record<ArtifactStage, string> = { plan: 'intent', design: 'spec' }
 const LABEL: Record<ArtifactStage, string> = { plan: 'Intent', design: 'Spec' }
 const APP_BRANCH_RE = new RegExp(`^(${TICKET_KEY_PATTERN})/(intent|spec)$`)
 
 /** `docs/work/CB-3/intent.md` */
 export function artifactPath(key: string, stage: ArtifactStage): string {
-  return `docs/work/${key}/${FILE_NAME[stage]}.md`
+  return `${WORK_DIR}/${key}/${FILE_NAME[stage]}.md`
 }
 
 /** `CB-3/intent` — one branch per ticket and stage. */

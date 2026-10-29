@@ -1,4 +1,5 @@
 import { Octokit } from '@octokit/rest'
+import { WORK_DIR } from '../../domain/artifacts'
 import { CodeHostError, type CodeHost, type PullRequest } from '../../ports'
 
 export interface GitHubCodeHostOptions {
@@ -15,6 +16,12 @@ export interface GitHubCodeHostOptions {
 }
 
 const REQUEST_TIMEOUT_MS = 15_000
+const HTTP_UNAUTHORIZED = 401
+const HTTP_FORBIDDEN = 403
+const HTTP_NOT_FOUND = 404
+/** GitHub's answer for a rejected request, e.g. a ref that already exists or a protected branch. */
+const HTTP_UNPROCESSABLE = 422
+const HTTP_TOO_MANY_REQUESTS = 429
 /** Annotated tags may point to further tags; deeper chains are treated as broken. */
 const MAX_TAG_DEPTH = 5
 /** Messages of a rejected force-update: classic branch protection or a ruleset. */
@@ -22,6 +29,7 @@ const PROTECTED_RE = /protected|rule violation|force-push/i
 
 const REPO_URL_RE = /^https:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/
 
+/** Owner and repository name of a GitHub URL. @throws {Error} (German, shown at startup) for any other URL. */
 export function parseGitHubRepoUrl(url: string): { owner: string; repo: string } {
   const match = REPO_URL_RE.exec(url.trim())
   if (!match) throw new Error(`TARGET_REPO ist keine GitHub-URL (https://github.com/<owner>/<repo>): ${url}`)
@@ -29,9 +37,9 @@ export function parseGitHubRepoUrl(url: string): { owner: string; repo: string }
 }
 
 const STATUS_HINT: Record<number, string> = {
-  401: 'GitHub lehnt das Token ab (401) — GITHUB_TOKEN prüfen.',
-  403: 'Dem GitHub-Token fehlen Rechte (403) — nötig sind Contents und Pull requests, jeweils "Read and write".',
-  404: 'Bei GitHub nicht gefunden (404) — TARGET_REPO und den Repo-Zugriff des Tokens prüfen.',
+  [HTTP_UNAUTHORIZED]: 'GitHub lehnt das Token ab (401) — GITHUB_TOKEN prüfen.',
+  [HTTP_FORBIDDEN]: 'Dem GitHub-Token fehlen Rechte (403) — nötig sind Contents und Pull requests, jeweils "Read and write".',
+  [HTTP_NOT_FOUND]: 'Bei GitHub nicht gefunden (404) — TARGET_REPO und den Repo-Zugriff des Tokens prüfen.',
 }
 
 function statusOf(err: unknown): number {
@@ -39,12 +47,20 @@ function statusOf(err: unknown): number {
   return typeof status === 'number' ? status : 0
 }
 
+/** German explanation of a failed GitHub request, with what the user can do about it. */
+function hintFor(status: number, detail: string): string {
+  const rateLimited = status === HTTP_TOO_MANY_REQUESTS || (status === HTTP_FORBIDDEN && /rate limit/i.test(detail))
+  if (rateLimited) return 'GitHub-Rate-Limit erreicht — später erneut versuchen.'
+  const known = STATUS_HINT[status]
+  if (known) return known
+  if (status === HTTP_UNPROCESSABLE) return `GitHub lehnt die Anfrage ab (422): ${detail}`
+  return `GitHub-Fehler: ${detail}`
+}
+
 function toCodeHostError(err: unknown, action: string): CodeHostError {
   const status = statusOf(err)
   const detail = err instanceof Error ? err.message : String(err)
-  const rateLimited = status === 429 || (status === 403 && /rate limit/i.test(detail))
-  const hint = rateLimited ? 'GitHub-Rate-Limit erreicht — später erneut versuchen.' : STATUS_HINT[status] ?? (status === 422 ? `GitHub lehnt die Anfrage ab (422): ${detail}` : `GitHub-Fehler: ${detail}`)
-  return new CodeHostError(status, `${action}: ${hint}`)
+  return new CodeHostError(status, `${action}: ${hintFor(status, detail)}`)
 }
 
 interface GitHubPull {
@@ -103,7 +119,7 @@ export function createGitHubCodeHost(options: GitHubCodeHostOptions): CodeHost {
     try {
       object = (await octokit.rest.git.getRef({ owner, repo, ref })).data.object
     } catch (err) {
-      if (statusOf(err) === 404) return null
+      if (statusOf(err) === HTTP_NOT_FOUND) return null
       throw err
     }
     for (let depth = 0; object.type === 'tag'; depth++) {
@@ -122,20 +138,20 @@ export function createGitHubCodeHost(options: GitHubCodeHostOptions): CodeHost {
       await octokit.rest.git.createRef({ owner, repo, ref: `refs/${ref}`, sha })
       return { sha, created: true }
     } catch (err) {
-      if (statusOf(err) !== 422) throw err
+      if (statusOf(err) !== HTTP_UNPROCESSABLE) throw err
       const existing = await commitOf(ref)
       if (existing === null) throw err
       return { sha: existing, created: false }
     }
   }
 
-  /** True if `docs/work` exists on `ref`. */
+  /** True if the work directory (`docs/work`) exists on `ref`. */
   const hasWorkDir = async (ref: string): Promise<boolean> => {
     try {
-      await octokit.rest.repos.getContent({ owner, repo, path: 'docs/work', ref })
+      await octokit.rest.repos.getContent({ owner, repo, path: WORK_DIR, ref })
       return true
     } catch (err) {
-      if (statusOf(err) === 404) return false
+      if (statusOf(err) === HTTP_NOT_FOUND) return false
       throw err
     }
   }
@@ -147,7 +163,7 @@ export function createGitHubCodeHost(options: GitHubCodeHostOptions): CodeHost {
       if (Array.isArray(data) || data.type !== 'file') return null
       return { content: Buffer.from(data.content, 'base64').toString('utf-8'), sha: data.sha }
     } catch (err) {
-      if (statusOf(err) === 404) return null
+      if (statusOf(err) === HTTP_NOT_FOUND) return null
       throw err
     }
   }
@@ -162,7 +178,9 @@ export function createGitHubCodeHost(options: GitHubCodeHostOptions): CodeHost {
         if (tagSha === null) {
           const head = (await octokit.rest.git.getRef({ owner, repo, ref: `heads/${await defaultBranch()}` })).data.object.sha
           // Lightweight tag: a plain ref to the commit.
-          ;({ sha: tagSha, created: createdTag } = await ensureRef(`tags/${baselineTag}`, head))
+          const tag = await ensureRef(`tags/${baselineTag}`, head)
+          tagSha = tag.sha
+          createdTag = tag.created
         }
         let createdBranch = false
         if ((await commitOf(`heads/${baseBranch}`)) === null) {
@@ -175,12 +193,12 @@ export function createGitHubCodeHost(options: GitHubCodeHostOptions): CodeHost {
     async resetBaseBranch() {
       const action = `Branch ${baseBranch} zurücksetzen`
       const sha = await step(action, () => commitOf(`tags/${baselineTag}`))
-      if (sha === null) throw new CodeHostError(404, `${action}: Tag ${baselineTag} fehlt — beim nächsten Start legt die App ihn auf den Default-Branch.`)
+      if (sha === null) throw new CodeHostError(HTTP_NOT_FOUND, `${action}: Tag ${baselineTag} fehlt — beim nächsten Start legt die App ihn auf den Default-Branch.`)
       try {
         await octokit.rest.git.updateRef({ owner, repo, ref: `heads/${baseBranch}`, sha, force: true })
       } catch (err) {
-        if (statusOf(err) === 422 && PROTECTED_RE.test(err instanceof Error ? err.message : '')) {
-          throw new CodeHostError(422, `${action}: Branch-Schutz auf ${baseBranch} verhindert den Reset — Schutzregel in GitHub entfernen.`)
+        if (statusOf(err) === HTTP_UNPROCESSABLE && PROTECTED_RE.test(err instanceof Error ? err.message : '')) {
+          throw new CodeHostError(HTTP_UNPROCESSABLE, `${action}: Branch-Schutz auf ${baseBranch} verhindert den Reset — Schutzregel in GitHub entfernen.`)
         }
         throw toCodeHostError(err, action)
       }
@@ -231,7 +249,7 @@ export function createGitHubCodeHost(options: GitHubCodeHostOptions): CodeHost {
           await octokit.rest.git.deleteRef({ owner, repo, ref: `heads/${name}` })
         } catch (err) {
           // GitHub answers 422 (or 404) for a branch that does not exist.
-          if (statusOf(err) !== 404 && statusOf(err) !== 422) throw err
+          if (statusOf(err) !== HTTP_NOT_FOUND && statusOf(err) !== HTTP_UNPROCESSABLE) throw err
         }
       }),
   }

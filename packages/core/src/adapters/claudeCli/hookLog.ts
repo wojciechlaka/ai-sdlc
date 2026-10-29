@@ -9,6 +9,10 @@ import type { ToolEvent } from '../../ports'
 // follows it while the run lasts and turns the lines into ToolEvents.
 
 const POLL_INTERVAL_MS = 200
+// Same names as the summary run in adapters/git/repoCache.ts; adapters must not import each other
+// (architecture test), so each keeps its own copy.
+const HOOK_LOG_DIR_PREFIX = 'refinement-hooks-'
+const HOOK_LOG_FILE_NAME = 'tools.jsonl'
 const READ_CHUNK_BYTES = 64 * 1024
 
 /** Parses one log line of the hook scripts; null for anything that is not a tool event. */
@@ -44,8 +48,8 @@ export interface HookLog {
  * (polling; partial lines wait for their newline). `close` drains the rest.
  */
 export async function openHookLog(onEvent: (event: ToolEvent) => void, pollMs = POLL_INTERVAL_MS): Promise<HookLog> {
-  const dir = await fs.mkdtemp(path.join(/*turbopackIgnore: true*/ os.tmpdir(), 'refinement-hooks-'))
-  const file = path.join(/*turbopackIgnore: true*/ dir, 'tools.jsonl')
+  const dir = await fs.mkdtemp(path.join(/*turbopackIgnore: true*/ os.tmpdir(), HOOK_LOG_DIR_PREFIX))
+  const file = path.join(/*turbopackIgnore: true*/ dir, HOOK_LOG_FILE_NAME)
   await fs.writeFile(file, '')
   const handle = await fs.open(file, 'r')
   const decoder = new StringDecoder('utf8')

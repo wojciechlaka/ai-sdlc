@@ -1,8 +1,17 @@
 import type { QAPair } from '../../domain/types'
+import type { SchemaFailureReason } from './errors'
 
 const MAX_RETRY_OUTPUT_CHARS = 3000
-const INVALID_JSON_ERROR = 'Agent output is not valid JSON'
 
+/** What the retry prompt needs from the rejected first output. */
+export interface RetryContext {
+  previousOutput: string
+  reason: SchemaFailureReason
+  /** Message of the SchemaValidationError, quoted to the agent. */
+  schemaError: string
+}
+
+/** Everything one prompt is built from; `retryContext` turns it into a correction prompt. */
 export interface PromptInput {
   skill: string
   ticketKey: string
@@ -10,10 +19,7 @@ export interface PromptInput {
   description: string
   codebaseSummary?: string
   answeredQuestions: QAPair[]
-  retryContext?: {
-    previousOutput: string
-    schemaError: string
-  }
+  retryContext?: RetryContext
 }
 
 /**
@@ -42,11 +48,10 @@ function answeredQuestionsSection(input: PromptInput): string | null {
   return `## Bisherige Rückfragen (bereits beantwortet)\n\n${pairs}`
 }
 
-function correctionSection(retry: NonNullable<PromptInput['retryContext']>): string {
+function correctionSection(retry: RetryContext): string {
   return [
     '## Korrektur erforderlich',
-    // The message reaches us wrapped by SchemaValidationError, hence `includes`.
-    retry.schemaError.includes(INVALID_JSON_ERROR)
+    retry.reason === 'invalid_json'
       ? 'Dein letzter Output enthielt kein gültiges JSON. Du hast vermutlich Text statt JSON ausgegeben:'
       : 'Dein letzter Output war strukturell ungültig:',
     '',
