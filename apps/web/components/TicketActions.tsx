@@ -41,7 +41,7 @@ export function TicketActions({ ticket, tokenConfigured }: Props) {
 
   const running = ticket.state === 'running'
   const startable = ticket.state === 'ready' || ticket.state === 'failed'
-  const elapsed = useElapsedSeconds(running, !running)
+  const elapsed = useElapsedSeconds(running)
 
   const run = (action: () => Promise<ActionResult<unknown>>, onSuccess?: () => void) =>
     startTransition(async () => {

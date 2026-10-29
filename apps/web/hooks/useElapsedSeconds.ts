@@ -1,43 +1,22 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 const MS_PER_SECOND = 1000
 
-/**
- * Seconds the agent has been working. Pauses while `isRunning` is false (e.g. waiting for an
- * answer) and resets to 0 when `shouldReset` is true.
- */
-export function useElapsedSeconds(isRunning: boolean, shouldReset: boolean): number {
+/** Whole seconds since `isRunning` last became true; 0 while it is false. */
+export function useElapsedSeconds(isRunning: boolean): number {
   const [elapsed, setElapsed] = useState(0)
-  const startTimeRef = useRef<number | null>(null)
-  const pausedRef = useRef(0)
 
   useEffect(() => {
-    if (shouldReset) {
-      pausedRef.current = 0
-      startTimeRef.current = null
-      return
-    }
-    if (!isRunning) {
-      if (startTimeRef.current !== null) {
-        pausedRef.current += Math.floor((Date.now() - startTimeRef.current) / MS_PER_SECOND)
-        startTimeRef.current = null
-      }
-      return
-    }
-    const offset = pausedRef.current
-    startTimeRef.current = Date.now()
-    const resetId = setTimeout(() => setElapsed(offset), 0)
-    const id = setInterval(() => {
-      if (startTimeRef.current === null) return
-      setElapsed(offset + Math.floor((Date.now() - startTimeRef.current) / MS_PER_SECOND))
-    }, MS_PER_SECOND)
+    if (!isRunning) return
+    const startedAt = Date.now()
+    const id = setInterval(() => setElapsed(Math.floor((Date.now() - startedAt) / MS_PER_SECOND)), MS_PER_SECOND)
     return () => {
-      clearTimeout(resetId)
       clearInterval(id)
+      setElapsed(0)
     }
-  }, [isRunning, shouldReset])
+  }, [isRunning])
 
-  return shouldReset ? 0 : elapsed
+  return elapsed
 }
