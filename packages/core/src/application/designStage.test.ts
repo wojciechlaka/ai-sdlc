@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { CodeHostError } from '../ports'
-import { SAMPLE_CHOICE_OUTPUT, SAMPLE_META, SAMPLE_SPEC_OUTPUT, createTestContext, seedTicket, type TestContext } from '../testing/fakes'
+import {
+  SAMPLE_CHOICE_OUTPUT, SAMPLE_META, SAMPLE_SPEC_OUTPUT, createTestContext, errorCodeOf, seedTicket, type TestContext,
+} from '../testing/fakes'
 import { answerQuestion, startStage, stopRun } from './stageCommands'
 import { syncReviews } from './syncReviews'
 
@@ -116,6 +118,34 @@ describe('design stage — choice', () => {
     })
     expect(ctx.events.published).toContainEqual({ type: 'question', ticketKey: 'CB-2', question: 'Wo wird die Lesezeit berechnet?' })
     expect(ctx.codeHost.pulls).toEqual([])
+  })
+
+  it('continues with the picked option and documents it in the spec', async () => {
+    const ctx = setup()
+    ctx.agent.outcome = { output: SAMPLE_CHOICE_OUTPUT, meta: SAMPLE_META }
+    await start(ctx)
+    ctx.agent.outcome = { output: SAMPLE_SPEC_OUTPUT, meta: SAMPLE_META }
+
+    answerQuestion(ctx.deps, 'CB-2', { choice: 'A', note: 'Migration ist ok' })
+    await ctx.settle()
+
+    const answer = 'Ansatz A: Beim Speichern — Anmerkung: Migration ist ok'
+    expect(ctx.deps.tickets.findByKey('CB-2')?.state).toBe('in_review')
+    expect(ctx.agent.calls[1]).toMatchObject({ answeredQuestions: [{ question: 'Wo wird die Lesezeit berechnet?', answer }], questionsRemaining: 2 })
+    expect(ctx.store.audit.find((e) => e.type === 'answer_given')).toMatchObject({ actor: 'human', payload: { answer, choice: 'A' } })
+    expect(ctx.codeHost.branches.get('CB-2/spec')?.get('docs/work/CB-2/spec.md')).toContain(`**F:** Wo wird die Lesezeit berechnet?\\\n**A:** ${answer}`)
+  })
+
+  it('rejects an option that was not offered and a free-text answer to a choice', async () => {
+    const ctx = setup()
+    ctx.agent.outcome = { output: SAMPLE_CHOICE_OUTPUT, meta: SAMPLE_META }
+    await start(ctx)
+
+    expect(errorCodeOf(() => answerQuestion(ctx.deps, 'CB-2', { choice: 'C' }))).toBe('VALIDATION')
+    expect(errorCodeOf(() => answerQuestion(ctx.deps, 'CB-2', { answer: 'Beim Lesen' }))).toBe('VALIDATION')
+    expect(errorCodeOf(() => answerQuestion(ctx.deps, 'CB-2', { choice: 'X' }))).toBe('VALIDATION')
+    expect(ctx.deps.tickets.findByKey('CB-2')?.state).toBe('awaiting_answer')
+    expect(ctx.store.audit.map((e) => e.type)).not.toContain('answer_given')
   })
 })
 

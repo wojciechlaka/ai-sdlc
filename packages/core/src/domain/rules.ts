@@ -1,4 +1,6 @@
+import type { AnswerInput, ChoiceId, ChoiceOption, ChoiceOutput, QuestionOutput } from '@refinement/shared'
 import type { AgentRun, ArtifactStage, QAPair, Stage, Ticket, TicketState } from './types'
+import { ValidationError } from './errors'
 
 /** Stages that can be started; a stage is added once it has an agent (`STAGE_AGENTS` in adapters/claudeCli). */
 export const STARTABLE_STAGES: readonly ArtifactStage[] = ['plan', 'design']
@@ -94,20 +96,59 @@ export function questionsRemaining(stage: ArtifactStage, runs: AgentRun[]): numb
   return limit === null ? null : Math.max(0, limit - countQuestionsAsked(runs))
 }
 
+/** Answer text of a picked option as the next run and `spec.md` see it: `Ansatz B: <Titel> — Anmerkung: <note>`. */
+export function choiceAnswerText(option: Pick<ChoiceOption, 'id' | 'title'>, note?: string): string {
+  const base = `Ansatz ${option.id}: ${option.title.trim()}`
+  const trimmedNote = note?.trim()
+  return trimmedNote ? `${base} — Anmerkung: ${trimmedNote}` : base
+}
+
+/** What `answerQuestion` continues with: the run that asked, the new Q&A history and the logged answer. */
+export interface AnswerPlan {
+  /** The latest run of the stage; its output is the open question or choice. */
+  questionRun: AgentRun
+  /** Q&A history of the question run plus the new answer. */
+  answeredQuestions: QAPair[]
+  /** Answer text as the next run and the artifact see it. */
+  answer: string
+  /** Picked option when the open question was a choice. */
+  choice?: ChoiceId
+}
+
 /**
- * Finds the open question and builds the Q&A history for the answer run.
+ * Finds the open question or choice and builds the Q&A history for the answer run.
  * Only the latest run counts: a question followed by another run is no longer open.
- * @param runs   - Runs of one ticket and stage in `seq` order.
- * @param answer - The human's answer to the open question.
+ * @param runs  - Runs of one ticket and stage in `seq` order.
+ * @param input - The human's answer (`{ answer }`) or pick (`{ choice, note? }`).
+ * @returns null when nothing is open.
+ * @throws {ValidationError} when the input does not fit the open question (answer for a choice, pick for a question,
+ *   id that was not offered).
  */
-export function planAnswerRun(
-  runs: AgentRun[],
-  answer: string,
-): { questionRun: AgentRun; answeredQuestions: QAPair[] } | null {
+export function planAnswerRun(runs: AgentRun[], input: AnswerInput): AnswerPlan | null {
   const latest = runs[runs.length - 1]
   const output = latest?.output
-  if (!latest || output?.type !== 'question') {
+  if (!latest || (output?.type !== 'question' && output?.type !== 'choice')) {
     return null
   }
-  return { questionRun: latest, answeredQuestions: [...latest.input.answeredQuestions, { question: output.question, answer }] }
+  const { answer, choice } = answerFor(output, input)
+  const answeredQuestions = [...latest.input.answeredQuestions, { question: output.question, answer }]
+  return choice ? { questionRun: latest, answeredQuestions, answer, choice } : { questionRun: latest, answeredQuestions, answer }
+}
+
+/** Answer text (and picked id) for the open question or choice. @throws {ValidationError} */
+function answerFor(output: QuestionOutput | ChoiceOutput, input: AnswerInput): { answer: string; choice?: ChoiceId } {
+  if (output.type === 'question') {
+    if (!('answer' in input)) {
+      throw new ValidationError('Die offene Rückfrage erwartet eine Antwort, keine Auswahl')
+    }
+    return { answer: input.answer }
+  }
+  if (!('choice' in input)) {
+    throw new ValidationError('Bitte einen der angebotenen Ansätze wählen')
+  }
+  const option = output.options.find((candidate) => candidate.id === input.choice)
+  if (!option) {
+    throw new ValidationError(`Ansatz ${input.choice} wurde nicht angeboten`)
+  }
+  return { answer: choiceAnswerText(option, input.note), choice: option.id }
 }

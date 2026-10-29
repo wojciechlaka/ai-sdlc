@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { ArtifactStageSchema, PrStateSchema, StageSchema, TicketStateSchema } from './stages'
 import { AuditActorSchema } from './auditEvents'
+import { ChoiceIdSchema } from './agentOutput'
 
 const notBlank = (message: string) => z.string().refine((value) => value.trim().length > 0, message)
 
@@ -132,8 +133,12 @@ export const StartStageInputSchema = z.object({
 })
 export type StartStageInput = z.infer<typeof StartStageInputSchema>
 
-/** Input of `answerQuestion`: the human's answer to the open question. */
-export const AnswerInputSchema = z.object({
-  answer: notBlank('Antwort ist erforderlich'),
-})
+/**
+ * Input of `answerQuestion`: a free-text answer to an open question, or the id of the picked option of an open
+ * choice with an optional note. Exactly one of both shapes; extra keys are rejected.
+ */
+export const AnswerInputSchema = z.union([
+  z.object({ answer: notBlank('Antwort ist erforderlich') }).strict(),
+  z.object({ choice: ChoiceIdSchema, note: z.string().optional() }).strict(),
+], { error: 'Antwort oder Auswahl ist erforderlich' })
 export type AnswerInput = z.infer<typeof AnswerInputSchema>

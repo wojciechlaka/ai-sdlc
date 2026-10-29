@@ -64,7 +64,18 @@ describe('inputs', () => {
   })
 
   it('AnswerInputSchema rejects blank answers', () => {
-    expect(AnswerInputSchema.safeParse({ answer: '  ' }).success).toBe(false)
+    expect(AnswerInputSchema.safeParse({ answer: '  ' }).error?.issues.map((issue) => issue.message)).toEqual(['Antwort ist erforderlich'])
+  })
+
+  it('AnswerInputSchema accepts a picked option with or without a note', () => {
+    expect(AnswerInputSchema.parse({ choice: 'B' })).toEqual({ choice: 'B' })
+    expect(AnswerInputSchema.parse({ choice: 'A', note: 'ohne Cache' })).toEqual({ choice: 'A', note: 'ohne Cache' })
+  })
+
+  it('AnswerInputSchema rejects unknown ids, both shapes at once and empty input with a German message', () => {
+    for (const input of [{ choice: 'D' }, { answer: 'x', choice: 'A' }, {}]) {
+      expect(AnswerInputSchema.safeParse(input).error?.issues.map((issue) => issue.message)).toEqual(['Antwort oder Auswahl ist erforderlich'])
+    }
   })
 })
 
