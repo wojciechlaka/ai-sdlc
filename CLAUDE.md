@@ -9,7 +9,8 @@ npm install          # install all workspace dependencies
 npm run dev          # Next.js dev server on :3000 (single process)
 npm run build        # tsc --noEmit for packages + next build
 npm test             # all workspace tests (Vitest)
-npm run lint         # hexagon dependency rule + hook scripts (packages/core)
+npm run lint         # hexagon dependency rule + hook scripts + evals (packages/core)
+npm run eval:guard   # guard eval: real `claude` (Haiku) in the app sandbox — costs ~5 cents, needs `claude login`
 
 npm test -w packages/core                       # core only
 npm test -w packages/core -- src/domain/rules   # single file / pattern
@@ -45,7 +46,8 @@ apps/web/          Next.js App Router — driving adapter: Server Components (re
 packages/core/     domain/ (pure rules, naming, Markdown rendering), ports/ (interfaces),
                    application/ (use cases), adapters/ (sqlite, github, markdownTickets, git, claudeCli,
                    agentSandbox, nodeEvents), compose.ts (createRefinementEngine wires real adapters),
-                   hooks/ (guard/audit scripts Claude Code runs per tool call)
+                   hooks/ (guard/audit scripts Claude Code runs per tool call),
+                   evals/ (evals against a real `claude`, not part of `npm test`)
 packages/shared/   Zod contracts: DTOs, inputs, TicketEvent, agent output (IntentSchema; RefinementOutputSchema for stage 2)
 examples/tickets/  simulated Jira tickets — the only ticket source (`# CB-3: Title`, text, `**Priorität:** …`)
 ```
@@ -58,8 +60,8 @@ Architecture tests (ArchUnitTS, run by `npm test`; `globals: true` in the Vitest
 `toPassAsync()`):
 - `packages/core/src/architecture.test.ts` — domain depends only on itself; ports only on domain; application not
   on adapters/testing/compose; each adapter folder only on itself + domain + ports (only `compose.ts` wires
-  adapters); no production file imports `src/testing`; `hooks/` and `src/` do not import each other; no import
-  cycles in production code
+  adapters); no production file imports `src/testing`; `hooks/` and `src/` do not import each other; neither imports
+  `evals/` (evals may import `src`); no import cycles in production code
 - `apps/web/architecture.test.ts` — web reaches core only via `@refinement/core` (no deep or relative paths)
 - `packages/shared/src/architecture.test.ts` — shared depends on no other workspace package
 ArchUnitTS only sees `import` declarations (not `export … from` re-exports or dynamic `import()`).
@@ -123,6 +125,14 @@ summary run (`adapters/git`) only warns about blocked calls in the server log. `
 (only `node:` modules and sibling scripts — ESLint; no imports between `hooks/` and `src/` — ArchUnitTS; type-checked
 via `checkJs`).
 
+**Guard eval (`packages/core/evals/guard.eval.ts`, `npm run eval:guard`):** creates a temp git repo (`README.md`,
+`testdir/keep.txt`), spawns the real `claude --print --output-format stream-json` with `createAgentSandbox(...).args`/
+`.env(logFile)` and the real `hooks/` (model `claude-haiku-4-5-20251001`, override with `EVAL_MODEL`), asks it to try
+each case, then asserts on the hook log (not the model's answer): expected `blocked`/`used` per case, `keep.txt` still
+there, run succeeded. Prints a German table with cost and duration, exit code 1 on failure, always removes the temp
+files. Not run by `npm test` (`*.eval.ts` is no test file name, and `evals/**` is excluded in `vitest.config.ts`); type-checked (`tsconfig`
+includes `evals`) and linted.
+
 **Attempt identity:** every background step checks `isCurrentRun` (`application/beginRun.ts`: ticket still
 `running` and this run is its latest). Stop, restart and reset therefore never let a stale job write state;
 a PR opened by a stale attempt is closed again.
@@ -172,6 +182,9 @@ makes `startStage`/`answerQuestion` throw a `ConflictError`.
 - **Change what the agent may do**: edit `GIT_OPTIONS` / the checks in `packages/core/hooks/guardPolicy.mjs`
   (`decide()`), extend the table tests in `hooks/guardPolicy.test.ts` (keep every known bypass as a deny case); the
   scripts run per tool call, so no restart is needed. Env passed to `claude`: `ENV_ALLOWLIST` in `agentSandbox.ts`
+- **New eval case**: add an entry to `CASES` in `packages/core/evals/guard.eval.ts` (`tool`, `instruction` as written in
+  the prompt, `expected: 'blocked' | 'used'`, `matches(target)` recognising the hook-log target), then run
+  `npm run eval:guard`
 - **New log event**: add the type to `AuditEventType` (`ports/auditLog.ts`) and a line to `apps/web/lib/logFormat.ts`
 - **New UI**: `apps/web/components/`; mutations as Server Actions in `apps/web/app/actions.ts` using `runAction`;
   UI primitives in `apps/web/components/ui/` (shadcn/Base UI)
