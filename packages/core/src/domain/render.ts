@@ -11,9 +11,21 @@ function bulletList(items: string[]): string {
   return items.length ? items.map((item) => `- ${oneLine(item)}`).join('\n') : NONE
 }
 
-/** A multi-line text field: trimmed, `Keine.` when empty. */
+/** Keeps a `#` at the start of a line from becoming a heading: agent text must not add sections. */
+function demoteHeadings(text: string): string {
+  return text.replace(/^(\s*)#/gm, '$1\\#')
+}
+
+/** A multi-line text field: trimmed, headings demoted, `Keine.` when empty. */
 function textBlock(text: string): string {
-  return text.trim() || NONE
+  return demoteHeadings(text.trim()) || NONE
+}
+
+/** Code span that survives backticks in the content (longer fence, padded). */
+function codeSpan(text: string): string {
+  const longest = Math.max(0, ...(text.match(/`+/g) ?? []).map((run) => run.length))
+  const fence = '`'.repeat(longest + 1)
+  return longest > 0 ? `${fence} ${text} ${fence}` : `${fence}${text}${fence}`
 }
 
 function qaList(pairs: QAPair[]): string {
@@ -36,11 +48,11 @@ export function renderIntent(ticket: Pick<Ticket, 'key' | 'sourcePath'>, intent:
     '',
     '## Problem',
     '',
-    intent.problem.trim(),
+    textBlock(intent.problem),
     '',
     '## Gewünschtes Ergebnis',
     '',
-    intent.desiredOutcome.trim(),
+    textBlock(intent.desiredOutcome),
     '',
     '## Erfolgskriterien',
     '',
@@ -81,7 +93,7 @@ function componentsList(components: Spec['components']): string {
 }
 
 function affectedFilesList(files: Spec['affectedFiles']): string {
-  return bulletList(files.map((file) => `\`${oneLine(file.path)}\`${file.isNew ? ' (neu)' : ''} — ${oneLine(file.change)}`))
+  return bulletList(files.map((file) => `${codeSpan(oneLine(file.path))}${file.isNew ? ' (neu)' : ''} — ${oneLine(file.change)}`))
 }
 
 function risksList(risks: Spec['risks']): string {

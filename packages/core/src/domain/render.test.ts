@@ -243,6 +243,21 @@ describe('renderSpec', () => {
   })
 })
 
+describe('renderSpec — robustness against agent text', () => {
+  it('demotes headings in multi-line text so they cannot create sections', () => {
+    const md = renderSpec(TICKET, { ...SPEC, goal: 'Erst.\n## Fake\n  # Noch einer\nEnde' }, [])
+    expect(md).toContain('## Ziel\n\nErst.\n\\## Fake\n  \\# Noch einer\nEnde\n')
+    expect(md.split('\n').filter((line) => line.startsWith('## Fake'))).toEqual([])
+  })
+
+  it('keeps a path with backticks in one code span', () => {
+    const md = renderSpec(TICKET, {
+      ...SPEC, affectedFiles: [{ path: 'src/`a`.ts', change: 'neu', isNew: false }],
+    }, [])
+    expect(md).toContain('- `` src/`a`.ts `` — neu\n')
+  })
+})
+
 describe('renderPullRequestBody — design', () => {
   it('names the spec and uses the goal as summary', () => {
     expect(renderPullRequestBody(TICKET, 'design', SPEC.goal)).toBe(
