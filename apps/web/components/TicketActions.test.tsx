@@ -75,8 +75,8 @@ describe('TicketActions', () => {
   it('shows the progress of a running agent and stops it', async () => {
     vi.mocked(stopRunAction).mockResolvedValue({ ok: true, data: undefined })
     renderActions({ state: 'running' })
-    act(() => sse.handlers?.onMessage({ type: 'progress', ticketKey: 'CB-2', message: 'Codebase wird analysiert...' }))
-    expect(screen.getByText('Codebase wird analysiert...')).toBeInTheDocument()
+    act(() => sse.handlers?.onMessage({ type: 'progress', ticketKey: 'CB-2', message: 'Codebase wird analysiert…' }))
+    expect(screen.getByText('Codebase wird analysiert…')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Plan starten' })).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: 'Stoppen' }))

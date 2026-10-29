@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation'
 import { resetSystemAction } from '@/app/actions'
 import { useAppState } from './AppStateProvider'
 
+/** What the reset does; shown as tooltip and, as a question, in the confirmation dialog. */
+const RESET_EFFECT = 'Datenbank leeren, Tickets neu einlesen, offene PRs der App schließen und den Branch showcase auf showcase-base zurücksetzen'
+
 /**
  * Empties the database and runs the start again with a repo reset (ticket import, PR clean-up,
  * branch `showcase` back to tag `showcase-base`, stage derivation). Warnings of the start stay visible.
@@ -18,7 +21,7 @@ export function ResetButton() {
   const [warnings, setWarnings] = useState<string[]>([])
 
   const handleReset = () => {
-    if (!window.confirm('Datenbank leeren, Tickets neu einlesen, offene PRs der App schließen und den Branch showcase auf showcase-base zurücksetzen?')) return
+    if (!window.confirm(`${RESET_EFFECT}?`)) return
     startTransition(async () => {
       setError(null)
       setWarnings([])
@@ -39,9 +42,9 @@ export function ResetButton() {
         onClick={handleReset}
         disabled={pending}
         className="btn-ghost-xs"
-        title="Datenbank leeren, Tickets aus examples/tickets neu einlesen und Branch showcase zurücksetzen"
+        title={RESET_EFFECT}
       >
-        {pending ? 'Setze zurück...' : 'Reset'}
+        {pending ? 'Setze zurück…' : 'Reset'}
       </button>
       {error && (
         <p role="alert" className="text-xs text-red-600">

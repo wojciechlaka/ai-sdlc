@@ -165,7 +165,7 @@ async function generateAndCache(
   options: RepoCacheOptions,
 ): Promise<string | null> {
   try {
-    onProgress(`Codebase wird analysiert (einmalig für das Modell: ${model})...`)
+    onProgress(`Codebase wird analysiert (einmalig für das Modell: ${model})…`)
     const summary = await runSummaryJob(repoDir, model, options)
     await fsPromises.writeFile(summaryPath, summary)
     onProgress('Codebase-Analyse abgeschlossen.')

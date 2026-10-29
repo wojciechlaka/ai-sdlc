@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import type { StageViewDto } from '@refinement/shared'
-import { StagePanel, stripFrontMatter } from './StagePanel'
+import { StagePanel } from './StagePanel'
 
 const DONE: StageViewDto = {
   stage: 'plan',
@@ -39,12 +39,5 @@ describe('StagePanel', () => {
     expect(screen.getByText('offen')).toBeInTheDocument()
     expect(screen.queryAllByRole('link')).toEqual([])
     expect(screen.queryByText('Inhalt anzeigen')).toBeNull()
-  })
-})
-
-describe('stripFrontMatter', () => {
-  it('removes the YAML header only', () => {
-    expect(stripFrontMatter('---\na: b\n---\n\n# T\n')).toBe('# T\n')
-    expect(stripFrontMatter('# T\n---\n')).toBe('# T\n---\n')
   })
 })

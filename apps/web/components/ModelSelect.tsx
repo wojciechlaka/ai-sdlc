@@ -1,5 +1,3 @@
-'use client'
-
 import { MODELS } from '@/lib/constants'
 
 interface Props {
@@ -11,7 +9,10 @@ interface Props {
   size?: 'sm' | 'md'
 }
 
-/** Dropdown for picking the Claude model used for a stage run. */
+/**
+ * Dropdown for picking the Claude model used for a stage run.
+ * No `'use client'`: it takes a function prop, so it is rendered only inside client components (TicketActions).
+ */
 export function ModelSelect({ value, onChange, disabled = false, size = 'md' }: Props) {
   const className = size === 'sm' ? 'select-sm' : 'select-md'
   return (

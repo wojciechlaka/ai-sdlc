@@ -22,7 +22,7 @@ describe('QuestionPanel', () => {
     const onAnswered = vi.fn()
     render(<QuestionPanel ticketKey="CB-1" question="Welche DB?" onAnswered={onAnswered} />)
 
-    fireEvent.change(screen.getByPlaceholderText('Antwort eingeben...'), { target: { value: 'Postgres' } })
+    fireEvent.change(screen.getByPlaceholderText('Antwort eingeben…'), { target: { value: 'Postgres' } })
     fireEvent.click(screen.getByRole('button', { name: 'Antworten' }))
 
     await waitFor(() => expect(onAnswered).toHaveBeenCalled())
@@ -34,11 +34,11 @@ describe('QuestionPanel', () => {
     const onAnswered = vi.fn()
     render(<QuestionPanel ticketKey="CB-1" question="Welche DB?" onAnswered={onAnswered} />)
 
-    fireEvent.change(screen.getByPlaceholderText('Antwort eingeben...'), { target: { value: 'Postgres' } })
+    fireEvent.change(screen.getByPlaceholderText('Antwort eingeben…'), { target: { value: 'Postgres' } })
     fireEvent.click(screen.getByRole('button', { name: 'Antworten' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Answer already in progress')
     expect(onAnswered).not.toHaveBeenCalled()
-    expect(screen.getByPlaceholderText('Antwort eingeben...')).toHaveValue('Postgres')
+    expect(screen.getByPlaceholderText('Antwort eingeben…')).toHaveValue('Postgres')
   })
 })

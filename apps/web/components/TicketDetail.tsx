@@ -7,8 +7,14 @@ import { LogList } from './LogList'
 import { StagePanel } from './StagePanel'
 import { TicketActions } from './TicketActions'
 
+interface Props {
+  ticket: TicketDetailDto
+  /** False without `GITHUB_TOKEN`: the start action is disabled with a hint. */
+  tokenConfigured: boolean
+}
+
 /** Server-rendered ticket page: header, the one action, source ticket, stages, log. */
-export function TicketDetail({ ticket, tokenConfigured }: { ticket: TicketDetailDto; tokenConfigured: boolean }) {
+export function TicketDetail({ ticket, tokenConfigured }: Props) {
   return (
     <div className="max-w-3xl space-y-6 p-6">
       <header className="space-y-2">
@@ -27,7 +33,7 @@ export function TicketDetail({ ticket, tokenConfigured }: { ticket: TicketDetail
       <TicketActions key={ticket.key} ticket={ticket} tokenConfigured={tokenConfigured} />
 
       <section className="space-y-2">
-        <h3 className="text-sm font-semibold text-slate-600">Ticket</h3>
+        <h2 className="text-sm font-semibold text-slate-600">Ticket</h2>
         <p className="font-mono text-xs text-slate-400">Quelle: {ticket.sourcePath}</p>
         <div className="prose-plan">
           <ReactMarkdown>{ticket.description}</ReactMarkdown>
@@ -36,7 +42,7 @@ export function TicketDetail({ ticket, tokenConfigured }: { ticket: TicketDetail
 
       <Separator />
       <section className="space-y-3">
-        <h3 className="text-sm font-semibold text-slate-600">Stufen</h3>
+        <h2 className="text-sm font-semibold text-slate-600">Stufen</h2>
         {ticket.stages.map((view) => (
           <StagePanel key={view.stage} view={view} />
         ))}
@@ -44,7 +50,7 @@ export function TicketDetail({ ticket, tokenConfigured }: { ticket: TicketDetail
 
       <Separator />
       <section className="space-y-2">
-        <h3 className="text-sm font-semibold text-slate-600">Log</h3>
+        <h2 className="text-sm font-semibold text-slate-600">Log</h2>
         <LogList log={ticket.log} />
       </section>
     </div>

@@ -15,7 +15,7 @@ export async function runStage(deps: UseCaseDeps, ticket: Ticket, request: RunRe
   const { runId } = request
   reporter.log(`Starting stage ${request.stage} (${request.trigger}) for "${ticket.title}"`)
 
-  reporter.progress('Repository wird vorbereitet...')
+  reporter.progress('Repository wird vorbereitet…')
   let repoDir: string
   try {
     repoDir = await deps.repos.ensureRepo(deps.repoUrl)
@@ -38,6 +38,6 @@ export async function runStage(deps: UseCaseDeps, ticket: Ticket, request: RunRe
     return
   }
 
-  reporter.progress('Agent wird gestartet...')
+  reporter.progress('Agent wird gestartet…')
   await executeRun(deps, ticket, { ...request, repoDir, codebaseSummary })
 }

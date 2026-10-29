@@ -92,7 +92,7 @@ export async function executeRun(deps: UseCaseDeps, ticket: Ticket, request: Exe
       return
     }
 
-    reporter.progress('Intent wird als Pull Request angelegt...')
+    reporter.progress('Intent wird als Pull Request angelegt…')
     await publishArtifact(deps, ticket, request.stage, {
       markdown: renderIntent(ticket, output.result, request.answeredQuestions),
       summary: output.result.problem,

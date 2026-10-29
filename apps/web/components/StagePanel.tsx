@@ -1,15 +1,11 @@
 import ReactMarkdown from 'react-markdown'
 import type { PrState, StageViewDto } from '@refinement/shared'
 import { ARTIFACT_STAGE_TITLE } from '@/lib/constants'
+import { stripFrontMatter } from '@/lib/markdown'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 
 const PR_STATE: Record<PrState, string> = { open: 'offen', merged: 'gemergt', closed: 'geschlossen' }
 const DATE = new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium', timeZone: 'Europe/Berlin' })
-
-/** The YAML header is metadata for tools; Markdown would render it as text. */
-export function stripFrontMatter(markdown: string): string {
-  return markdown.replace(/^---\n[\s\S]*?\n---\n+/, '')
-}
 
 /** One artifact stage: done mark, links to file and PR, content (live from the base branch showcase) in a collapsible block. */
 export function StagePanel({ view }: { view: StageViewDto }) {

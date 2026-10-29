@@ -32,7 +32,7 @@ const runningProcesses = new Map<string, ChildProcess>()
 
 /** Tools whose use means the agent is exploring the codebase; each switch to one of them shows ANALYSIS_PROGRESS. */
 const CODEBASE_TOOLS = new Set(['Read', 'Glob', 'Grep', 'Bash'])
-const ANALYSIS_PROGRESS = 'Codebase wird analysiert...'
+const ANALYSIS_PROGRESS = 'Codebase wird analysiert…'
 
 /**
  * Interprets the Claude process exit code and returns the extracted result, or throws an appropriate error.
@@ -258,7 +258,7 @@ function aggregateCliResults(first: ExtractedResult, retry: ExtractedResult): Ex
 /** Progress messages before the retry: preview of the malformed output and the validation error. */
 function reportSchemaError(rawOutput: string | undefined, message: string, onProgress: (msg: string) => void): void {
   const preview = (rawOutput ?? '').slice(0, SCHEMA_ERROR_PREVIEW_CHARS).replace(/\n/g, ' ')
-  onProgress(`Schema-Fehler, Retry... (Output: "${preview}")`)
+  onProgress(`Schema-Fehler, Retry… (Output: "${preview}")`)
   onProgress(`Schema-Validierungsfehler: ${message}`)
 }
 

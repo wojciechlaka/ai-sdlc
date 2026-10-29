@@ -1,5 +1,3 @@
-'use client'
-
 import { formatElapsed } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 
@@ -10,7 +8,10 @@ interface Props {
   everConnected: boolean
 }
 
-/** Shown while the agent runs: pulse indicator, elapsed time, progress log, connection warning. */
+/**
+ * Shown while the agent runs: pulse indicator, elapsed time, progress log, connection warning.
+ * Purely presentational (no hooks or handlers); TicketActions renders it on the client.
+ */
 export function AgentRunningCard({ elapsed, progressLog, connected, everConnected }: Props) {
   return (
     <Card className="border-slate-200">
@@ -28,7 +29,7 @@ export function AgentRunningCard({ elapsed, progressLog, connected, everConnecte
       </CardHeader>
       <CardContent>
         {progressLog.length === 0 ? (
-          <p className="text-xs text-slate-400 font-mono">Warte auf Agent...</p>
+          <p className="text-xs text-slate-400 font-mono">Warte auf Agent…</p>
         ) : (
           <div className="space-y-1 max-h-48 overflow-y-auto">
             {progressLog.map((msg, i) => (

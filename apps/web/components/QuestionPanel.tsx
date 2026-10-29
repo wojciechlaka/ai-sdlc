@@ -41,14 +41,14 @@ export function QuestionPanel({ ticketKey, question, onAnswered }: Props) {
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-sm">{question}</p>
-        <Textarea value={answer} onChange={(e) => setAnswer(e.target.value)} rows={3} placeholder="Antwort eingeben..." />
+        <Textarea value={answer} onChange={(e) => setAnswer(e.target.value)} rows={3} placeholder="Antwort eingeben…" />
         {error && (
           <p role="alert" className="text-sm text-red-600">
             {error}
           </p>
         )}
         <Button onClick={handleSubmit} disabled={sending || !answer.trim()} size="sm">
-          {sending ? 'Sende...' : 'Antworten'}
+          {sending ? 'Sende…' : 'Antworten'}
         </Button>
       </CardContent>
     </Card>
