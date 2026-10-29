@@ -11,7 +11,9 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { SpecSchema, type Spec } from '@refinement/shared'
-import { createAgentSandbox, createHookLogFile, hookSettings, sandboxEnv } from '../src/adapters/agentSandbox/agentSandbox'
+import {
+  createAgentSandbox, createHookLogFile, hookSettings, sandboxEnv,
+} from '../src/adapters/agentSandbox/agentSandbox'
 import { STAGE_AGENTS, runAgent } from '../src/adapters/claudeCli'
 import { extractJsonString } from '../src/adapters/claudeCli/agentOutput'
 import { renderIntent, renderSpec } from '../src/domain/render'
@@ -19,7 +21,8 @@ import { artifactPath } from '../src/domain/artifacts'
 import { describeError } from '../src/domain/errors'
 import { FIXTURE_NAME, SPEC_CASES, type SpecEvalCase } from './specCases'
 import {
-  DEFAULT_MIN_SCORE, JudgeVerdictSchema, buildJudgePrompt, failedScores, fixedChecks, type CheckResult, type JudgeVerdict,
+  DEFAULT_MIN_SCORE, JudgeVerdictSchema, buildJudgePrompt, failedScores, fixedChecks,
+  type CheckResult, type JudgeVerdict,
 } from './specRubric'
 
 const MODEL = process.env.EVAL_MODEL || 'claude-sonnet-4-6'
@@ -36,7 +39,7 @@ const FIXTURE_DIR = path.join(__dirname, 'fixtures', FIXTURE_NAME)
  * `--tools ''` (no built-in tools) and `--strict-mcp-config` (no MCP servers, e.g. from the user settings, as we pass
  * no --mcp-config). This deny list is only a backup, together with the guard hooks and an empty cwd.
  */
-const JUDGE_DISALLOWED_TOOLS = 'Bash,Read,Glob,Grep,Edit,Write,NotebookEdit,WebFetch,WebSearch,Task'
+const JUDGE_DISALLOWED_TOOLS = 'Bash,Read,Glob,Grep,Edit,Write,NotebookEdit,WebFetch,WebSearch,Task,Agent'
 
 /** Outcome of one case for the report. */
 interface CaseReport {
@@ -57,7 +60,9 @@ function listFiles(dir: string, prefix = ''): string[] {
 
 /** Every fixture file with its content — the judge's view of the codebase. */
 function fixtureOverview(files: string[]): string {
-  return files.map((file) => `### ${file}\n\n${fs.readFileSync(path.join(FIXTURE_DIR, file), 'utf-8').trim()}`).join('\n\n')
+  return files
+    .map((file) => `### ${file}\n\n${fs.readFileSync(path.join(FIXTURE_DIR, file), 'utf-8').trim()}`)
+    .join('\n\n')
 }
 
 /** Temp git repo: the fixture plus the merged intent under `docs/work/<KEY>/intent.md`; realpath like the guard's. */
@@ -68,7 +73,11 @@ function createTempRepo(evalCase: SpecEvalCase, intentMarkdown: string): string 
     const intentFile = path.join(repo, artifactPath(evalCase.key, 'plan'))
     fs.mkdirSync(path.dirname(intentFile), { recursive: true })
     fs.writeFileSync(intentFile, intentMarkdown)
-    const git = (...args: string[]) => execFileSync('git', ['-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null', '-c', 'user.name=eval', '-c', 'user.email=eval@example.com', ...args], { cwd: repo })
+    const gitConfig = [
+      '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null',
+      '-c', 'user.name=eval', '-c', 'user.email=eval@example.com',
+    ]
+    const git = (...args: string[]) => execFileSync('git', [...gitConfig, ...args], { cwd: repo })
     git('init', '-q')
     git('add', '.')
     git('commit', '-qm', 'init')
@@ -81,7 +90,11 @@ function createTempRepo(evalCase: SpecEvalCase, intentMarkdown: string): string 
 }
 
 /** Runs the design agent like the app does, with no questions left; returns its spec or null plus the cost. */
-async function runSpecAgent(evalCase: SpecEvalCase, repo: string, intentMarkdown: string): Promise<{ spec: Spec | null; detail: string; costUsd: number }> {
+async function runSpecAgent(
+  evalCase: SpecEvalCase,
+  repo: string,
+  intentMarkdown: string,
+): Promise<{ spec: Spec | null; detail: string; costUsd: number }> {
   const sandbox = createAgentSandbox({ hooksDir: HOOKS_DIR })
   try {
     const { output, meta } = await runAgent({
@@ -97,8 +110,31 @@ async function runSpecAgent(evalCase: SpecEvalCase, repo: string, intentMarkdown
   }
 }
 
+/** What the judge call yields: its verdict (or why there is none) and the cost. */
+interface JudgeOutcome {
+  verdict: JudgeVerdict | null
+  detail: string
+  costUsd: number
+}
+
+/** Reads the CLI's JSON output of the judge call into a verdict; failures become `detail`, never throw. */
+function parseJudgeOutput(stdout: string, failure: string): JudgeOutcome {
+  let result: { result?: string; total_cost_usd?: number; is_error?: boolean }
+  try {
+    result = JSON.parse(stdout) as typeof result
+  } catch {
+    return { verdict: null, detail: `Bewerter ohne gültige Ausgabe: ${failure}`, costUsd: 0 }
+  }
+  const parsed = JudgeVerdictSchema.safeParse(safeJson(extractJsonString(result.result ?? '')))
+  const costUsd = result.total_cost_usd ?? 0
+  if (result.is_error || !parsed.success) {
+    return { verdict: null, detail: `Bewertung unlesbar: ${(result.result ?? '').slice(0, 300)}`, costUsd }
+  }
+  return { verdict: parsed.data, detail: 'bewertet', costUsd }
+}
+
 /** Calls the judge model without tools; returns its verdict (or the error), its cost and whether it used tools. */
-async function judge(prompt: string): Promise<{ verdict: JudgeVerdict | null; detail: string; costUsd: number; toolCalls: number }> {
+async function judge(prompt: string): Promise<JudgeOutcome & { toolCalls: number }> {
   let cwd: string | undefined
   let hookLog: Awaited<ReturnType<typeof createHookLogFile>> | undefined
   try {
@@ -106,23 +142,15 @@ async function judge(prompt: string): Promise<{ verdict: JudgeVerdict | null; de
     hookLog = await createHookLogFile()
     const args = [
       '--print', '--output-format', 'json', '--model', JUDGE_MODEL,
-      '--setting-sources', 'user', '--settings', hookSettings(HOOKS_DIR), '--disallowedTools', JUDGE_DISALLOWED_TOOLS,
-      '--tools', '', '--strict-mcp-config',
+      '--setting-sources', 'user', '--settings', hookSettings(HOOKS_DIR),
+      '--disallowedTools', JUDGE_DISALLOWED_TOOLS, '--tools', '', '--strict-mcp-config',
     ]
-    const proc = spawnSync('claude', args, { cwd, env: sandboxEnv(process.env, hookLog.path), input: prompt, encoding: 'utf-8', timeout: JUDGE_TIMEOUT_MS })
+    const proc = spawnSync('claude', args, {
+      cwd, env: sandboxEnv(process.env, hookLog.path), input: prompt, encoding: 'utf-8', timeout: JUDGE_TIMEOUT_MS,
+    })
     const toolCalls = fs.readFileSync(hookLog.path, 'utf-8').split('\n').filter(Boolean).length
-    let result: { result?: string; total_cost_usd?: number; is_error?: boolean }
-    try {
-      result = JSON.parse(proc.stdout ?? '') as typeof result
-    } catch {
-      return { verdict: null, detail: `Bewerter ohne gültige Ausgabe: ${[proc.error?.message, (proc.stderr ?? '').slice(0, 300)].filter(Boolean).join(' · ')}`, costUsd: 0, toolCalls }
-    }
-    const parsed = JudgeVerdictSchema.safeParse(safeJson(extractJsonString(result.result ?? '')))
-    const costUsd = result.total_cost_usd ?? 0
-    if (result.is_error || !parsed.success) {
-      return { verdict: null, detail: `Bewertung unlesbar: ${(result.result ?? '').slice(0, 300)}`, costUsd, toolCalls }
-    }
-    return { verdict: parsed.data, detail: 'bewertet', costUsd, toolCalls }
+    const failure = [proc.error?.message, (proc.stderr ?? '').slice(0, 300)].filter(Boolean).join(' · ')
+    return { ...parseJudgeOutput(proc.stdout ?? '', failure), toolCalls }
   } finally {
     if (cwd) {
       fs.rmSync(cwd, { recursive: true, force: true })
@@ -148,18 +176,25 @@ async function runCase(evalCase: SpecEvalCase, files: string[]): Promise<CaseRep
   try {
     repo = createTempRepo(evalCase, intentMarkdown)
     const agent = await runSpecAgent(evalCase, repo, intentMarkdown)
-    const checks: CheckResult[] = [{ name: 'Spec direkt geliefert (Schema)', pass: agent.spec !== null, detail: agent.detail }]
+    const checks: CheckResult[] = [
+      { name: 'Spec direkt geliefert (Schema)', pass: agent.spec !== null, detail: agent.detail },
+    ]
+    const seconds = () => Math.round((Date.now() - started) / 1000)
     if (!agent.spec) {
-      return { key: evalCase.key, checks, verdict: null, costUsd: agent.costUsd, seconds: Math.round((Date.now() - started) / 1000) }
+      return { key: evalCase.key, checks, verdict: null, costUsd: agent.costUsd, seconds: seconds() }
     }
     checks.push(...fixedChecks(agent.spec, evalCase.intent, new Set(files)))
     const specMarkdown = renderSpec(ticket, agent.spec, [])
-    const judged = await judge(buildJudgePrompt({ intentMarkdown, specMarkdown, fixtureOverview: fixtureOverview(files) }))
+    const judged = await judge(
+      buildJudgePrompt({ intentMarkdown, specMarkdown, fixtureOverview: fixtureOverview(files) }),
+    )
     checks.push({ name: 'Bewertung gelesen', pass: judged.verdict !== null, detail: judged.detail })
-    checks.push({ name: 'Bewerter ohne Werkzeuge', pass: judged.toolCalls === 0, detail: `${judged.toolCalls} Aufrufe` })
+    checks.push({
+      name: 'Bewerter ohne Werkzeuge', pass: judged.toolCalls === 0, detail: `${judged.toolCalls} Aufrufe`,
+    })
     return {
       key: evalCase.key, checks, verdict: judged.verdict,
-      costUsd: agent.costUsd + judged.costUsd, seconds: Math.round((Date.now() - started) / 1000),
+      costUsd: agent.costUsd + judged.costUsd, seconds: seconds(),
     }
   } finally {
     if (repo) {
@@ -186,7 +221,8 @@ function printCase(report: CaseReport): number {
   const failed = failedScores(report.verdict, MIN_SCORE)
   for (const score of report.verdict.scores) {
     const pass = score.score >= MIN_SCORE
-    console.log(`  ${`Bewertung ${score.criterion}`.padEnd(36)}${cell(`${score.score}/5 — ${score.reason}`, pass)}${pass ? '✓' : '✗'}`)
+    const label = `Bewertung ${score.criterion}`.padEnd(36)
+    console.log(`  ${label}${cell(`${score.score}/5 — ${score.reason}`, pass)}${pass ? '✓' : '✗'}`)
   }
   for (const entry of report.verdict.coverage) {
     console.log(`    ${entry.successCriterion} → ${entry.acceptanceCriteria.join(' | ') || '—'}`)
@@ -196,7 +232,10 @@ function printCase(report: CaseReport): number {
 
 async function main(): Promise<number> {
   const files = listFiles(FIXTURE_DIR)
-  console.log(`Spec-Eval · Agent ${MODEL} (${STAGE_AGENTS.design.skillFile}) · Bewerter ${JUDGE_MODEL} · Schwelle ${MIN_SCORE}/5`)
+  console.log(
+    `Spec-Eval · Agent ${MODEL} (${STAGE_AGENTS.design.skillFile}) · Bewerter ${JUDGE_MODEL}`
+    + ` · Schwelle ${MIN_SCORE}/5`,
+  )
   let failures = 0
   let totalCost = 0
   const started = Date.now()
