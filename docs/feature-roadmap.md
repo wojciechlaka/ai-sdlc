@@ -55,7 +55,10 @@ des Teams.
 | 6 Maintain | neues `intent.md` aus Monitoring, Incident-Records | Service Owner / On-Call; Verwerfungen mit Begründung | Zeit vom Schwellwert-Bruch bis zum `intent.md` in der Triage | Anteil der Befunde, die zu gemergten Fixes werden; wiederholte Incidents | Ausblick |
 
 **Stufe 1 — Plan.** Aus dem rohen Ticket schreibt der Agent `intent.md`: was das Problem ist, was erreicht
-werden soll, wer betroffen ist, was offen ist. Der Product Owner prüft und merged.
+werden soll, wer betroffen ist, was offen ist. Der Product Owner prüft und merged. Governance als Code gibt es
+hier schon in klein: ein **Skill** (`intent-agent.md`) sagt dem Agent, was er tun soll, **Hooks** (Guard und Audit)
+setzen durch, dass er im Ziel-Repo nur liest, und ein **Eval** (`npm run eval:guard`) prüft das mit einem echten
+Agent ([architecture.md](architecture.md) §5, [E6](decisions.md)).
 
 **Stufe 2 — Design.** Aus dem freigegebenen Intent und der Codebase schreibt der Agent `spec.md` — mit
 Rückfragen, wo Regeln unklar sind. Der Product Owner gibt frei, bei höherem Risiko zusätzlich der Tech
@@ -66,7 +69,8 @@ Code-PR. Team-Wissen liegt in `CLAUDE.md`, Skills und Hooks des Ziel-Repos.
 
 **Stufe 4 — Test (Ausblick).** Der Agent prüft seine Arbeit selbst und liefert Testnachweise —
 Testergebnisse, Build-Logs, Screenshot-Diffs. Evals aus 20–50 echten Aufgaben sichern die Qualität; jeder
-Incident wird zu einem neuen Fall. Der Code Owner prüft die Nachweise im PR-Review.
+Incident wird zu einem neuen Fall. Der Code Owner prüft die Nachweise im PR-Review. Der Guard-Eval aus
+Stufe 1 ist das Muster dafür: Fälle als Liste, geprüft am Verhalten, nicht an der Antwort des Modells.
 
 **Stufe 5 — Deploy (Ausblick).** Ein Agent reviewt den PR gegen die geschriebenen Policies; der Code Owner
 genehmigt den Merge per Branch Protection, der Release Manager die Produktion. Der Agent, der den Code
@@ -91,7 +95,8 @@ und der Kreislauf beginnt von vorn.
 der Intent-Agent schreibt `intent.md` (mit Rückfragen in der App), die App legt die Datei auf dem Branch
 `<TICKET>/intent` ab und öffnet einen PR gegen den Arbeitsbranch `showcase`. Der Merge schiebt das Ticket in
 Stufe 2; Stufe, Zustand und Log liegen in der Datenbank, der Inhalt in Git. Ein Reset setzt `showcase` auf den
-Tag `showcase-base` zurück, `master` bleibt unberührt. Ziel-Repo der Demo ist der Fork der Blog-API „Conduit“
+Tag `showcase-base` zurück, `master` bleibt unberührt. Der Agent läuft in einer Sandbox mit Guard- und
+Audit-Hooks (nur lesen im Klon, jeder Werkzeugaufruf im Log), geprüft durch einen Eval. Ziel-Repo der Demo ist der Fork der Blog-API „Conduit“
 ([wojciechlaka/node-express-realworld-example-app](https://github.com/wojciechlaka/node-express-realworld-example-app));
 Beispiel-Tickets → [`examples/tickets/`](../examples/tickets/README.md).
 
