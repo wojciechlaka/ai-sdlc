@@ -52,7 +52,7 @@ SpecSchema = {
   dataFlow, errorHandling,
   acceptanceCriteria: string[] (≥ 1),
   tests,
-  affectedFiles: [{ path, change }],
+  affectedFiles: [{ path, change, isNew: boolean }],
   risks: [{ description, severity: low|medium|high, mitigation }],
   openPoints: [{ question }],
 }
@@ -152,19 +152,52 @@ der Agent hat keine Spec geliefert“ (erneut startbar). Stufe 1 bleibt unverän
 - Reviews nach Modell-Staffel: Sonnet für Pakete, Opus für Nebenläufigkeit (Klon-Umstellung) und die
   Gesamt-Review.
 
-## 9. Doku
+## 9. Qualitäts-Eval für Specs
 
-README (Ablauf Stufe 2), `docs/architecture.md` (Stand, Ablauf, Glossar), `docs/datenmodell.md` (`choice`,
+`packages/core/evals/spec.eval.ts`, Aufruf `npm run eval:spec` (Wurzel: `npm run eval:spec -w packages/core`), nicht
+Teil von `npm test`.
+
+- **Fixture:** kleines Beispiel-Repo `packages/core/evals/fixtures/<name>/` (Mini-Express-API mit Artikel-Routen)
+  und 2–3 Intents mit Erfolgskriterien (z. B. Lesezeit, Entwürfe) als Daten neben dem Eval. Der Eval kopiert das
+  Fixture in einen Temp-Ordner, macht daraus ein git-Repo und lässt den **echten Spec-Agent** laufen — dieselbe
+  Sandbox, derselbe Skill, dasselbe Schema wie die App (`STAGE_AGENTS.design`).
+- **Ohne Rückfragen:** Start mit „0 Rückfragen übrig“; der Agent muss direkt die Spec liefern.
+- **Feste Prüfungen** (eindeutig, ohne Modell): Ausgabe passt zu `SpecSchema`; jede Datei unter „Betroffene Dateien“
+  existiert im Fixture, außer sie ist als neu markiert (`affectedFiles[].isNew`); Anzahl Akzeptanzkriterien ≥ Anzahl
+  Erfolgskriterien; keine Code-Blöcke mit Implementierung in den Textfeldern; mindestens eine verworfene Alternative
+  mit Grund.
+- **Bewertung durch ein zweites Modell** (Antwort als JSON, Zod-geprüft): Intent, Spec und Fixture-Überblick gehen an
+  den Bewerter; je Kriterium Punkte 1–5 mit Begründung:
+  - *Abdeckung* — jedes Erfolgskriterium durch ein prüfbares Akzeptanzkriterium abgedeckt (Zuordnung wird
+    mitgeliefert);
+  - *Prüfbarkeit* — Akzeptanzkriterien beobachtbar und eindeutig;
+  - *Passung zur Codebase* — Ansatz und Komponenten nutzen die vorhandenen Muster;
+  - *YAGNI* — nichts, was der Intent nicht verlangt;
+  - *Konsistenz* — Tests decken die Akzeptanzkriterien ab, Risiken haben Gegenmaßnahmen.
+- **Ausgabe:** deutsche Tabelle pro Intent und Kriterium, Kosten und Dauer; Exit-Code 1, wenn eine feste Prüfung
+  scheitert oder eine Bewertung unter der Schwelle liegt (Standard < 3 von 5). Rubrik, Schwellen und Fälle stehen in
+  `evals/specRubric.ts` bzw. den Fixture-Daten.
+- **Modelle:** Spec-Agent standardmäßig Sonnet (`EVAL_MODEL`), Bewerter Haiku (`EVAL_JUDGE_MODEL`). Geschätzt
+  0,20–0,40 $ pro Lauf.
+- **Bewerter in der Sandbox:** Der Bewerter-Aufruf bekommt keine Werkzeuge (`--allowedTools` leer bzw. nur Antwort),
+  nur Text im Prompt.
+- Governance als Code wird damit Skill → Hook → **zwei Evals**: Guard-Eval (darf der Agent das?) und Spec-Eval
+  (ist das Ergebnis gut?).
+
+## 10. Doku
+
+README (Ablauf Stufe 2, `npm run eval:spec`), `docs/architecture.md` (Stand, Ablauf, Glossar), `docs/datenmodell.md` (`choice`,
 Spec-Schema, Log-Payloads), `docs/ui-ux-concept.md` (`ChoicePanel`, Stufe 2), `CLAUDE.md`, Roadmap (Stufe 2
 „gebaut“), Playbook-Stufen-Spec (§6/§10: Verweis auf dieses Spec).
 
-## 10. Abnahme
+## 11. Abnahme
 
-- `npm test`, `npm run build`, `npm run lint` grün; `npm run eval:guard` grün.
+- `npm test`, `npm run build`, `npm run lint` grün; `npm run eval:guard` und `npm run eval:spec` grün (Eval-Läufe
+  kosten Tokens, nach Zustimmung).
 - Manueller Durchlauf **nur nach Zustimmung** (Tokens, PRs im Fork): CB-1 (steht in Design) → „Design starten“ →
   ggf. Auswahl/Rückfrage → PR `CB-1: Spec` → Merge → „Fertig“, Spec-Inhalt in der App → Reset setzt alles zurück.
 
-## 11. Nicht enthalten (YAGNI)
+## 12. Nicht enthalten (YAGNI)
 
-Fortsetzen der Sitzung (SDK/`--resume`), Qualitäts-Eval für Specs, eigene Sandbox pro Stufe (beide Stufen lesen
+Fortsetzen der Sitzung (SDK/`--resume`), eigene Sandbox pro Stufe (beide Stufen lesen
 nur), Abschnitt-für-Abschnitt-Freigabe in der App (das Gate ist der PR).
