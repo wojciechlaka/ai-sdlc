@@ -175,9 +175,10 @@ makes `startStage`/`answerQuestion` throw a `ConflictError`.
 - `packages/core/src/adapters/git/` — `repoCache.ts` (clone/pull into the cache, `getRepoDir`, factory),
   `codebaseSummary.ts` (summary prompt, in-flight dedupe, sandboxed summary run, blocked-call warnings)
 - `packages/core/src/adapters/sqlite/schema.ts` — Drizzle schema: `tickets`, `agent_runs`, `artifacts`, `audit_events`
-- `packages/core/src/testing/fakes.ts` — in-memory repositories, `FakeCodeHost` (GitHub-like semantics),
-  `FakeTicketSource`, `FakeAgentRunner` (`hold()`/`stop()`, scripted `progress`/`toolEvents`, recorded `callbacks`),
-  `createTestContext({ token })`, `seedTicket`
+- `packages/core/src/testing/` — test doubles, all re-exported by `fakes.ts` (tests import from there):
+  `inMemoryRepositories.ts`, `fakeCodeHost.ts` (GitHub-like semantics), `fakeTicketSource.ts`, `fakeAgentRunner.ts`
+  (`hold()`/`stop()`, scripted `progress`/`toolEvents`, recorded `callbacks`), `fakeRepoProvider.ts`, `samples.ts`,
+  `testContext.ts` (`createTestContext({ token })`, `seedTicket`, `errorCodeOf`)
 - `packages/core/hooks/{guardPolicy,guard,audit,hookIo}.mjs` — guard/audit hook scripts for the agent (spec §13)
 - `packages/core/src/adapters/agentSandbox/agentSandbox.ts` — flags, hook settings and env allowlist of every `claude` process
 - `packages/core/skills/intent-agent.md` — stage 1 skill, included verbatim in the prompt
