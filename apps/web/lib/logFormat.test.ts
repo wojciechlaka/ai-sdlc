@@ -22,9 +22,9 @@ describe('describeLogEvent', () => {
     { input: aLogEntry('guard_blocked', { tool: 'Write', target: 'src/app.ts' }), text: 'Blockiert: Write src/app.ts' },
     { input: aLogEntry('tool_used', { tool: 'Bash', target: 'git log -5' }, 'agent'), text: 'Bash `git log -5`' },
     { input: aLogEntry('tool_used', { tool: 'Read', target: 'src/app.ts' }, 'agent'), text: 'Read src/app.ts' },
-    { input: aLogEntry('something_new', null), text: 'something_new' },
-    { input: aLogEntry('pr_merged', { prNumber: 'vier' }), text: 'pr_merged' },
-    { input: aLogEntry('error', null), text: 'error' },
+    { input: aLogEntry('something_new', null), text: 'Eintrag something_new' },
+    { input: aLogEntry('pr_merged', { prNumber: 'vier' }), text: 'PR gemergt' },
+    { input: aLogEntry('error', null), text: 'Fehler' },
   ])('describes $input.type as $text', ({ input, text }) => {
     expect(describeLogEvent(input)).toBe(text)
   })

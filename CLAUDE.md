@@ -81,8 +81,8 @@ changing Next-specific code.
   `guard_blocked`, `tool_used`). Contract in `packages/shared/src/auditEvents.ts`: `AuditEventSchema` (discriminated
   union on `type`, one payload schema per type) and `AuditPayloads`. The core writes via `record(deps, ticketKey,
   actor, type, payload)` (`application/auditTrail.ts`; `AuditLog.append` is typed by the map, so a wrong payload
-  does not compile); `apps/web/lib/logFormat.ts` parses each stored entry with `safeParse` and falls back to the
-  type name for rows that do not match (old versions).
+  does not compile); `apps/web/lib/logFormat.ts` parses each stored entry with `safeParse` and falls back to a
+  German type name (`FALLBACK_LABEL`, else `Eintrag <type>`) for rows that do not match (old versions).
 
 ### Transitions (`domain/rules.ts`)
 
@@ -199,8 +199,8 @@ makes `startStage`/`answerQuestion` throw a `ConflictError`.
   the prompt, `expected: 'blocked' | 'used'`, `matches(target)` recognising the hook-log target), then run
   `npm run eval:guard`
 - **New log event**: add `event('<type>', <payload schema>)` to `AuditEventSchema`
-  (`packages/shared/src/auditEvents.ts`), write it with `record(...)` and add its `case` to `describeLogEvent`
-  (`apps/web/lib/logFormat.ts`; the switch is exhaustive)
+  (`packages/shared/src/auditEvents.ts`), write it with `record(...)`, add its `case` to `describeLogEvent`
+  and its name to `FALLBACK_LABEL` (`apps/web/lib/logFormat.ts`; both are exhaustive)
 - **New UI**: `apps/web/components/`; mutations as Server Actions in `apps/web/app/actions.ts` using `runAction`;
   UI primitives in `apps/web/components/ui/` (shadcn/Base UI)
 - **New ticket**: Markdown file in `examples/tickets/`; appears after restart or reset

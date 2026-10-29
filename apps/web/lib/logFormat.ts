@@ -1,4 +1,4 @@
-import { AuditEventSchema, type AuditLogEntryDto, type AuditPayloads, type Stage } from '@refinement/shared'
+import { AuditEventSchema, type AuditEventType, type AuditLogEntryDto, type AuditPayloads, type Stage } from '@refinement/shared'
 import { STAGE_LABEL } from './constants'
 import { formatCost, formatElapsed, formatTokens } from './format'
 import { modelLabel } from './models'
@@ -12,29 +12,53 @@ function toolCall({ tool, target }: { tool: string; target: string }): string {
   return tool === 'Bash' ? `${tool} \`${target}\`` : `${tool} ${target}`
 }
 
-/** Tokens and cost of a run, or '' when the run has no usage (stop, restart, error before Claude answered). */
-function runUsage(run: AuditPayloads['run_finished']): string {
+/** " · tokens↑ tokens↓ · cost" of a run, or '' when the run has no usage (stop, restart, error before Claude answered). */
+function usageSuffix(run: AuditPayloads['run_finished']): string {
   const inputTokens = run.inputTokens ?? 0
   if (inputTokens === 0) return ''
+  // Claude reports uncached input, cache writes and cache reads separately. Writes are new context the model
+  // processed; reads are the same prompt prefix re-read on every turn and would inflate the count many times over.
   const tokensIn = inputTokens + (run.cacheCreationTokens ?? 0)
   return ` · ${formatTokens(tokensIn)}↑ ${formatTokens(run.outputTokens ?? 0)}↓ · ${formatCost(runCostUsd(run))}`
 }
 
-/** German line for a finished run: timeout, failure (with reason) or success (with duration). */
+/** German line for a finished run: timeout, failure (with reason) or success (with duration), plus usage. */
 function describeRunFinished(run: AuditPayloads['run_finished']): string {
-  const usage = runUsage(run)
+  const usage = usageSuffix(run)
   if (run.status === 'timeout') return `Agent-Zeitlimit überschritten${usage}`
   if (run.status !== 'succeeded') return `Agent-Lauf fehlgeschlagen${run.reason ? ` (${run.reason})` : ''}${usage}`
   return `Agent fertig in ${formatElapsed(run.durationSeconds ?? 0)}${usage}`
 }
 
+/** German name per entry type, shown when a stored entry does not match its payload schema. */
+const FALLBACK_LABEL: Record<AuditEventType, string> = {
+  ticket_imported: 'Ticket übernommen',
+  run_started:     'Agent gestartet',
+  run_finished:    'Agent-Lauf beendet',
+  question_asked:  'Rückfrage',
+  answer_given:    'Antwort',
+  pr_opened:       'PR geöffnet',
+  pr_merged:       'PR gemergt',
+  pr_closed:       'PR geschlossen',
+  stage_changed:   'Stufe gewechselt',
+  cleanup:         'Beim Start aufgeräumt',
+  error:           'Fehler',
+  guard_blocked:   'Werkzeugaufruf blockiert',
+  tool_used:       'Werkzeugaufruf',
+}
+
+/** Line for an entry that fails the contract: the German name of a known type, otherwise `Eintrag <type>`. */
+function describeUnparsed(type: string): string {
+  return Object.hasOwn(FALLBACK_LABEL, type) ? FALLBACK_LABEL[type as AuditEventType] : `Eintrag ${type}`
+}
+
 /**
  * One German line per log entry. Entries that do not match the contract (unknown type, rows of an older version)
- * fall back to the type name instead of breaking the page.
+ * get a generic German line instead of breaking the page.
  */
 export function describeLogEvent(entry: AuditLogEntryDto): string {
   const parsed = AuditEventSchema.safeParse(entry)
-  if (!parsed.success) return entry.type
+  if (!parsed.success) return describeUnparsed(entry.type)
   const event = parsed.data
   switch (event.type) {
     case 'ticket_imported':
