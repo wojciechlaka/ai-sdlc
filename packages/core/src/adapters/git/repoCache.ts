@@ -56,7 +56,10 @@ function freshClone(repoUrl: string, repoDir: string, cacheDir: string): void {
  */
 function checkoutBaseBranch(repoUrl: string, repoDir: string, baseBranch: string): void {
   // The ceiling stops git from searching upward: a broken repoDir must fail, never act on a parent repository.
-  const env = { ...process.env, GIT_CEILING_DIRECTORIES: path.dirname(repoDir) }
+  // The ceiling must be absolute (git ignores relative ones); GIT_DIR/GIT_WORK_TREE would override discovery.
+  const env: NodeJS.ProcessEnv = { ...process.env, GIT_CEILING_DIRECTORIES: path.dirname(repoDir) }
+  delete env.GIT_DIR
+  delete env.GIT_WORK_TREE
   const git = (args: string[]) => execFileSync('git', args, { cwd: repoDir, env, stdio: 'pipe' })
   // Strip any token an earlier version may have stored in the remote URL.
   git(['remote', 'set-url', 'origin', repoUrl])
@@ -78,12 +81,13 @@ function checkoutBaseBranch(repoUrl: string, repoDir: string, baseBranch: string
  * Note: uses execFileSync — blocks the event loop during network I/O.
  *
  * @param repoUrl    - The repository URL.
- * @param cacheDir   - Root of the clone cache.
+ * @param cacheDirInput - Root of the clone cache (resolved to an absolute path).
  * @param baseBranch - Branch to check out, e.g. `showcase`.
  * @returns The absolute path to the cached repository directory.
  * @throws If `git clone` fails or the fresh clone has no `baseBranch` (a failed update falls back to a fresh clone).
  */
-export async function ensureRepo(repoUrl: string, cacheDir: string, baseBranch: string): Promise<string> {
+export async function ensureRepo(repoUrl: string, cacheDirInput: string, baseBranch: string): Promise<string> {
+  const cacheDir = path.resolve(cacheDirInput)
   const repoDir = getRepoDir(repoUrl, cacheDir)
 
   if (!fs.existsSync(repoDir)) {

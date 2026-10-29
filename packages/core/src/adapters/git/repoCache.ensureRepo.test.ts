@@ -80,6 +80,29 @@ describe('ensureRepo', () => {
     }
   })
 
+  it('resolves a relative cache directory so the ceiling and the returned directory are absolute', async () => {
+    mockExistsSync.mockReturnValue(true)
+    const dir = await ensureRepo(REPO_URL, '.cache/repos', 'showcase')
+    expect(path.isAbsolute(dir)).toBe(true)
+    for (const call of mockExecFileSync.mock.calls) {
+      const options = call[2] as { cwd: string; env: Record<string, string> }
+      expect(path.isAbsolute(options.env.GIT_CEILING_DIRECTORIES)).toBe(true)
+      expect(options.env.GIT_CEILING_DIRECTORIES).toBe(path.dirname(options.cwd))
+    }
+  })
+
+  it('does not let inherited GIT_DIR or GIT_WORK_TREE override repository discovery', async () => {
+    mockExistsSync.mockReturnValue(true)
+    vi.stubEnv('GIT_DIR', '/elsewhere/.git')
+    vi.stubEnv('GIT_WORK_TREE', '/elsewhere')
+    await ensureRepo(REPO_URL, CACHE_DIR, 'showcase')
+    for (const call of mockExecFileSync.mock.calls) {
+      const env = (call[2] as { env: Record<string, string> }).env
+      expect(env).not.toHaveProperty('GIT_DIR')
+      expect(env).not.toHaveProperty('GIT_WORK_TREE')
+    }
+  })
+
   it('removes the broken directory and re-clones when the update fails', async () => {
     mockExistsSync.mockReturnValue(true)
     mockExecFileSync

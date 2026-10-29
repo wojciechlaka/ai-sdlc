@@ -66,7 +66,9 @@ describe('ensureRepo — base branch', () => {
   })
 
   it('never touches a parent repository when the cache directory is inside it and the clone folder is broken', async () => {
-    const parent = path.join(base, 'parent')
+    // Raw (not realpath'd) temp path: on macOS os.tmpdir() is a symlink, which the ceiling must cope with too.
+    const rawBase = fs.mkdtempSync(path.join(os.tmpdir(), 'repo-parent-'))
+    const parent = path.join(rawBase, 'parent')
     fs.mkdirSync(parent)
     git(parent, 'init', '-q', '-b', 'main')
     fs.writeFileSync(path.join(parent, 'work.md'), 'wichtig')
@@ -79,13 +81,16 @@ describe('ensureRepo — base branch', () => {
     const brokenDir = getRepoDir(source, nestedCache)
     fs.mkdirSync(brokenDir, { recursive: true }) // empty: an interrupted clone
 
-    const dir = await ensureRepo(source, nestedCache, 'showcase')
-
-    expect(git(parent, 'rev-parse', 'HEAD')).toBe(head)
-    expect(git(parent, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('main')
-    expect(git(parent, 'remote', 'get-url', 'origin')).toBe('https://example.invalid/parent.git')
-    expect(fs.readFileSync(path.join(parent, 'work.md'), 'utf-8')).toBe('wichtig')
-    expect(git(dir, 'rev-parse', '--show-toplevel')).toBe(fs.realpathSync(dir))
-    expect(git(dir, 'rev-parse', 'HEAD')).toBe(git(source, 'rev-parse', 'showcase'))
+    try {
+      const dir = await ensureRepo(source, nestedCache, 'showcase')
+      expect(git(dir, 'rev-parse', '--show-toplevel')).toBe(fs.realpathSync(dir))
+      expect(git(dir, 'rev-parse', 'HEAD')).toBe(git(source, 'rev-parse', 'showcase'))
+      expect(git(parent, 'rev-parse', 'HEAD')).toBe(head)
+      expect(git(parent, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('main')
+      expect(git(parent, 'remote', 'get-url', 'origin')).toBe('https://example.invalid/parent.git')
+      expect(fs.readFileSync(path.join(parent, 'work.md'), 'utf-8')).toBe('wichtig')
+    } finally {
+      fs.rmSync(rawBase, { recursive: true, force: true })
+    }
   })
 })
