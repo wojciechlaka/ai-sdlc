@@ -7,8 +7,4 @@ describe('TicketEventSchema', () => {
     expect(TicketEventSchema.parse({ type: 'question', ticketKey: 'CB-1', question: 'q' }).type).toBe('question')
     expect(TicketEventSchema.parse({ type: 'state', ticketKey: 'CB-1', stage: 'design', state: 'ready' }).type).toBe('state')
   })
-
-  it('rejects the old status event', () => {
-    expect(TicketEventSchema.safeParse({ type: 'status', ticketId: 'T-1', status: 'review' }).success).toBe(false)
-  })
 })

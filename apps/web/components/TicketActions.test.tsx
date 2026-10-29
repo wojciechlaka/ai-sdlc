@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
-import type { TicketDetailDto, TicketEvent } from '@refinement/shared'
+import type { TicketDetailDto } from '@refinement/shared'
+import type { SSEHandlers } from '@/hooks/useSSE'
 
 const router = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }))
 vi.mock('next/navigation', () => ({ useRouter: () => router }))
@@ -12,10 +13,10 @@ vi.mock('@/app/actions', () => ({
 }))
 
 const sse = vi.hoisted(() => ({
-  handlers: null as null | { onMessage: (e: TicketEvent) => void; onReconnect?: () => void },
+  handlers: null as null | SSEHandlers,
 }))
 vi.mock('@/hooks/useSSE', () => ({
-  useSSE: (_key: string | null, handlers: { onMessage: (e: TicketEvent) => void; onReconnect?: () => void }) => {
+  useSSE: (_key: string | null, handlers: SSEHandlers) => {
     sse.handlers = handlers
     return { connected: true, everConnected: true }
   },
@@ -24,19 +25,13 @@ vi.mock('@/hooks/useSSE', () => ({
 import { startStageAction, stopRunAction } from '@/app/actions'
 import { DEFAULT_MODEL } from '@/lib/constants'
 import { AppStateProvider } from './AppStateProvider'
+import { aTicketDetail } from '@/test/fixtures'
 import { TicketActions } from './TicketActions'
-
-const NOW = new Date('2026-10-28T10:00:00Z')
-
-const DETAIL: TicketDetailDto = {
-  key: 'CB-2', title: 'Lesezeit', description: 'D', priority: 'Mittel', sourcePath: 'examples/tickets/cb-2-lesezeit.md',
-  stage: 'plan', state: 'ready', openPr: null, updatedAt: NOW, stages: [], log: [], pendingQuestion: null,
-}
 
 function renderActions(patch: Partial<TicketDetailDto> = {}, tokenConfigured = true) {
   return render(
     <AppStateProvider>
-      <TicketActions ticket={{ ...DETAIL, ...patch }} tokenConfigured={tokenConfigured} />
+      <TicketActions ticket={aTicketDetail(patch)} tokenConfigured={tokenConfigured} />
     </AppStateProvider>,
   )
 }

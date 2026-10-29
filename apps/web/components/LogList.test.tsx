@@ -1,18 +1,15 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
-import type { AuditEventDto } from '@refinement/shared'
+import { anAuditEvent } from '@/test/fixtures'
 import { LogList } from './LogList'
 
-const at = new Date('2026-10-28T10:00:00Z')
-const entry = (type: string, payload: unknown, actor: AuditEventDto['actor'] = 'system'): AuditEventDto => ({ actor, type, payload, createdAt: at })
-
 const LOG = [
-  entry('run_started', { stage: 'plan', trigger: 'initial', model: 'x' }),
-  entry('tool_used', { tool: 'Bash', target: 'git log -5' }, 'agent'),
-  entry('tool_used', { tool: 'Read', target: 'src/app.ts' }, 'agent'),
-  entry('tool_used', { tool: 'Grep', target: 'router' }, 'agent'),
-  entry('guard_blocked', { tool: 'Bash', target: 'rm -rf docs', reason: 'Befehl rm ist nicht erlaubt' }),
-  entry('tool_used', { tool: 'Read', target: 'README.md' }, 'agent'),
+  anAuditEvent('run_started', { stage: 'plan', trigger: 'initial', model: 'x' }),
+  anAuditEvent('tool_used', { tool: 'Bash', target: 'git log -5' }, 'agent'),
+  anAuditEvent('tool_used', { tool: 'Read', target: 'src/app.ts' }, 'agent'),
+  anAuditEvent('tool_used', { tool: 'Grep', target: 'router' }, 'agent'),
+  anAuditEvent('guard_blocked', { tool: 'Bash', target: 'rm -rf docs', reason: 'Befehl rm ist nicht erlaubt' }),
+  anAuditEvent('tool_used', { tool: 'Read', target: 'README.md' }, 'agent'),
 ]
 
 describe('LogList', () => {

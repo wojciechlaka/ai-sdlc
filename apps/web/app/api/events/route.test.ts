@@ -1,13 +1,14 @@
 // @vitest-environment node
 import { describe, it, expect, vi } from 'vitest'
 
+/** Listener of the fake event bus; route.ts only needs the ticket key of an event. */
 type Handler = (event: { ticketKey: string }) => void
 
 const bus = vi.hoisted(() => {
-  const handlers = new Map<string, Set<(event: { ticketKey: string }) => void>>()
+  const handlers = new Map<string, Set<Handler>>()
   const ALL = '*'
   return {
-    subscribe(ticketKey: string | null, handler: (event: { ticketKey: string }) => void) {
+    subscribe(ticketKey: string | null, handler: Handler) {
       const name = ticketKey ?? ALL
       if (!handlers.has(name)) handlers.set(name, new Set())
       handlers.get(name)!.add(handler)
