@@ -7,6 +7,13 @@
 // characters at all, splits on single spaces into words and matches the git grammar below — everything else
 // is denied. To change what the agent may do, edit the lists below and the table tests in guardPolicy.test.ts.
 //
+// Grammar: `git [--no-pager] <subcommand> <word>…` — the subcommand is a key of GIT_OPTIONS; every word starting
+// with `-` must match one of its option rules, every other word must be a PLAIN_WORD (revision, `rev:path` or a
+// path inside the clone; no absolute path, no `..`). Worked example:
+//   `git --no-pager log --oneline -n20 -- src/app.ts`
+//   → `--no-pager` skipped, subcommand `log`; `--oneline`, `-n20` and `--` are log options; `src/app.ts` is a
+//     plain word inside the clone → allowed. `git log --output=x` is denied (option not listed).
+//
 // git configuration: the clone and its `.git/config` are created by the app (adapters/git), global and system
 // config are switched off for the agent (GIT_CONFIG_GLOBAL=/dev/null, GIT_CONFIG_NOSYSTEM=1), so no pager,
 // external diff or textconv driver can be configured; the allowlists keep `--ext-diff`/`--textconv` out anyway.
@@ -32,8 +39,10 @@ const REVISION_SUFFIX_MISPLACED = /(^|[ =:])[~^]/
 /** Non-option words: revisions, paths in the clone, `rev:path`. */
 const PLAIN_WORD = /^[A-Za-z0-9._/:@=+-][A-Za-z0-9._/:@=+~^-]*$/
 
-/** Allowed git subcommands and their allowed options (exact strings or full-match patterns). */
-/** @type {Record<string, OptionRule[]>} */
+/**
+ * Allowed git subcommands and their allowed options (exact strings or full-match patterns).
+ * @type {Record<string, OptionRule[]>}
+ */
 const GIT_OPTIONS = {
   log: ['--oneline', '-p', /^-n\d+$/, /^-\d+$/, '--stat', '--name-only', '--name-status', /^--since=[A-Za-z0-9.:-]+$/,
     /^--author=[A-Za-z0-9._@-]+$/, '--follow', '--'],
@@ -54,6 +63,28 @@ const denyBash = (/** @type {string} */ detail) => deny(`${detail}. ${BASH_HINT}
 const denyPath = (/** @type {string} */ detail) => deny(`${PATH_HINT} (${detail})`)
 
 /**
+ * String value of `input[key]`, or undefined when it is missing or not a string.
+ * @param {Record<string, unknown>} input
+ * @param {string} key
+ * @returns {string | undefined}
+ */
+function optionalString(input, key) {
+  const value = input[key]
+  return typeof value === 'string' ? value : undefined
+}
+
+/**
+ * String value of `input[key]`, or `''` when it is missing or not a string.
+ * @param {Record<string, unknown>} input
+ * @param {string} key
+ * @returns {string}
+ */
+function stringOrEmpty(input, key) {
+  return optionalString(input, key) ?? ''
+}
+
+/**
+ * True if `word` matches one of the option rules of the subcommand.
  * @param {string} word
  * @param {OptionRule[]} rules
  */
@@ -147,25 +178,24 @@ function globReason(pattern) {
 }
 
 /**
- * Read: `file_path`; Glob: `path`, `pattern`; Grep: `path`, `glob`. Grep's `pattern` is a regular expression
+ * Confines the file tools to the clone. Read: `file_path`; Glob: `path`, `pattern`; Grep: `path`, `glob`. Grep's `pattern` is a regular expression
  * over file contents, not a path, and stays unrestricted.
  * @param {string} tool
  * @param {Record<string, unknown>} input
  * @param {unknown} cwd
  * @returns {Decision}
  */
-function decideRead(tool, input, cwd) {
+function decideFileTool(tool, input, cwd) {
   if (typeof cwd !== 'string' || cwd === '') return denyPath('Arbeitsordner unbekannt')
-  const str = (/** @type {string} */ key) => (typeof input[key] === 'string' ? /** @type {string} */ (input[key]) : undefined)
   /** @type {(string | null)[]} */
   const reasons = []
   if (tool === 'Read') {
-    const file = str('file_path')
+    const file = optionalString(input, 'file_path')
     reasons.push(file ? outsideReason(file, cwd) : 'Datei fehlt')
   } else {
-    const dir = str('path')
+    const dir = optionalString(input, 'path')
     if (dir !== undefined) reasons.push(outsideReason(dir, cwd))
-    const pattern = tool === 'Glob' ? str('pattern') : str('glob')
+    const pattern = optionalString(input, tool === 'Glob' ? 'pattern' : 'glob')
     if (pattern !== undefined) reasons.push(globReason(pattern))
   }
   const reason = reasons.find((r) => r !== null)
@@ -180,12 +210,13 @@ function decideRead(tool, input, cwd) {
 export function decide(call) {
   const tool = typeof call.tool_name === 'string' ? call.tool_name : ''
   const input = /** @type {Record<string, unknown>} */ (call.tool_input && typeof call.tool_input === 'object' ? call.tool_input : {})
-  if (tool === 'Read' || tool === 'Glob' || tool === 'Grep') return decideRead(tool, input, call.cwd)
+  if (tool === 'Read' || tool === 'Glob' || tool === 'Grep') return decideFileTool(tool, input, call.cwd)
   if (tool === 'Bash') return typeof input.command === 'string' ? decideBash(input.command) : denyBash('Bash ohne Befehl')
   return deny(`Werkzeug ${tool || 'unbekannt'} ist nicht erlaubt (nur Read, Glob, Grep und lesende git-Befehle)`)
 }
 
 /**
+ * `value` relative to `cwd` when it lies inside it, otherwise unchanged.
  * @param {string} value
  * @param {unknown} cwd
  */
@@ -205,14 +236,17 @@ function relativeTo(value, cwd) {
  */
 export function toolTarget(call, maxChars = DEFAULT_TARGET_CHARS) {
   const input = /** @type {Record<string, unknown>} */ (call.tool_input && typeof call.tool_input === 'object' ? call.tool_input : {})
-  const str = (/** @type {string} */ key) => (typeof input[key] === 'string' ? /** @type {string} */ (input[key]) : '')
+  const command = stringOrEmpty(input, 'command')
+  const pattern = stringOrEmpty(input, 'pattern')
+  const dir = stringOrEmpty(input, 'path')
+  const file = stringOrEmpty(input, 'file_path') || stringOrEmpty(input, 'notebook_path')
+  const url = stringOrEmpty(input, 'url')
   let target
-  if (str('command')) target = str('command')
-  else if (str('pattern')) target = str('path') ? `${str('pattern')} in ${relativeTo(str('path'), call.cwd)}` : str('pattern')
-  else if (str('file_path')) target = relativeTo(str('file_path'), call.cwd)
-  else if (str('notebook_path')) target = relativeTo(str('notebook_path'), call.cwd)
-  else if (str('path')) target = relativeTo(str('path'), call.cwd)
-  else if (str('url')) target = str('url')
+  if (command) target = command
+  else if (pattern) target = dir ? `${pattern} in ${relativeTo(dir, call.cwd)}` : pattern
+  else if (file) target = relativeTo(file, call.cwd)
+  else if (dir) target = relativeTo(dir, call.cwd)
+  else if (url) target = url
   else target = Object.keys(input).length > 0 ? JSON.stringify(input) : ''
   target = target.replace(/\s*\n\s*/g, ' ')
   return target.length > maxChars ? `${target.slice(0, maxChars - 1)}…` : target
