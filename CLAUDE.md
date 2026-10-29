@@ -48,7 +48,7 @@ packages/core/     domain/ (pure rules, naming, Markdown rendering), ports/ (int
                    agentSandbox, nodeEvents), compose.ts (createRefinementEngine wires real adapters),
                    hooks/ (guard/audit scripts Claude Code runs per tool call),
                    evals/ (evals against a real `claude`, not part of `npm test`)
-packages/shared/   Zod contracts: DTOs, inputs, TicketEvent, agent output (IntentSchema; RefinementOutputSchema for stage 2)
+packages/shared/   Zod contracts: DTOs, inputs, TicketEvent, audit events, agent output (IntentSchema; RefinementOutputSchema for stage 2)
 examples/tickets/  simulated Jira tickets — the only ticket source (`# CB-3: Title`, text, `**Priorität:** …`)
 ```
 
@@ -78,8 +78,11 @@ changing Next-specific code.
 - **Artifact** — stage, path `docs/work/<KEY>/intent.md|spec.md`, branch `<KEY>/intent|spec`, PR number/url/state, mergedAt
 - **AuditEvent** — the per-ticket log shown on the ticket page (`ticket_imported`, `run_started`, `run_finished`,
   `question_asked`, `answer_given`, `pr_opened`, `pr_merged`, `pr_closed`, `stage_changed`, `cleanup`, `error`,
-  `guard_blocked`, `tool_used`).
-  `apps/web/lib/logFormat.ts` reads these payload keys — keep both in sync.
+  `guard_blocked`, `tool_used`). Contract in `packages/shared/src/auditEvents.ts`: `AuditEventSchema` (discriminated
+  union on `type`, one payload schema per type) and `AuditPayloads`. The core writes via `record(deps, ticketKey,
+  actor, type, payload)` (`application/auditTrail.ts`; `AuditLog.append` is typed by the map, so a wrong payload
+  does not compile); `apps/web/lib/logFormat.ts` parses each stored entry with `safeParse` and falls back to the
+  type name for rows that do not match (old versions).
 
 ### Transitions (`domain/rules.ts`)
 
@@ -186,7 +189,8 @@ makes `startStage`/`answerQuestion` throw a `ConflictError`.
 - **New eval case**: add an entry to `CASES` in `packages/core/evals/guard.eval.ts` (`tool`, `instruction` as written in
   the prompt, `expected: 'blocked' | 'used'`, `matches(target)` recognising the hook-log target), then run
   `npm run eval:guard`
-- **New log event**: add the type to `AuditEventType` (`ports/auditLog.ts`) and a line to `apps/web/lib/logFormat.ts`
+- **New log event**: add `event('<type>', <payload schema>)` to `AuditEventSchema` (`packages/shared/src/auditEvents.ts`),
+  write it with `record(...)` and add its `case` to `describeLogEvent` (`apps/web/lib/logFormat.ts`; the switch is exhaustive)
 - **New UI**: `apps/web/components/`; mutations as Server Actions in `apps/web/app/actions.ts` using `runAction`;
   UI primitives in `apps/web/components/ui/` (shadcn/Base UI)
 - **New ticket**: Markdown file in `examples/tickets/`; appears after restart or reset

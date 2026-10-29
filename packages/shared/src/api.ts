@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { ArtifactStageSchema, PrStateSchema, StageSchema, TicketStateSchema } from './stages'
+import { AuditActorSchema } from './auditEvents'
 
 const notBlank = (message: string) => z.string().refine((value) => value.trim().length > 0, message)
 
@@ -42,19 +43,21 @@ export const StageViewSchema = z.object({
 })
 export type StageViewDto = z.infer<typeof StageViewSchema>
 
-export const AuditActorSchema = z.enum(['human', 'agent', 'system'])
-
-export const AuditEventSchema = z.object({
+/**
+ * One stored entry of the ticket log as the core returns it. `type` and `payload` stay loose because old rows may
+ * predate the current contract; the web parses them with `AuditEventSchema` and falls back to the type name.
+ */
+export const AuditLogEntrySchema = z.object({
   actor: AuditActorSchema,
   type: z.string(),
   payload: z.unknown(),
   createdAt: z.date(),
 })
-export type AuditEventDto = z.infer<typeof AuditEventSchema>
+export type AuditLogEntryDto = z.infer<typeof AuditLogEntrySchema>
 
 export const TicketDetailSchema = TicketSchema.extend({
   stages: z.array(StageViewSchema),
-  log: z.array(AuditEventSchema),
+  log: z.array(AuditLogEntrySchema),
   /** Question of the agent while the ticket is `awaiting_answer`. */
   pendingQuestion: z.string().nullable(),
 })

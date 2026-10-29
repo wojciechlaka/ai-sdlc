@@ -1,7 +1,7 @@
-import type { AuditEventDto } from '@refinement/shared'
+import type { AuditLogEntryDto } from '@refinement/shared'
 import { describeLogEvent, groupLogEntries } from '@/lib/logFormat'
 
-const ACTOR_LABEL: Record<AuditEventDto['actor'], string> = { human: 'Mensch', agent: 'Agent', system: 'System' }
+const ACTOR_LABEL: Record<AuditLogEntryDto['actor'], string> = { human: 'Mensch', agent: 'Agent', system: 'System' }
 const TIME = new Intl.DateTimeFormat('de-DE', { dateStyle: 'short', timeStyle: 'medium', timeZone: 'Europe/Berlin' })
 
 function Time({ at }: { at: Date }) {
@@ -16,7 +16,7 @@ function Time({ at }: { at: Date }) {
  * Persistent log of the ticket, oldest first. Consecutive tool calls of the agent are collapsed into one row
  * (`<details>`, no client state); calls blocked by the guard are highlighted.
  */
-export function LogList({ log }: { log: AuditEventDto[] }) {
+export function LogList({ log }: { log: AuditLogEntryDto[] }) {
   if (log.length === 0) return <p className="text-xs text-slate-400">Noch keine Einträge.</p>
   return (
     <ol className="space-y-1">

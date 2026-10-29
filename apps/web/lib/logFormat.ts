@@ -1,15 +1,11 @@
-import type { AuditEventDto, Stage } from '@refinement/shared'
+import { AuditEventSchema, type AuditLogEntryDto, type AuditPayloads, type Stage } from '@refinement/shared'
 import { CACHE_READ_MULTIPLIER, CACHE_WRITE_MULTIPLIER, MODELS, MODEL_PRICING, TOKENS_PER_MILLION, STAGE_LABEL } from './constants'
 import { formatElapsed } from './utils'
 
 const TOKENS_PER_K = 1000
 
-type Payload = Record<string, unknown>
-
-const text = (p: Payload, key: string) => (p[key] === undefined || p[key] === null ? '' : String(p[key]))
-const count = (p: Payload, key: string) => (typeof p[key] === 'number' ? (p[key] as number) : 0)
 const modelLabel = (model: string) => MODELS.find((m) => m.value === model)?.label ?? model
-const stageLabel = (stage: string) => STAGE_LABEL[stage as Stage] ?? stage
+const stageLabel = (stage: Stage) => STAGE_LABEL[stage] ?? stage
 
 /** 1500 → "1.5K" */
 export function formatTokens(n: number): string {
@@ -19,15 +15,15 @@ export function formatTokens(n: number): string {
 }
 
 /** Cost of a run: the reported value, otherwise estimated from the pricing table; 0 if unknown. */
-export function runCostUsd(p: Payload): number {
-  const reported = count(p, 'costUsd')
+export function runCostUsd(run: AuditPayloads['run_finished']): number {
+  const reported = run.costUsd ?? 0
   if (reported > 0) return reported
-  const pricing = MODEL_PRICING[text(p, 'model')]
+  const pricing = MODEL_PRICING[run.model ?? '']
   if (!pricing) return 0
-  return (count(p, 'inputTokens') / TOKENS_PER_MILLION) * pricing.inputPerMtok
-    + (count(p, 'cacheCreationTokens') / TOKENS_PER_MILLION) * pricing.inputPerMtok * CACHE_WRITE_MULTIPLIER
-    + (count(p, 'cacheReadTokens') / TOKENS_PER_MILLION) * pricing.inputPerMtok * CACHE_READ_MULTIPLIER
-    + (count(p, 'outputTokens') / TOKENS_PER_MILLION) * pricing.outputPerMtok
+  return ((run.inputTokens ?? 0) / TOKENS_PER_MILLION) * pricing.inputPerMtok
+    + ((run.cacheCreationTokens ?? 0) / TOKENS_PER_MILLION) * pricing.inputPerMtok * CACHE_WRITE_MULTIPLIER
+    + ((run.cacheReadTokens ?? 0) / TOKENS_PER_MILLION) * pricing.inputPerMtok * CACHE_READ_MULTIPLIER
+    + ((run.outputTokens ?? 0) / TOKENS_PER_MILLION) * pricing.outputPerMtok
 }
 
 /** Dollar amount with more decimals for tiny costs; `—` for zero. */
@@ -37,60 +33,72 @@ export function formatCost(usd: number): string {
 }
 
 /** Tool call with its target; Bash commands in backticks. */
-function toolCall(p: Payload): string {
-  const tool = text(p, 'tool')
-  const target = text(p, 'target')
+function toolCall({ tool, target }: { tool: string; target: string }): string {
   if (!target) return tool
   return tool === 'Bash' ? `${tool} \`${target}\`` : `${tool} ${target}`
 }
 
-/** One German line per log entry; unknown types fall back to the type name. */
-export function describeLogEvent(event: AuditEventDto): string {
-  const p = (event.payload ?? {}) as Payload
+/** Tokens and cost of a run, or '' when the run has no usage (stop, restart, error before Claude answered). */
+function runUsage(run: AuditPayloads['run_finished']): string {
+  const inputTokens = run.inputTokens ?? 0
+  if (inputTokens === 0) return ''
+  const tokensIn = inputTokens + (run.cacheCreationTokens ?? 0)
+  return ` · ${formatTokens(tokensIn)}↑ ${formatTokens(run.outputTokens ?? 0)}↓ · ${formatCost(runCostUsd(run))}`
+}
+
+/** German line for a finished run: timeout, failure (with reason) or success (with duration). */
+function describeRunFinished(run: AuditPayloads['run_finished']): string {
+  const usage = runUsage(run)
+  if (run.status === 'timeout') return `Agent-Zeitlimit überschritten${usage}`
+  if (run.status !== 'succeeded') return `Agent-Lauf fehlgeschlagen${run.reason ? ` (${run.reason})` : ''}${usage}`
+  return `Agent fertig in ${formatElapsed(run.durationSeconds ?? 0)}${usage}`
+}
+
+/**
+ * One German line per log entry. Entries that do not match the contract (unknown type, rows of an older version)
+ * fall back to the type name instead of breaking the page.
+ */
+export function describeLogEvent(entry: AuditLogEntryDto): string {
+  const parsed = AuditEventSchema.safeParse(entry)
+  if (!parsed.success) return entry.type
+  const event = parsed.data
   switch (event.type) {
     case 'ticket_imported':
-      return `Ticket übernommen aus ${text(p, 'sourcePath')}`
-    case 'run_started':
-      return `Agent gestartet (${stageLabel(text(p, 'stage'))}, ${modelLabel(text(p, 'model'))}${p.trigger === 'answer' ? ', mit Antwort' : ''})`
-    case 'run_finished': {
-      const tokensIn = count(p, 'inputTokens') + count(p, 'cacheCreationTokens')
-      const usage = count(p, 'inputTokens') > 0
-        ? ` · ${formatTokens(tokensIn)}↑ ${formatTokens(count(p, 'outputTokens'))}↓ · ${formatCost(runCostUsd(p))}`
-        : ''
-      if (p.status === 'timeout') return `Agent-Zeitlimit überschritten${usage}`
-      if (p.status !== 'succeeded') return `Agent-Lauf fehlgeschlagen${p.reason ? ` (${text(p, 'reason')})` : ''}${usage}`
-      return `Agent fertig in ${formatElapsed(count(p, 'durationSeconds'))}${usage}`
+      return `Ticket übernommen aus ${event.payload.sourcePath}`
+    case 'run_started': {
+      const { stage, model, trigger } = event.payload
+      return `Agent gestartet (${stageLabel(stage)}, ${modelLabel(model)}${trigger === 'answer' ? ', mit Antwort' : ''})`
     }
+    case 'run_finished':
+      return describeRunFinished(event.payload)
     case 'question_asked':
-      return `Rückfrage: ${text(p, 'question')}`
+      return `Rückfrage: ${event.payload.question}`
     case 'answer_given':
-      return `Antwort: ${text(p, 'answer')}`
+      return `Antwort: ${event.payload.answer}`
     case 'pr_opened':
-      return `PR #${count(p, 'prNumber')} geöffnet (${text(p, 'branch')})`
+      return `PR #${event.payload.prNumber} geöffnet (${event.payload.branch})`
     case 'pr_merged':
-      return `PR #${count(p, 'prNumber')} gemergt`
+      return `PR #${event.payload.prNumber} gemergt`
     case 'pr_closed':
-      return `PR #${count(p, 'prNumber')} ohne Merge geschlossen`
+      return `PR #${event.payload.prNumber} ohne Merge geschlossen`
     case 'stage_changed':
-      return `Stufe ${stageLabel(text(p, 'from'))} → ${stageLabel(text(p, 'to'))}`
+      return `Stufe ${stageLabel(event.payload.from)} → ${stageLabel(event.payload.to)}`
     case 'cleanup':
-      return `Beim Start aufgeräumt: PR #${count(p, 'prNumber')} geschlossen, Branch ${text(p, 'branch')} gelöscht`
+      return `Beim Start aufgeräumt: PR #${event.payload.prNumber} geschlossen, Branch ${event.payload.branch} gelöscht`
     case 'error':
-      return `Fehler: ${text(p, 'message')}`
+      return `Fehler: ${event.payload.message}`
     case 'guard_blocked':
-      return `Blockiert: ${toolCall(p)}${p.reason ? ` — ${text(p, 'reason')}` : ''}`
+      return `Blockiert: ${toolCall(event.payload)}${event.payload.reason ? ` — ${event.payload.reason}` : ''}`
     case 'tool_used':
-      return toolCall(p)
-    default:
-      return event.type
+      return toolCall(event.payload)
   }
 }
 
 /** A row of the ticket log: one entry, or consecutive `tool_used` entries shown as one collapsible row. */
-export type LogRow = { kind: 'event'; event: AuditEventDto } | { kind: 'tools'; events: AuditEventDto[] }
+export type LogRow = { kind: 'event'; event: AuditLogEntryDto } | { kind: 'tools'; events: AuditLogEntryDto[] }
 
 /** Groups consecutive `tool_used` entries so the log stays readable; everything else stays a row of its own. */
-export function groupLogEntries(log: AuditEventDto[]): LogRow[] {
+export function groupLogEntries(log: AuditLogEntryDto[]): LogRow[] {
   const rows: LogRow[] = []
   for (const event of log) {
     const last = rows.at(-1)

@@ -9,6 +9,7 @@ import { requireTicket } from './requireTicket'
 import { createReporter } from './reporter'
 import { beginRun, type RunRequest } from './runLifecycle'
 import { runStage } from './runStage'
+import { record } from './auditTrail'
 
 /** The reset empties the database and rewrites the repo; a run started meanwhile would act on stale state. */
 function rejectDuringReset(deps: UseCaseDeps): void {
@@ -45,7 +46,7 @@ export function answerQuestion(deps: UseCaseDeps, key: string, raw: unknown): vo
   const plan = planAnswerRun(deps.runs.listForTicket(ticket.key, stage), answer)
   if (!plan) throw new ConflictError('Keine offene Rückfrage gefunden')
 
-  deps.audit.append({ ticketKey: ticket.key, actor: 'human', type: 'answer_given', payload: { answer } })
+  record(deps, ticket.key, 'human', 'answer_given', { answer })
   createReporter(deps, ticket.key).setState('running')
   const request: RunRequest = { stage, trigger: 'answer', model: plan.questionRun.input.model, answeredQuestions: plan.answeredQuestions }
   deps.runInBackground(runStage(deps, ticket, { ...request, runId: beginRun(deps, ticket, request) }))

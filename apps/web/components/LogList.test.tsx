@@ -1,15 +1,15 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
-import { anAuditEvent } from '@/test/fixtures'
+import { aLogEntry } from '@/test/fixtures'
 import { LogList } from './LogList'
 
 const LOG = [
-  anAuditEvent('run_started', { stage: 'plan', trigger: 'initial', model: 'x' }),
-  anAuditEvent('tool_used', { tool: 'Bash', target: 'git log -5' }, 'agent'),
-  anAuditEvent('tool_used', { tool: 'Read', target: 'src/app.ts' }, 'agent'),
-  anAuditEvent('tool_used', { tool: 'Grep', target: 'router' }, 'agent'),
-  anAuditEvent('guard_blocked', { tool: 'Bash', target: 'rm -rf docs', reason: 'Befehl rm ist nicht erlaubt' }),
-  anAuditEvent('tool_used', { tool: 'Read', target: 'README.md' }, 'agent'),
+  aLogEntry('run_started', { runId: 'r1', stage: 'plan', trigger: 'initial', model: 'x' }),
+  aLogEntry('tool_used', { tool: 'Bash', target: 'git log -5' }, 'agent'),
+  aLogEntry('tool_used', { tool: 'Read', target: 'src/app.ts' }, 'agent'),
+  aLogEntry('tool_used', { tool: 'Grep', target: 'router' }, 'agent'),
+  aLogEntry('guard_blocked', { tool: 'Bash', target: 'rm -rf docs', reason: 'Befehl rm ist nicht erlaubt' }),
+  aLogEntry('tool_used', { tool: 'Read', target: 'README.md' }, 'agent'),
 ]
 
 describe('LogList', () => {

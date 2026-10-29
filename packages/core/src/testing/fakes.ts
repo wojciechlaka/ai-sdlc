@@ -13,7 +13,7 @@ import {
   type AgentRunRepository,
   type AgentRunResult,
   type ArtifactRepository,
-  type AuditEvent,
+  type AuditLogEntry,
   type AuditLog,
   type BaseBranchPreparation,
   type CodeHost,
@@ -68,7 +68,7 @@ export interface InMemoryStore {
   tickets: Ticket[]
   runs: AgentRun[]
   artifacts: Artifact[]
-  audit: AuditEvent[]
+  audit: AuditLogEntry[]
 }
 
 export function createInMemoryTicketRepository(store: InMemoryStore): TicketRepository {

@@ -208,7 +208,7 @@ describe('resetSystem', () => {
   it('stops running agents, empties the database and starts again', async () => {
     const ctx = withSource(createTestContext(), 'CB-1', 'CB-2')
     seedTicket(ctx, 'CB-1', { stage: 'design', state: 'running' })
-    ctx.deps.audit.append({ ticketKey: 'CB-1', actor: 'system', type: 'cleanup' })
+    ctx.deps.audit.append({ ticketKey: 'CB-1', actor: 'system', type: 'cleanup', payload: { prNumber: 1, branch: 'CB-1/intent' } })
 
     await resetSystem(ctx.deps)
 

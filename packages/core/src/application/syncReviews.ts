@@ -5,6 +5,7 @@ import type { UseCaseDeps } from './deps'
 import { createReporter } from './reporter'
 import { describeError } from '../domain/errors'
 import { requireTicket } from './requireTicket'
+import { record } from './auditTrail'
 
 const NOT_FOUND = 404
 
@@ -24,7 +25,7 @@ export async function syncReviews(deps: UseCaseDeps, key?: string): Promise<void
     if (ticket.state !== 'in_review' || !stage) continue
     const artifact = deps.artifacts.findOpen(ticket.key, stage)
     if (!artifact) {
-      deps.audit.append({ ticketKey: ticket.key, actor: 'system', type: 'error', payload: { message: 'Kein offener PR zur Stufe gefunden' } })
+      record(deps, ticket.key, 'system', 'error', { message: 'Kein offener PR zur Stufe gefunden' })
       createReporter(deps, ticket.key).setState('ready')
       continue
     }
@@ -49,7 +50,7 @@ async function syncOne(deps: UseCaseDeps, host: CodeHost, ticket: Ticket, stage:
   if (!pr) {
     if (failure instanceof CodeHostError && failure.status === NOT_FOUND) {
       deps.artifacts.markClosed(artifact.id)
-      deps.audit.append({ ticketKey: ticket.key, actor: 'system', type: 'error', payload: { message: `PR #${artifact.prNumber} gibt es nicht mehr` } })
+      record(deps, ticket.key, 'system', 'error', { message: `PR #${artifact.prNumber} gibt es nicht mehr` })
       reporter.setState('ready')
     } else {
       console.warn(`[syncReviews] ${ticket.key}: ${describeError(failure)}`)
@@ -59,13 +60,13 @@ async function syncOne(deps: UseCaseDeps, host: CodeHost, ticket: Ticket, stage:
 
   if (pr.state === 'merged') {
     deps.artifacts.markMerged(artifact.id, pr.mergedAt ?? new Date())
-    deps.audit.append({ ticketKey: ticket.key, actor: 'human', type: 'pr_merged', payload: { prNumber: pr.number } })
+    record(deps, ticket.key, 'human', 'pr_merged', { prNumber: pr.number })
     const next = nextStage(stage)
-    deps.audit.append({ ticketKey: ticket.key, actor: 'system', type: 'stage_changed', payload: { from: stage, to: next } })
+    record(deps, ticket.key, 'system', 'stage_changed', { from: stage, to: next })
     reporter.setState('ready', next)
   } else if (pr.state === 'closed') {
     deps.artifacts.markClosed(artifact.id)
-    deps.audit.append({ ticketKey: ticket.key, actor: 'human', type: 'pr_closed', payload: { prNumber: pr.number } })
+    record(deps, ticket.key, 'human', 'pr_closed', { prNumber: pr.number })
     reporter.setState('ready')
     try {
       await host.deleteBranch(artifact.branch)

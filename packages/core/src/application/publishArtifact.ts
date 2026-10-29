@@ -6,6 +6,7 @@ import { isCurrentRun } from './runLifecycle'
 import { describeError } from '../domain/errors'
 import { TOKEN_MISSING } from './messages'
 import { createReporter } from './reporter'
+import { record } from './auditTrail'
 
 /**
  * Proposes the artifact via its own branch and PR, records it and moves the ticket to `in_review`.
@@ -42,6 +43,6 @@ export async function publishArtifact(
   }
 
   deps.artifacts.create({ ticketKey: ticket.key, stage, path, branch, prNumber: pr.number, prUrl: pr.url })
-  deps.audit.append({ ticketKey: ticket.key, actor: 'system', type: 'pr_opened', payload: { prNumber: pr.number, prUrl: pr.url, branch } })
+  record(deps, ticket.key, 'system', 'pr_opened', { prNumber: pr.number, prUrl: pr.url, branch })
   createReporter(deps, ticket.key).setState('in_review')
 }

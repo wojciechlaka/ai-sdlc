@@ -8,15 +8,16 @@ export {
   PullRequestRefSchema,
   TicketSchema,
   StageViewSchema,
-  AuditActorSchema,
-  AuditEventSchema,
+  AuditLogEntrySchema,
   TicketDetailSchema,
   SettingsSchema,
   StartStageInputSchema,
   AnswerInputSchema,
 } from './api'
 export type {
-  PullRequestRefDto, TicketDto, StageViewDto, AuditEventDto, TicketDetailDto, SettingsDto, StartStageInput, AnswerInput,
+  PullRequestRefDto, TicketDto, StageViewDto, AuditLogEntryDto, TicketDetailDto, SettingsDto, StartStageInput, AnswerInput,
 } from './api'
 export { TicketEventSchema } from './events'
 export type { TicketEvent } from './events'
+export { AuditActorSchema, AuditEventSchema } from './auditEvents'
+export type { AuditActor, AuditEvent, AuditEventType, AuditPayloads } from './auditEvents'

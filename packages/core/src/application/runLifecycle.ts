@@ -1,5 +1,6 @@
 import type { ArtifactStage, QAPair, RunTrigger, Ticket } from '../domain/types'
 import type { UseCaseDeps } from './deps'
+import { record } from './auditTrail'
 
 // Lifecycle of one attempt (one AgentRun): begin, check it is still current, finish it on failure.
 
@@ -22,9 +23,8 @@ export function beginRun(deps: UseCaseDeps, ticket: Ticket, request: RunRequest)
     ticketKey: ticket.key, stage: request.stage, trigger: request.trigger, model: request.model,
     input: { model: request.model, answeredQuestions: request.answeredQuestions },
   })
-  deps.audit.append({
-    ticketKey: ticket.key, actor: 'system', type: 'run_started',
-    payload: { runId: run.id, stage: request.stage, trigger: request.trigger, model: request.model },
+  record(deps, ticket.key, 'system', 'run_started', {
+    runId: run.id, stage: request.stage, trigger: request.trigger, model: request.model,
   })
   return run.id
 }
@@ -38,5 +38,5 @@ export function isCurrentRun(deps: UseCaseDeps, ticketKey: string, runId: string
 export function finishRun(deps: UseCaseDeps, ticketKey: string, runId: string, status: 'failed' | 'timeout'): void {
   if (deps.runs.findById(runId)?.status !== 'running') return
   deps.runs.fail(runId, status)
-  deps.audit.append({ ticketKey, actor: 'system', type: 'run_finished', payload: { runId, status } })
+  record(deps, ticketKey, 'system', 'run_finished', { runId, status })
 }

@@ -1,6 +1,6 @@
-import type { AuditEventDto, PullRequestRefDto, TicketDto } from '@refinement/shared'
+import type { AuditLogEntryDto, PullRequestRefDto, TicketDto } from '@refinement/shared'
 import type { Artifact, Ticket } from '../domain/types'
-import type { AuditEvent } from '../ports'
+import type { AuditLogEntry } from '../ports'
 
 export function toPullRequestRef(artifact: Artifact): PullRequestRefDto {
   return { number: artifact.prNumber, url: artifact.prUrl, state: artifact.prState }
@@ -22,6 +22,6 @@ export function toTicketDto(ticket: Ticket, openArtifact: Artifact | null): Tick
 }
 
 /** The ticket key is implied by the page and therefore omitted. */
-export function toAuditEventDto(event: AuditEvent): AuditEventDto {
-  return { actor: event.actor, type: event.type, payload: event.payload, createdAt: event.createdAt }
+export function toAuditLogEntryDto(entry: AuditLogEntry): AuditLogEntryDto {
+  return { actor: entry.actor, type: entry.type, payload: entry.payload, createdAt: entry.createdAt }
 }

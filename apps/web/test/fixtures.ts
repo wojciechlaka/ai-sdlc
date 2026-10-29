@@ -1,4 +1,4 @@
-import type { AuditEventDto, TicketDetailDto, TicketDto } from '@refinement/shared'
+import type { AuditLogEntryDto, TicketDetailDto, TicketDto } from '@refinement/shared'
 
 /** Fixed timestamp of all fixtures, so rendered dates are stable. */
 export const FIXTURE_DATE = new Date('2026-10-28T10:00:00Z')
@@ -18,6 +18,6 @@ export function aTicketDetail(patch: Partial<TicketDetailDto> = {}): TicketDetai
 }
 
 /** One log entry of the ticket page, written by `actor` (system by default). */
-export function anAuditEvent(type: string, payload: unknown, actor: AuditEventDto['actor'] = 'system'): AuditEventDto {
+export function aLogEntry(type: string, payload: unknown, actor: AuditLogEntryDto['actor'] = 'system'): AuditLogEntryDto {
   return { actor, type, payload, createdAt: FIXTURE_DATE }
 }

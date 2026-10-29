@@ -1,33 +1,28 @@
-export type AuditActor = 'human' | 'agent' | 'system'
+import type { AuditActor, AuditEventType, AuditPayloads } from '@refinement/shared'
 
-export type AuditEventType =
-  | 'ticket_imported'
-  | 'run_started'
-  | 'run_finished'
-  | 'question_asked'
-  | 'answer_given'
-  | 'pr_opened'
-  | 'pr_merged'
-  | 'pr_closed'
-  | 'stage_changed'
-  | 'cleanup'
-  | 'error'
-  /** The guard hook denied a tool call of the agent; payload `{ tool, target, reason }`. */
-  | 'guard_blocked'
-  /** The agent ran a tool call; payload `{ tool, target }`. */
-  | 'tool_used'
+export type { AuditActor, AuditEventType, AuditPayloads }
 
-export interface AuditEvent {
+/** A new log entry; `payload` must match `type` (contract in `packages/shared/src/auditEvents.ts`). */
+export interface NewAuditEvent<T extends AuditEventType> {
   ticketKey: string
   actor: AuditActor
-  type: AuditEventType
+  type: T
+  payload: AuditPayloads[T]
+}
+
+/** A stored log entry. Type and payload stay loose: rows written by older versions may not match the contract. */
+export interface AuditLogEntry {
+  ticketKey: string
+  actor: AuditActor
+  type: string
   payload: unknown
   createdAt: Date
 }
 
 /** Persistent log per ticket. */
 export interface AuditLog {
-  append(event: { ticketKey: string; actor: AuditActor; type: AuditEventType; payload?: unknown }): void
+  /** Appends one entry; the payload type follows from `type`, so a wrong payload does not compile. */
+  append<T extends AuditEventType>(event: NewAuditEvent<T>): void
   /** Entries of one ticket, oldest first. */
-  listForTicket(ticketKey: string): AuditEvent[]
+  listForTicket(ticketKey: string): AuditLogEntry[]
 }

@@ -3,7 +3,7 @@ import type { Artifact, ArtifactStage, Ticket } from '../domain/types'
 import { ARTIFACT_STAGES, artifactPath, fileUrl } from '../domain/artifacts'
 import { currentArtifactStage, isStageCompleted } from '../domain/rules'
 import type { UseCaseDeps } from './deps'
-import { toAuditEventDto, toPullRequestRef, toTicketDto } from './dto'
+import { toAuditLogEntryDto, toPullRequestRef, toTicketDto } from './dto'
 import { describeError } from '../domain/errors'
 import { requireTicket } from './requireTicket'
 
@@ -58,7 +58,7 @@ export async function getTicket(deps: UseCaseDeps, key: string): Promise<TicketD
   return {
     ...toTicketDto(ticket, openArtifact(deps, ticket)),
     stages: await Promise.all(ARTIFACT_STAGES.map((stage) => stageView(deps, ticket, artifacts, stage))),
-    log: deps.audit.listForTicket(ticket.key).map(toAuditEventDto),
+    log: deps.audit.listForTicket(ticket.key).map(toAuditLogEntryDto),
     pendingQuestion: pendingQuestion(deps, ticket),
   }
 }

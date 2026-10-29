@@ -118,13 +118,13 @@ describe('stricter fakes', () => {
 
   it('rejects artifacts and log entries for unknown tickets and returns deep copies', () => {
     const ctx = createTestContext()
-    expect(() => ctx.deps.audit.append({ ticketKey: 'CB-9', actor: 'system', type: 'error' })).toThrow('Ticket CB-9 not found')
+    expect(() => ctx.deps.audit.append({ ticketKey: 'CB-9', actor: 'system', type: 'error', payload: { message: 'x' } })).toThrow('Ticket CB-9 not found')
     expect(() => ctx.deps.artifacts.create({ ticketKey: 'CB-9', stage: 'plan', path: 'p', branch: 'b', prNumber: 1, prUrl: 'u' })).toThrow('Ticket CB-9 not found')
 
     seedTicket(ctx, 'CB-1')
-    ctx.deps.audit.append({ ticketKey: 'CB-1', actor: 'system', type: 'error', payload: { a: { b: 1 } } })
-    ;(ctx.deps.audit.listForTicket('CB-1')[0].payload as { a: { b: number } }).a.b = 2
-    expect(ctx.deps.audit.listForTicket('CB-1')[0].payload).toEqual({ a: { b: 1 } })
+    ctx.deps.audit.append({ ticketKey: 'CB-1', actor: 'system', type: 'stage_changed', payload: { from: 'plan', to: 'design' } })
+    ;(ctx.deps.audit.listForTicket('CB-1')[0].payload as { to: string }).to = 'done'
+    expect(ctx.deps.audit.listForTicket('CB-1')[0].payload).toEqual({ from: 'plan', to: 'design' })
   })
 })
 

@@ -7,6 +7,7 @@ import { RESET_RUNNING } from './messages'
 import { createReporter } from './reporter'
 import { sleep } from './sleep'
 import { syncReviews } from './syncReviews'
+import { record } from './auditTrail'
 
 export interface StartupOptions {
   /** Also resets the target repo: app branches deleted, base branch force-moved to the baseline tag (spec §12). */
@@ -113,7 +114,7 @@ async function resetRepository(deps: UseCaseDeps, host: CodeHost, warn: Warn): P
 function endInterruptedRuns(deps: UseCaseDeps): void {
   for (const run of deps.runs.findStuck()) {
     deps.runs.fail(run.id, 'failed')
-    deps.audit.append({ ticketKey: run.ticketKey, actor: 'system', type: 'run_finished', payload: { runId: run.id, status: 'failed', reason: 'Neustart' } })
+    record(deps, run.ticketKey, 'system', 'run_finished', { runId: run.id, status: 'failed', reason: 'Neustart' })
   }
   for (const ticket of deps.tickets.list()) {
     if (ticket.state === 'running') deps.tickets.update(ticket.key, { state: 'ready' })
@@ -125,7 +126,7 @@ function importTickets(deps: UseCaseDeps): void {
   const created = new Set(deps.tickets.upsertFromSource(items))
   for (const item of items) {
     if (created.has(item.key)) {
-      deps.audit.append({ ticketKey: item.key, actor: 'system', type: 'ticket_imported', payload: { sourcePath: item.sourcePath } })
+      record(deps, item.key, 'system', 'ticket_imported', { sourcePath: item.sourcePath })
     }
   }
   console.log(`[startup] ${items.length} ticket(s) read, ${created.size} new`)
@@ -142,7 +143,7 @@ async function closeOpenPullRequests(deps: UseCaseDeps, host: CodeHost, warn: Wa
       await host.deleteBranch(pr.headBranch)
       const artifact = deps.artifacts.findOpen(owner.key, owner.stage)
       if (artifact) deps.artifacts.markClosed(artifact.id)
-      deps.audit.append({ ticketKey: owner.key, actor: 'system', type: 'cleanup', payload: { prNumber: pr.number, branch: pr.headBranch } })
+      record(deps, owner.key, 'system', 'cleanup', { prNumber: pr.number, branch: pr.headBranch })
     } catch (err) {
       warn(`PR #${pr.number} (${pr.headBranch}) nicht aufgeräumt: ${describeError(err)}`)
     }
@@ -163,7 +164,7 @@ async function deriveStages(deps: UseCaseDeps, host: CodeHost, warn: Warn): Prom
       const next = reconcile(current, stageFromRepo({ hasIntent: intent !== null, hasSpec: spec !== null }))
       if (next.stage === current.stage && next.state === current.state) continue
       if (next.stage !== current.stage) {
-        deps.audit.append({ ticketKey: key, actor: 'system', type: 'stage_changed', payload: { from: current.stage, to: next.stage } })
+        record(deps, key, 'system', 'stage_changed', { from: current.stage, to: next.stage })
       }
       createReporter(deps, key).setState(next.state, next.stage)
     } catch (err) {

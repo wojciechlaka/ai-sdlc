@@ -7,6 +7,7 @@ import { createReporter } from './reporter'
 import { describeError } from '../domain/errors'
 import { failStage } from './failStage'
 import { publishArtifact } from './publishArtifact'
+import { record } from './auditTrail'
 
 /** RunRequest plus what `runStage` prepared: the run id, the checkout and the codebase summary. */
 export interface ExecuteRunRequest extends RunRequest {
@@ -30,10 +31,10 @@ export async function executeRun(deps: UseCaseDeps, ticket: Ticket, request: Exe
   const onToolEvent = ({ kind, tool, target, reason }: ToolEvent) => {
     if (!isCurrent()) return
     if (kind === 'blocked') {
-      deps.audit.append({ ticketKey: ticket.key, actor: 'system', type: 'guard_blocked', payload: { tool, target, reason } })
+      record(deps, ticket.key, 'system', 'guard_blocked', { tool, target, reason })
       reporter.logAndProgress(`Blockiert: ${tool} ${target}`)
     } else {
-      deps.audit.append({ ticketKey: ticket.key, actor: 'agent', type: 'tool_used', payload: { tool, target } })
+      record(deps, ticket.key, 'agent', 'tool_used', { tool, target })
     }
   }
 
@@ -56,14 +57,7 @@ export async function executeRun(deps: UseCaseDeps, ticket: Ticket, request: Exe
       reporter.log('Agent result discarded: the attempt is no longer current')
       if (deps.runs.findById(runId)?.status === 'running') {
         deps.runs.fail(runId, 'failed')
-        deps.audit.append({
-          ticketKey: ticket.key, actor: 'system', type: 'run_finished',
-          payload: {
-            runId, status: 'failed', reason: 'verworfen', model: meta.model, durationSeconds: meta.durationSeconds, costUsd: meta.costUsd,
-            inputTokens: meta.inputTokens, cacheCreationTokens: meta.cacheCreationTokens,
-            cacheReadTokens: meta.cacheReadTokens, outputTokens: meta.outputTokens,
-          },
-        })
+        record(deps, ticket.key, 'system', 'run_finished', { runId, status: 'failed', reason: 'verworfen', ...meta })
       }
       return
     }
@@ -77,17 +71,10 @@ export async function executeRun(deps: UseCaseDeps, ticket: Ticket, request: Exe
       cacheReadTokens: meta.cacheReadTokens,
       outputTokens: meta.outputTokens,
     })
-    deps.audit.append({
-      ticketKey: ticket.key, actor: 'agent', type: 'run_finished',
-      payload: {
-        runId, status: 'succeeded', model: meta.model, durationSeconds: meta.durationSeconds, costUsd: meta.costUsd,
-        inputTokens: meta.inputTokens, cacheCreationTokens: meta.cacheCreationTokens,
-        cacheReadTokens: meta.cacheReadTokens, outputTokens: meta.outputTokens,
-      },
-    })
+    record(deps, ticket.key, 'agent', 'run_finished', { runId, status: 'succeeded', ...meta })
 
     if (output.type === 'question') {
-      deps.audit.append({ ticketKey: ticket.key, actor: 'agent', type: 'question_asked', payload: { question: output.question } })
+      record(deps, ticket.key, 'agent', 'question_asked', { question: output.question })
       reporter.setState('awaiting_answer')
       reporter.question(output.question)
       return
