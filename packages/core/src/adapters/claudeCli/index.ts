@@ -226,7 +226,7 @@ async function runAttempt(
     title: input.title,
     description: input.description,
     codebaseSummary: input.codebaseSummary,
-    previousRuns: input.previousRuns,
+    answeredQuestions: input.answeredQuestions,
     retryContext,
   })
 

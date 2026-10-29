@@ -46,7 +46,7 @@ describe('startStage — success', () => {
     expect(ctx.repos.requestedUrls).toEqual(['https://github.com/o/r'])
     expect(ctx.agent.calls[0]).toMatchObject({
       ticketKey: 'CB-2', stage: 'plan', title: 'Lesezeit bei Artikeln anzeigen', model: 'claude-sonnet-4-6',
-      repoPath: '/repo', codebaseSummary: 'Express + Prisma', previousRuns: [],
+      repoPath: '/repo', codebaseSummary: 'Express + Prisma', answeredQuestions: [],
     })
   })
 
@@ -61,7 +61,7 @@ describe('startStage — success', () => {
     })
     expect(ctx.store.audit[2]?.payload).toEqual({ prNumber: 1, prUrl: 'https://github.com/o/r/pull/1', branch: 'CB-2/intent' })
     expect(ctx.events.published.flatMap((e) => (e.type === 'state' ? [e.state] : []))).toEqual(['running', 'in_review'])
-    expect(ctx.store.runs[0]).toMatchObject({ stage: 'plan', trigger: 'initial', status: 'succeeded', input: { model: 'claude-sonnet-4-6', previousRuns: [] } })
+    expect(ctx.store.runs[0]).toMatchObject({ stage: 'plan', trigger: 'initial', status: 'succeeded', input: { model: 'claude-sonnet-4-6', answeredQuestions: [] } })
   })
 
   it('replaces a branch left over from an earlier attempt', async () => {
@@ -178,7 +178,7 @@ describe('answerQuestion', () => {
     await ctx.settle()
 
     expect(ctx.deps.tickets.findByKey('CB-2')?.state).toBe('in_review')
-    expect(ctx.agent.calls[1]).toMatchObject({ model: 'claude-sonnet-4-6', previousRuns: [{ question: 'Wer?', answer: 'Alle Leser' }] })
+    expect(ctx.agent.calls[1]).toMatchObject({ model: 'claude-sonnet-4-6', answeredQuestions: [{ question: 'Wer?', answer: 'Alle Leser' }] })
     expect(ctx.store.runs[1]).toMatchObject({ trigger: 'answer', seq: 2 })
     expect(ctx.codeHost.branches.get('CB-2/intent')?.get('docs/work/CB-2/intent.md')).toContain('**F:** Wer?\\\n**A:** Alle Leser')
     expect(ctx.store.audit.find((e) => e.type === 'answer_given')).toMatchObject({ actor: 'human', payload: { answer: 'Alle Leser' } })

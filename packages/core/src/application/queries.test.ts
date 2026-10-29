@@ -80,7 +80,7 @@ describe('getTicket', () => {
   it('returns the log and the open question', async () => {
     const ctx = createTestContext()
     seedTicket(ctx, 'CB-1', { state: 'awaiting_answer' })
-    const run = ctx.deps.runs.create({ ticketKey: 'CB-1', stage: 'plan', trigger: 'initial', model: 'm', input: { model: 'm', previousRuns: [] } })
+    const run = ctx.deps.runs.create({ ticketKey: 'CB-1', stage: 'plan', trigger: 'initial', model: 'm', input: { model: 'm', answeredQuestions: [] } })
     ctx.deps.runs.complete(run.id, {
       output: { type: 'question', question: 'Wer?' }, costUsd: 0, inputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, outputTokens: 0,
     })

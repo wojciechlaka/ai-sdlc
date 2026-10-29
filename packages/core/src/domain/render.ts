@@ -11,7 +11,7 @@ function bulletList(items: string[]): string {
   return items.length ? items.map((item) => `- ${oneLine(item)}`).join('\n') : NONE
 }
 
-function answeredQuestions(pairs: QAPair[]): string {
+function qaList(pairs: QAPair[]): string {
   return pairs.length ? pairs.map((p) => `**F:** ${oneLine(p.question)}\\\n**A:** ${oneLine(p.answer)}`).join('\n\n') : NONE
 }
 
@@ -19,7 +19,7 @@ function answeredQuestions(pairs: QAPair[]): string {
  * Markdown of `docs/work/<KEY>/intent.md`. The front matter identifies the ticket only;
  * state stays in the platform database.
  */
-export function renderIntent(ticket: Pick<Ticket, 'key' | 'sourcePath'>, intent: Intent, answered: QAPair[]): string {
+export function renderIntent(ticket: Pick<Ticket, 'key' | 'sourcePath'>, intent: Intent, answeredQuestions: QAPair[]): string {
   return [
     '---',
     `ticket: ${ticket.key}`,
@@ -47,7 +47,7 @@ export function renderIntent(ticket: Pick<Ticket, 'key' | 'sourcePath'>, intent:
     '',
     '## Geklärte Rückfragen',
     '',
-    answeredQuestions(answered),
+    qaList(answeredQuestions),
     '',
   ].join('\n')
 }

@@ -4,14 +4,17 @@ import { SAMPLE_INTENT_OUTPUT, sourceTicket } from '../../testing/fakes'
 import { createSqliteTicketRepository } from './ticketRepository'
 import { createSqliteAgentRunRepository } from './agentRunRepository'
 import type { AgentRunRepository, TicketRepository } from '../../ports'
+import type { SqliteDb } from './database'
+import { agentRuns } from './schema'
 
-const INPUT = { model: 'm', previousRuns: [] }
+const INPUT = { model: 'm', answeredQuestions: [] }
 
+let db: SqliteDb
 let tickets: TicketRepository
 let runs: AgentRunRepository
 
 beforeEach(() => {
-  const db = createTestDatabase()
+  db = createTestDatabase()
   tickets = createSqliteTicketRepository(db)
   runs = createSqliteAgentRunRepository(db)
   tickets.upsertFromSource([sourceTicket('CB-1'), sourceTicket('CB-2')])
@@ -29,6 +32,18 @@ describe('create', () => {
 
   it('throws for unknown tickets', () => {
     expect(() => create('CB-404')).toThrow()
+  })
+})
+
+describe('input', () => {
+  it('reads rows written before the rename (`previousRuns`) as answeredQuestions', () => {
+    const qa = [{ question: 'Wer?', answer: 'Alle' }]
+    const legacyInput = { model: 'm', previousRuns: qa } as unknown as typeof agentRuns.$inferInsert['input']
+    const row = db.insert(agentRuns).values({
+      ticketKey: 'CB-1', stage: 'plan', seq: 1, trigger: 'answer', input: legacyInput, status: 'succeeded', model: 'm', startedAt: new Date(),
+    }).returning().get()
+    expect(runs.findById(row.id)?.input).toEqual({ model: 'm', answeredQuestions: qa })
+    expect(runs.listForTicket('CB-1')[0]?.input).toEqual({ model: 'm', answeredQuestions: qa })
   })
 })
 

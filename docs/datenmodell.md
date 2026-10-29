@@ -59,7 +59,7 @@ neuen Lauf.
 | `stage` | enum | `plan \| design` |
 | `seq` | integer | laufende Nummer pro Ticket, ab 1; der Lauf mit dem höchsten `seq` ist der aktuelle Versuch |
 | `trigger` | enum | `initial` (Stufe gestartet) \| `answer` (Fortsetzung nach Antwort) |
-| `input` | JSON | `{ model, previousRuns: { question, answer }[] }` — Modell und Q&A-Verlauf der Stufe |
+| `input` | JSON | `{ model, answeredQuestions: { question, answer }[] }` — Modell und Q&A-Verlauf der Stufe |
 | `output` | JSON, nullable | `StageOutput` (siehe unten); `null`, solange der Lauf läuft oder wenn er scheitert |
 | `status` | enum | `running \| succeeded \| failed \| timeout`; `succeeded` gilt für Rückfrage und Ergebnis |
 | `model` | string | gewähltes Modell |

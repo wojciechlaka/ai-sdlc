@@ -6,7 +6,7 @@ export interface RunRequest {
   trigger: RunTrigger
   model: string
   /** Answered questions so far; empty for the first run. */
-  previousRuns: QAPair[]
+  answeredQuestions: QAPair[]
 }
 
 /**
@@ -17,7 +17,7 @@ export interface RunRequest {
 export function beginRun(deps: UseCaseDeps, ticket: Ticket, request: RunRequest): string {
   const run = deps.runs.create({
     ticketKey: ticket.key, stage: request.stage, trigger: request.trigger, model: request.model,
-    input: { model: request.model, previousRuns: request.previousRuns },
+    input: { model: request.model, answeredQuestions: request.answeredQuestions },
   })
   deps.audit.append({
     ticketKey: ticket.key, actor: 'system', type: 'run_started',

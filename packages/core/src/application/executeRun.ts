@@ -46,7 +46,7 @@ export async function executeRun(deps: UseCaseDeps, ticket: Ticket, request: Exe
         repoPath: request.repoDir,
         model: request.model,
         codebaseSummary: request.codebaseSummary ?? undefined,
-        previousRuns: request.previousRuns,
+        answeredQuestions: request.answeredQuestions,
       },
       { onProgress: reporter.report, onToolEvent },
     )
@@ -94,7 +94,7 @@ export async function executeRun(deps: UseCaseDeps, ticket: Ticket, request: Exe
 
     reporter.progress('Intent wird als Pull Request angelegt...')
     await publishArtifact(deps, ticket, request.stage, {
-      markdown: renderIntent(ticket, output.result, request.previousRuns),
+      markdown: renderIntent(ticket, output.result, request.answeredQuestions),
       summary: output.result.problem,
     }, runId)
   } catch (err) {

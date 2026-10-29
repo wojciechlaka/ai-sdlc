@@ -24,7 +24,7 @@ function ticket(patch: Partial<Ticket> = {}): Ticket {
 function run(patch: Partial<AgentRun>): AgentRun {
   return {
     id: 'r', ticketKey: 'CB-1', stage: 'plan', seq: 1, trigger: 'initial',
-    input: { model: 'm', previousRuns: [] }, output: null, status: 'succeeded', model: 'm',
+    input: { model: 'm', answeredQuestions: [] }, output: null, status: 'succeeded', model: 'm',
     costUsd: null, inputTokens: null, cacheCreationTokens: null, cacheReadTokens: null, outputTokens: null,
     startedAt: NOW, finishedAt: NOW, ...patch,
   }
@@ -116,11 +116,11 @@ describe('planAnswerRun', () => {
     const first = run({ id: 'r1', seq: 1, output: { type: 'question', question: 'Q1' } })
     const second = run({
       id: 'r2', seq: 2, trigger: 'answer', output: { type: 'question', question: 'Q2' },
-      input: { model: 'm', previousRuns: [{ question: 'Q1', answer: 'A1' }] },
+      input: { model: 'm', answeredQuestions: [{ question: 'Q1', answer: 'A1' }] },
     })
     const plan = planAnswerRun([first, second], 'A2')
     expect(plan?.questionRun.id).toBe('r2')
-    expect(plan?.previousRuns).toEqual([{ question: 'Q1', answer: 'A1' }, { question: 'Q2', answer: 'A2' }])
+    expect(plan?.answeredQuestions).toEqual([{ question: 'Q1', answer: 'A1' }, { question: 'Q2', answer: 'A2' }])
   })
 
   it('ignores a question that was followed by a later run', () => {

@@ -49,7 +49,7 @@ describe('startup — tickets', () => {
   it('ends runs interrupted by a restart and returns their tickets to ready', async () => {
     const ctx = withSource(createTestContext({ token: false }), 'CB-1')
     seedTicket(ctx, 'CB-1', { state: 'running' })
-    const run = ctx.deps.runs.create({ ticketKey: 'CB-1', stage: 'plan', trigger: 'initial', model: 'm', input: { model: 'm', previousRuns: [] } })
+    const run = ctx.deps.runs.create({ ticketKey: 'CB-1', stage: 'plan', trigger: 'initial', model: 'm', input: { model: 'm', answeredQuestions: [] } })
 
     await startup(ctx.deps)
 

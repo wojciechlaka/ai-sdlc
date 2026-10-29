@@ -6,7 +6,7 @@ const BASE = {
   ticketKey: 'CB-2',
   title: 'Lesezeit bei Artikeln anzeigen',
   description: 'Leser möchten vorher sehen, wie lange ein Artikel dauert.',
-  previousRuns: [],
+  answeredQuestions: [],
 }
 
 describe('buildPrompt', () => {
@@ -23,7 +23,7 @@ describe('buildPrompt', () => {
   })
 
   it('adds answered questions', () => {
-    const prompt = buildPrompt({ ...BASE, previousRuns: [{ question: 'Wer?', answer: 'Alle Leser' }] })
+    const prompt = buildPrompt({ ...BASE, answeredQuestions: [{ question: 'Wer?', answer: 'Alle Leser' }] })
     expect(prompt).toContain('## Bisherige Rückfragen (bereits beantwortet)')
     expect(prompt).toContain('**F:** Wer?\n**A:** Alle Leser')
   })

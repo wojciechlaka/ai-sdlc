@@ -27,7 +27,7 @@ export function startStage(deps: UseCaseDeps, key: string, raw: unknown): void {
   const { model } = parseInput(StartStageInput, raw)
 
   createReporter(deps, ticket.key).setState('running')
-  const request: RunRequest = { stage, trigger: 'initial', model, previousRuns: [] }
+  const request: RunRequest = { stage, trigger: 'initial', model, answeredQuestions: [] }
   deps.runInBackground(runStage(deps, ticket, { ...request, runId: beginRun(deps, ticket, request) }))
 }
 
@@ -47,7 +47,7 @@ export function answerQuestion(deps: UseCaseDeps, key: string, raw: unknown): vo
 
   deps.audit.append({ ticketKey: ticket.key, actor: 'human', type: 'answer_given', payload: { answer } })
   createReporter(deps, ticket.key).setState('running')
-  const request: RunRequest = { stage, trigger: 'answer', model: plan.questionRun.input.model, previousRuns: plan.previousRuns }
+  const request: RunRequest = { stage, trigger: 'answer', model: plan.questionRun.input.model, answeredQuestions: plan.answeredQuestions }
   deps.runInBackground(runStage(deps, ticket, { ...request, runId: beginRun(deps, ticket, request) }))
 }
 

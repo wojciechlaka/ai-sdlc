@@ -132,7 +132,7 @@ describe('FakeAgentRunner', () => {
   it('terminates a held run when it is stopped', async () => {
     const { agent } = createTestContext()
     const release = agent.hold()
-    const run = agent.run({ ticketKey: 'CB-1', stage: 'plan', title: 't', description: 'd', repoPath: '/r', model: 'm', previousRuns: [] }, { onProgress: () => {}, onToolEvent: () => {} })
+    const run = agent.run({ ticketKey: 'CB-1', stage: 'plan', title: 't', description: 'd', repoPath: '/r', model: 'm', answeredQuestions: [] }, { onProgress: () => {}, onToolEvent: () => {} })
 
     expect(agent.stop('CB-1')).toBe(true)
     release()
@@ -143,7 +143,7 @@ describe('FakeAgentRunner', () => {
   it('does not affect a later run when nothing was running', async () => {
     const { agent } = createTestContext()
     expect(agent.stop('CB-1')).toBe(false)
-    const result = await agent.run({ ticketKey: 'CB-1', stage: 'plan', title: 't', description: 'd', repoPath: '/r', model: 'm', previousRuns: [] }, { onProgress: () => {}, onToolEvent: () => {} })
+    const result = await agent.run({ ticketKey: 'CB-1', stage: 'plan', title: 't', description: 'd', repoPath: '/r', model: 'm', answeredQuestions: [] }, { onProgress: () => {}, onToolEvent: () => {} })
     expect(result.output.type).toBe('intent')
   })
 
@@ -153,7 +153,7 @@ describe('FakeAgentRunner', () => {
     agent.toolEvents = [{ kind: 'used', tool: 'Read', target: 'a.ts' }]
     const onProgress = vi.fn()
     const onToolEvent = vi.fn()
-    await agent.run({ ticketKey: 'CB-1', stage: 'plan', title: 't', description: 'd', repoPath: '/r', model: 'm', previousRuns: [] }, { onProgress, onToolEvent })
+    await agent.run({ ticketKey: 'CB-1', stage: 'plan', title: 't', description: 'd', repoPath: '/r', model: 'm', answeredQuestions: [] }, { onProgress, onToolEvent })
     expect(onProgress).toHaveBeenCalledWith('Analyse')
     expect(onToolEvent).toHaveBeenCalledWith({ kind: 'used', tool: 'Read', target: 'a.ts' })
     expect(agent.callbacks).toHaveLength(1)

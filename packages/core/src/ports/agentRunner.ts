@@ -13,7 +13,7 @@ export interface AgentRunnerInput {
   model: string
   codebaseSummary?: string
   /** Answered questions of earlier runs of this stage. */
-  previousRuns: QAPair[]
+  answeredQuestions: QAPair[]
 }
 
 export interface AgentRunMeta {

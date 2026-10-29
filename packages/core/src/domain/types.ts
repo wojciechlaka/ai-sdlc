@@ -30,7 +30,8 @@ export interface Ticket extends SourceTicket {
 /** Snapshot of what a run was started with; the answer run continues from it. */
 export interface AgentRunInput {
   model: string
-  previousRuns: QAPair[]
+  /** Q&A history of the stage up to this run; empty for the first run. */
+  answeredQuestions: QAPair[]
 }
 
 export interface AgentRun {

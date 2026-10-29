@@ -9,7 +9,7 @@ export interface PromptInput {
   title: string
   description: string
   codebaseSummary?: string
-  previousRuns: QAPair[]
+  answeredQuestions: QAPair[]
   retryContext?: {
     previousOutput: string
     schemaError: string
@@ -22,8 +22,8 @@ export interface PromptInput {
  */
 export function buildPrompt(input: PromptInput): string {
   const parts = input.retryContext
-    ? [input.skill, '---', ...ticketSection(input), previousRunsSection(input), correctionSection(input.retryContext)]
-    : [input.skill, '---', summarySection(input), ...ticketSection(input), previousRunsSection(input)]
+    ? [input.skill, '---', ...ticketSection(input), answeredQuestionsSection(input), correctionSection(input.retryContext)]
+    : [input.skill, '---', summarySection(input), ...ticketSection(input), answeredQuestionsSection(input)]
   return parts.filter((part): part is string => Boolean(part)).join('\n\n')
 }
 
@@ -36,9 +36,9 @@ function summarySection(input: PromptInput): string | null {
   return input.codebaseSummary ? `## Codebase-Übersicht\n\n${input.codebaseSummary}\n\n---` : null
 }
 
-function previousRunsSection(input: PromptInput): string | null {
-  if (!input.previousRuns.length) return null
-  const pairs = input.previousRuns.map(({ question, answer }) => `**F:** ${question}\n**A:** ${answer}`).join('\n\n')
+function answeredQuestionsSection(input: PromptInput): string | null {
+  if (!input.answeredQuestions.length) return null
+  const pairs = input.answeredQuestions.map(({ question, answer }) => `**F:** ${question}\n**A:** ${answer}`).join('\n\n')
   return `## Bisherige Rückfragen (bereits beantwortet)\n\n${pairs}`
 }
 

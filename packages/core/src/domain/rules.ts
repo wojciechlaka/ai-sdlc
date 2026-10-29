@@ -61,9 +61,9 @@ export function reconcile(ticket: Pick<Ticket, 'stage' | 'state'>, repoStage: St
 export function planAnswerRun(
   runs: AgentRun[],
   answer: string,
-): { questionRun: AgentRun; previousRuns: QAPair[] } | null {
+): { questionRun: AgentRun; answeredQuestions: QAPair[] } | null {
   const latest = runs[runs.length - 1]
   const output = latest?.output
   if (!latest || output?.type !== 'question') return null
-  return { questionRun: latest, previousRuns: [...latest.input.previousRuns, { question: output.question, answer }] }
+  return { questionRun: latest, answeredQuestions: [...latest.input.answeredQuestions, { question: output.question, answer }] }
 }

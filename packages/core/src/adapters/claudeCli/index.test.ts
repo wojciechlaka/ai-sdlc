@@ -44,7 +44,7 @@ const mockSpawn = vi.mocked(spawn)
 
 const INPUT: AgentRunnerInput = {
   ticketKey: 'CB-2', stage: 'plan', title: 'Lesezeit', description: 'D', repoPath: '/tmp/repo',
-  model: 'claude-sonnet-4-6', previousRuns: [],
+  model: 'claude-sonnet-4-6', answeredQuestions: [],
 }
 
 beforeEach(() => {
