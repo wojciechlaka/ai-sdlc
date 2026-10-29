@@ -83,7 +83,7 @@
 </head>
 <body>
   <h1>Refinement Engine — Architektur</h1>
-  <p class="subtitle">Führt Tickets durch Stufe 1 (Plan → <code>intent.md</code>) und Stufe 2 (Design → <code>spec.md</code>) des AI-Native SDLC Playbooks. Ein Agent schreibt das Artefakt, die App legt es per Branch und PR im Ziel-Repo ab, der Merge ist die Freigabe. Stufe 1 läuft Ende zu Ende, Stufe 2 folgt. Eine Next.js-App, Fachkern nach Ports &amp; Adapters.</p>
+  <p class="subtitle">Führt Tickets durch Stufe 1 (Plan → <code>intent.md</code>) und Stufe 2 (Design → <code>spec.md</code>) des AI-Native SDLC Playbooks. Ein Agent schreibt das Artefakt, die App legt es per Branch und PR im Ziel-Repo ab, der Merge ist die Freigabe. Beide Stufen laufen Ende zu Ende; Stufe 2 liest den gemergten Intent und kann zwischen 2–3 Ansätzen wählen lassen. Eine Next.js-App, Fachkern nach Ports &amp; Adapters.</p>
 
   <div class="diagram">
     <img src="architecture.png" alt="Architekturdiagramm">
@@ -93,12 +93,12 @@
 
     <div class="block blue">
       <h2><span class="dot" style="background:#3b82f6"></span>Browser (blau)</h2>
-      <p>Die Oberfläche unter <code>localhost:3000</code>: das <strong>Board</strong> mit den Spalten 1 Plan, 2 Design und Fertig und die <strong>Ticketseite</strong> (<code>/tickets/CB-2</code>) mit genau einer Aktion je Zustand — Plan starten, Stoppen, Rückfrage beantworten oder PR öffnen —, den Stufen mit Inhalt aus Git und dem Log. Die Seitenleiste zeigt Ziel-Repo, Branch <code>showcase</code> und den Reset.</p>
+      <p>Die Oberfläche unter <code>localhost:3000</code>: das <strong>Board</strong> mit den Spalten 1 Plan, 2 Design und Fertig und die <strong>Ticketseite</strong> (<code>/tickets/CB-2</code>) mit genau einer Aktion je Zustand — Plan starten, Design starten, Stoppen, Rückfrage oder Auswahl beantworten oder PR öffnen —, den Stufen mit Inhalt aus Git und dem Log. Die Seitenleiste zeigt Ziel-Repo, Branch <code>showcase</code> und den Reset.</p>
     </div>
 
     <div class="block yellow">
       <h2><span class="dot" style="background:#ca8a04"></span>packages/shared</h2>
-      <p>Zod-Verträge zwischen Kern und UI: Ticket-, Stufen- und Log-DTOs, Eingaben (Modell, Antwort), die drei Event-Typen und das Schema der Agent-Ausgabe (<code>IntentAgentOutputSchema</code>: Rückfrage oder Intent). Der Kern validiert damit, die UI nutzt die Typen.</p>
+      <p>Zod-Verträge zwischen Kern und UI: Ticket-, Stufen- und Log-DTOs, Eingaben (Modell, Antwort), die drei Event-Typen und die Schemas der Agent-Ausgabe (<code>StageOutputSchema</code>: Rückfrage, Auswahl zwischen Ansätzen, Intent oder Spec). Der Kern validiert damit, die UI nutzt die Typen.</p>
     </div>
 
     <div class="block green" style="grid-column: span 2">
@@ -115,12 +115,12 @@
     <div class="block orange" style="grid-column: span 2">
       <h2><span class="dot" style="background:#ea580c"></span>packages/core — Hexagon (orange)</h2>
       <ul>
-        <li><strong>Use Cases</strong> — <code>startStage</code> (Klon → Agent → Rückfrage oder Intent → Branch, Datei, PR), <code>answerQuestion</code>, <code>stopRun</code>, <code>syncReviews</code> (Merge → nächste Stufe, geschlossen → bereit), <code>startup</code> (Tickets einlesen, <code>showcase</code> vorbereiten, aufräumen, Stufe ableiten), <code>resetSystem</code> (Datenbank leeren, <code>startup</code> mit Repo-Reset); Agent-Läufe laufen im Hintergrund weiter</li>
-        <li><strong>Domäne</strong> — reine Regeln ohne I/O: Übergänge von Stufe und Zustand, Namen von Branch und Datei (<code>CB-2/intent</code>, <code>docs/work/CB-2/intent.md</code>), Markdown des Intent, Ordnung der Schlüssel, Fachfehler</li>
+        <li><strong>Use Cases</strong> — <code>startStage</code> (Klon → Agent → Rückfrage, Auswahl, Intent oder Spec → Branch, Datei, PR), <code>answerQuestion</code> (Antwort oder gewählter Ansatz), <code>stopRun</code>, <code>syncReviews</code> (Merge → nächste Stufe, geschlossen → bereit), <code>startup</code> (Tickets einlesen, <code>showcase</code> vorbereiten, aufräumen, Stufe ableiten), <code>resetSystem</code> (Datenbank leeren, <code>startup</code> mit Repo-Reset); Agent-Läufe laufen im Hintergrund weiter</li>
+        <li><strong>Domäne</strong> — reine Regeln ohne I/O: Übergänge von Stufe und Zustand, Namen von Branch und Datei (<code>CB-2/intent</code>, <code>CB-2/spec</code>, <code>docs/work/CB-2/…</code>), Markdown von Intent und Spec, Rückfragen-Grenze (3 je Start), Ordnung der Schlüssel, Fachfehler</li>
         <li><strong>Ports</strong> — <code>TicketRepository</code>, <code>AgentRunRepository</code>, <code>ArtifactRepository</code>, <code>AuditLog</code>, <code>TicketSource</code>, <code>CodeHost</code>, <code>AgentRunner</code>, <code>RepoProvider</code>, <code>EventPublisher</code></li>
         <li><strong>Adapter</strong> — <code>sqlite</code> (Drizzle), <code>markdownTickets</code> (liest <code>examples/tickets/*.md</code>), <code>github</code> (Octokit: Branch, Datei, PR, Tag, Reset von <code>showcase</code>), <code>git</code> (Repo-Klon + Codebase-Summary, ohne Token), <code>claudeCli</code> (Agent als Subprocess, Zod-Validierung, ein Retry, liest das Hook-Log mit), <code>agentSandbox</code> (Flags, Hooks und Umgebung jedes <code>claude</code>-Prozesses), <code>nodeEvents</code> (Event-Bus)</li>
         <li><strong>Hook-Skripte <code>hooks/</code></strong> — <code>guard.mjs</code> (vor jedem Werkzeugaufruf, Regel in <code>guardPolicy.mjs</code>) und <code>audit.mjs</code> (danach); reines Node, startet Claude Code als eigenen Prozess</li>
-        <li><strong>Evals <code>evals/</code></strong> — <code>guard.eval.ts</code>: echter Agent prüft die Leitplanken (<code>npm run eval:guard</code>, nicht in <code>npm test</code>)</li>
+        <li><strong>Evals <code>evals/</code></strong> — <code>guard.eval.ts</code>: echter Agent prüft die Leitplanken (<code>npm run eval:guard</code>); <code>spec.eval.ts</code>: Spec-Qualität gegen ein Fixture-Repo (<code>npm run eval:spec</code>); beide nicht in <code>npm test</code></li>
         <li><strong>Abhängigkeitsregel</strong> — Domäne, Ports und Use Cases importieren keine Adapter; eine ESLint-Regel prüft das</li>
       </ul>
     </div>
@@ -129,7 +129,7 @@
       <h2><span class="dot" style="background:#9333ea"></span>Extern (lila)</h2>
       <ul>
         <li><strong>SQLite-Datei</strong> — <code>apps/web/data/refinement.db</code>: Tabellen <code>tickets</code>, <code>agent_runs</code>, <code>artifacts</code>, <code>audit_events</code> — Stufe, Zustand, Verweise und Log, keine Inhalte</li>
-        <li><strong>GitHub-API</strong> — Ziel-Repo (Conduit-Fork): Branches <code>CB-2/intent</code>, PRs gegen <code>showcase</code>, Inhalte und Stufen von <code>showcase</code>; Tag <code>showcase-base</code> ist der Ausgangsstand, <code>master</code> bleibt unberührt. Schreiben braucht <code>GITHUB_TOKEN</code></li>
+        <li><strong>GitHub-API</strong> — Ziel-Repo (Conduit-Fork): Branches <code>CB-2/intent</code> und <code>CB-2/spec</code>, PRs gegen <code>showcase</code>, Inhalte und Stufen von <code>showcase</code>; Tag <code>showcase-base</code> ist der Ausgangsstand, <code>master</code> bleibt unberührt. Schreiben braucht <code>GITHUB_TOKEN</code></li>
         <li><strong>Repo-Klon</strong> — lokale Kopie des Ziel-Repos, die der Agent liest</li>
         <li><strong>examples/tickets</strong> — Markdown-Dateien, die Jira-Tickets simulieren (<code># CB-2: Titel</code>)</li>
         <li><strong>claude CLI</strong> — bekommt den Prompt über stdin und liefert die Antwort als JSON-Stream über stdout; läuft in der Sandbox der App (nur Nutzer-Einstellungen, lesende Werkzeuge, kein <code>GITHUB_TOKEN</code>) und ruft vor und nach jedem Werkzeugaufruf die Hooks <code>guard</code> und <code>audit</code> auf</li>
@@ -139,9 +139,9 @@
     <div class="block" style="background:#fef2f2; border-color:#fecaca; grid-column: span 2">
       <h2 style="color:#b91c1c"><span class="dot" style="background:#dc2626"></span>Leitplanken des Agents — Governance als Code</h2>
       <ul>
-        <li><strong>Skill</strong> — <code>skills/intent-agent.md</code> sagt dem Agent, was er tun soll: Intent schreiben oder zurückfragen, im Ziel-Repo nur lesen</li>
+        <li><strong>Skills</strong> — <code>skills/intent-agent.md</code> (Stufe 1: Intent schreiben oder zurückfragen) und <code>skills/spec-agent.md</code> (Stufe 2: Spec schreiben, zurückfragen oder Ansätze zur Auswahl stellen) sagen dem Agent, was er tun soll; im Ziel-Repo liest er nur</li>
         <li><strong>Hook</strong> — der Guard setzt durch, was er darf: <code>Read</code>/<code>Glob</code>/<code>Grep</code> nur im Klon, <code>Bash</code> nur lesende git-Befehle (<code>git log</code>, <code>show</code>, <code>diff</code>, …) ohne Sonderzeichen; alles andere wird abgelehnt, im Zweifel auch. Blockierte Aufrufe stehen rot im Log des Tickets (<code>guard_blocked</code>), ausgeführte zusammengefasst (<code>tool_used</code>)</li>
-        <li><strong>Eval</strong> — <code>npm run eval:guard</code> startet <code>claude</code> (Haiku) in der Sandbox in einem Temp-Repo: <code>rm -rf</code>, Lesen von <code>~/.ssh/config</code> und <code>curl</code> müssen blockiert sein, <code>git log</code> und <code>README.md</code> erlaubt; geprüft am Hook-Log, etwa 5 Cent pro Lauf</li>
+        <li><strong>Eval</strong> — <code>npm run eval:guard</code> startet <code>claude</code> (Haiku) in der Sandbox in einem Temp-Repo: <code>rm -rf</code>, Lesen von <code>~/.ssh/config</code> und <code>curl</code> müssen blockiert sein, <code>git log</code> und <code>README.md</code> erlaubt; geprüft am Hook-Log, etwa 5 Cent pro Lauf. <code>npm run eval:spec</code> lässt den Spec-Agent (Sonnet) Specs gegen ein Fixture-Repo schreiben; feste Prüfungen plus ein Bewerter (Haiku, ohne Werkzeuge) mit Rubrik, etwa 0,20–0,40 USD</li>
         <li><strong>Kein MCP für Schreibzugriffe</strong> — der Agent schreibt nie in die Datenbank; Zustände ändern nur die Use Cases (E6, Restrisiken in Spec §13)</li>
       </ul>
     </div>
@@ -151,7 +151,7 @@
       <div class="arrows">
         <div class="arrow-block">
           <strong>↓ Server Actions (Browser → Server)</strong>
-          Befehle wie „Plan starten“, „Antworten“, „Stoppen“ oder „Reset“. Der Kern prüft Zustand und Eingabe, Fachfehler kommen als Meldung zurück in die Oberfläche.
+          Befehle wie „Plan starten“, „Design starten“, „Auswahl beantworten“, „Antworten“, „Stoppen“ oder „Reset“. Der Kern prüft Zustand und Eingabe, Fachfehler kommen als Meldung zurück in die Oberfläche.
         </div>
         <div class="arrow-block">
           <strong>↑ SSE (Server → Browser)</strong>
@@ -200,7 +200,7 @@
               </tr>
               <tr>
                 <td style="padding:6px 10px; font-family:monospace">question</td>
-                <td style="padding:6px 10px; color:#555">Der Agent stellt eine Rückfrage — Seite wird neu geladen und zeigt das Antwortfeld</td>
+                <td style="padding:6px 10px; color:#555">Der Agent stellt eine Rückfrage oder eine Auswahl — Seite wird neu geladen und zeigt das Antwortfeld</td>
               </tr>
             </tbody>
           </table>

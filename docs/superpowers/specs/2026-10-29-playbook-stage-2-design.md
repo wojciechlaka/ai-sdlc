@@ -203,3 +203,7 @@ Spec-Schema, Log-Payloads), `docs/ui-ux-concept.md` (`ChoicePanel`, Stufe 2), `C
 
 Fortsetzen der Sitzung (SDK/`--resume`), eigene Sandbox pro Stufe (beide Stufen lesen
 nur), Abschnitt-für-Abschnitt-Freigabe in der App (das Gate ist der PR).
+
+**Bekannte Grenzen.** Alle Läufe teilen einen Klon pro Ziel-Repo: Gleichzeitige Läufe sehen den Wechsel des
+Klons (Aktualisierung, Checkout von `showcase`), und der Rückfall auf einen frischen Klon kann einen laufenden
+Agent stören. Spätere Lösung: je Lauf ein eigenes `git worktree add --detach`.

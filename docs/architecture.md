@@ -237,6 +237,10 @@ Nutzers samt Startdateien; was der Agent im öffentlichen Klon liest, sieht er g
 **Offen:**
 
 - **Sandbox pro Stufe:** spätestens mit Stufe 3 (Build), siehe §5 „Agent-Sandbox“.
+- **Geteilter Klon (bekannte Grenze):** alle Läufe teilen einen Klon pro Ziel-Repo. Läuft ein Agent, während ein
+  anderes Ticket den Klon aktualisiert oder auf `showcase` wechselt, sieht er den Wechsel; fällt der Klon auf den
+  frischen Klon zurück (kaputter Cache), kann das einen laufenden Agent stören. Spätere Lösung: je Lauf ein eigenes
+  `git worktree add --detach`.
 - **Ticket-System anbinden:** Jira o. Ä. statt `examples/tickets/*.md`, siehe unten.
 
 ### Ausblick: Ticket-System anbinden (Jira o. Ä.)
