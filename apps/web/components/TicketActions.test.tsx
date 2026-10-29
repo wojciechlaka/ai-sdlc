@@ -99,7 +99,10 @@ describe('TicketActions', () => {
 
   it('keeps the design stage disabled until stage 2 exists', () => {
     renderActions({ stage: 'design' })
-    expect(screen.getByRole('button', { name: 'Design starten' })).toBeDisabled()
+    const start = screen.getByRole('button', { name: 'Design starten' })
+    expect(start).toBeDisabled()
+    expect(start).toHaveAccessibleDescription(/Stufe 1 ist abgeschlossen.*Stufe 2 \(Design\) ist noch nicht gebaut/)
+    expect(screen.queryByRole('combobox', { name: 'Modell' })).toBeNull()
   })
 
   it('reports a finished ticket', () => {

@@ -4,6 +4,7 @@ import { ModelSelect } from './ModelSelect'
 import { Button } from './ui/button'
 
 const TOKEN_HINT_ID = 'token-hint'
+const DESIGN_HINT_ID = 'design-hint'
 
 interface Props {
   stage: Stage
@@ -30,9 +31,17 @@ export function StartStagePanel({ stage, failed, tokenConfigured, model, onModel
 
   if (stage === 'design') {
     return (
-      <div className="space-y-1">
-        <Button disabled>Design starten</Button>
-        <p className="text-xs text-slate-500">Der Design-Agent (Stufe 2) folgt im nächsten Schritt.</p>
+      <div className="space-y-2">
+        <Button disabled aria-describedby={DESIGN_HINT_ID}>
+          Design starten
+        </Button>
+        <div id={DESIGN_HINT_ID} role="note" className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
+          <p className="font-medium text-slate-700">Stufe 1 ist abgeschlossen — der Intent ist gemergt.</p>
+          <p className="mt-1 text-slate-600">
+            Stufe 2 (Design) ist noch nicht gebaut. Hier startet später der Design-Agent, der aus dem Intent die Spec
+            (<code>spec.md</code>) schreibt; dann gibt es auch die Modellauswahl. Den Intent siehst du unten unter „Stufen“.
+          </p>
+        </div>
       </div>
     )
   }
