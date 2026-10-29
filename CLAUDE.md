@@ -95,7 +95,7 @@ running|awaiting_answer --stop--> ready
 
 ### Flow ("Plan starten")
 
-1. `startStageAction(key, { model })` → use case `startStage` (`application/stageCommands.ts`): validates (Zod),
+1. `startStageAction(ticketKey, { model })` → use case `startStage` (`application/stageCommands.ts`): validates (Zod),
    requires a code host (token), sets `running`, creates the AgentRun synchronously (`beginRun`) and hands
    `runStage` to `runInBackground`
 2. `runStage`: `RepoProvider.ensureRepo(TARGET_REPO)` (plain clone/pull into `$REPO_CACHE_DIR`, no token) →

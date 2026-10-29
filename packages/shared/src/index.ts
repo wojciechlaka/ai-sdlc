@@ -12,9 +12,11 @@ export {
   AuditEventSchema,
   TicketDetailSchema,
   SettingsSchema,
-  StartStageInput,
-  AnswerInput,
+  StartStageInputSchema,
+  AnswerInputSchema,
 } from './api'
-export type { PullRequestRefDto, TicketDto, StageViewDto, AuditEventDto, TicketDetailDto, SettingsDto } from './api'
+export type {
+  PullRequestRefDto, TicketDto, StageViewDto, AuditEventDto, TicketDetailDto, SettingsDto, StartStageInput, AnswerInput,
+} from './api'
 export { TicketEventSchema } from './events'
 export type { TicketEvent } from './events'

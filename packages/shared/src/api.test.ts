@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { AnswerInput, StartStageInput, TicketDetailSchema, TicketSchema } from './api'
+import { AnswerInputSchema, StartStageInputSchema, TicketDetailSchema, TicketSchema } from './api'
 
 const NOW = new Date('2026-10-28T10:00:00Z')
 
@@ -50,12 +50,12 @@ describe('TicketDetailSchema', () => {
 })
 
 describe('inputs', () => {
-  it('StartStageInput requires a model', () => {
-    expect(StartStageInput.safeParse({ model: ' ' }).success).toBe(false)
-    expect(StartStageInput.parse({ model: 'claude-sonnet-4-6' })).toEqual({ model: 'claude-sonnet-4-6' })
+  it('StartStageInputSchema requires a model', () => {
+    expect(StartStageInputSchema.safeParse({ model: ' ' }).success).toBe(false)
+    expect(StartStageInputSchema.parse({ model: 'claude-sonnet-4-6' })).toEqual({ model: 'claude-sonnet-4-6' })
   })
 
-  it('AnswerInput rejects blank answers', () => {
-    expect(AnswerInput.safeParse({ answer: '  ' }).success).toBe(false)
+  it('AnswerInputSchema rejects blank answers', () => {
+    expect(AnswerInputSchema.safeParse({ answer: '  ' }).success).toBe(false)
   })
 })

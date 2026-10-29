@@ -1,4 +1,4 @@
-import { AnswerInput, StartStageInput } from '@refinement/shared'
+import { AnswerInputSchema, StartStageInputSchema } from '@refinement/shared'
 import { ConflictError, errorCode } from '../domain/errors'
 import { canAnswer, canStartStage, canStop, currentArtifactStage, planAnswerRun } from '../domain/rules'
 import type { Ticket } from '../domain/types'
@@ -24,7 +24,7 @@ export function startStage(deps: UseCaseDeps, key: string, raw: unknown): void {
   if (!stage || !canStartStage(ticket)) {
     throw new ConflictError(`Stufe kann im Zustand ${ticket.stage}/${ticket.state} nicht gestartet werden`)
   }
-  const { model } = parseInput(StartStageInput, raw)
+  const { model } = parseInput(StartStageInputSchema, raw)
 
   createReporter(deps, ticket.key).setState('running')
   const request: RunRequest = { stage, trigger: 'initial', model, answeredQuestions: [] }
@@ -41,7 +41,7 @@ export function answerQuestion(deps: UseCaseDeps, key: string, raw: unknown): vo
   const stage = currentArtifactStage(ticket)
   if (!stage || !canAnswer(ticket)) throw new ConflictError('Ticket wartet nicht auf eine Antwort')
   if (!deps.codeHost) throw new ConflictError(TOKEN_MISSING)
-  const { answer } = parseInput(AnswerInput, raw)
+  const { answer } = parseInput(AnswerInputSchema, raw)
   const plan = planAnswerRun(deps.runs.listForTicket(ticket.key, stage), answer)
   if (!plan) throw new ConflictError('Keine offene Rückfrage gefunden')
 

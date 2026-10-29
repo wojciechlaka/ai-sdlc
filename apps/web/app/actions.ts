@@ -10,24 +10,28 @@ function refreshAll(): void {
   revalidatePath('/', 'layout')
 }
 
-export async function startStageAction(key: string, input: { model: string }): Promise<ActionResult> {
-  const result = await runAction(() => getEngine().startStage(key, input))
+/** Starts the ticket's current stage with the chosen model; the agent runs in the background. */
+export async function startStageAction(ticketKey: string, input: { model: string }): Promise<ActionResult> {
+  const result = await runAction(() => getEngine().startStage(ticketKey, input))
   refreshAll()
   return result
 }
 
-export async function answerQuestionAction(key: string, input: { answer: string }): Promise<ActionResult> {
-  const result = await runAction(() => getEngine().answerQuestion(key, input))
+/** Answers the agent's open question; the stage continues in a new run. */
+export async function answerQuestionAction(ticketKey: string, input: { answer: string }): Promise<ActionResult> {
+  const result = await runAction(() => getEngine().answerQuestion(ticketKey, input))
   refreshAll()
   return result
 }
 
-export async function stopRunAction(key: string): Promise<ActionResult> {
-  const result = await runAction(() => getEngine().stopRun(key))
+/** Stops the running agent and returns the ticket to `ready`. */
+export async function stopRunAction(ticketKey: string): Promise<ActionResult> {
+  const result = await runAction(() => getEngine().stopRun(ticketKey))
   refreshAll()
   return result
 }
 
+/** Resets database and target repo; the result carries the startup warnings. */
 export async function resetSystemAction(): Promise<ActionResult<StartupReport>> {
   const result = await runAction(() => getEngine().resetSystem())
   refreshAll()

@@ -70,12 +70,14 @@ export const SettingsSchema = z.object({
 })
 export type SettingsDto = z.infer<typeof SettingsSchema>
 
-export const StartStageInput = z.object({
+/** Input of `startStage`: the model the agent runs with. */
+export const StartStageInputSchema = z.object({
   model: notBlank('Modell ist erforderlich'),
 })
-export type StartStageInput = z.infer<typeof StartStageInput>
+export type StartStageInput = z.infer<typeof StartStageInputSchema>
 
-export const AnswerInput = z.object({
+/** Input of `answerQuestion`: the human's answer to the open question. */
+export const AnswerInputSchema = z.object({
   answer: notBlank('Antwort ist erforderlich'),
 })
-export type AnswerInput = z.infer<typeof AnswerInput>
+export type AnswerInput = z.infer<typeof AnswerInputSchema>

@@ -1,4 +1,4 @@
-import type { Stage, TicketDto, TicketState } from '@refinement/shared'
+import type { ArtifactStage, Stage, TicketDto, TicketState } from '@refinement/shared'
 
 export const MODELS = [
   { value: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5' },
@@ -8,10 +8,17 @@ export const MODELS = [
 
 export const DEFAULT_MODEL = 'claude-sonnet-4-6'
 
+/** Board column and badge label per stage. */
 export const STAGE_LABEL: Record<Stage, string> = {
   plan:   '1 Plan',
   design: '2 Design',
   done:   'Fertig',
+}
+
+/** Card title of an artifact stage on the ticket page: stage and artifact name. */
+export const ARTIFACT_STAGE_TITLE: Record<ArtifactStage, string> = {
+  plan:   '1 Plan · Intent',
+  design: '2 Design · Spec',
 }
 
 export const STATE_LABEL: Record<TicketState, string> = {
@@ -43,6 +50,7 @@ export const MODEL_PRICING: Record<string, { inputPerMtok: number; outputPerMtok
   'claude-opus-4-7':           { inputPerMtok: 5.00,  outputPerMtok: 25.00 },
 }
 
-export const MTOK = 1_000_000
+/** Prices are quoted per million tokens. */
+export const TOKENS_PER_MILLION = 1_000_000
 export const CACHE_WRITE_MULTIPLIER = 1.25
 export const CACHE_READ_MULTIPLIER = 0.10

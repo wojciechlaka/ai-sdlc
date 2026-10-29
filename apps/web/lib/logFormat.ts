@@ -1,5 +1,5 @@
 import type { AuditEventDto, Stage } from '@refinement/shared'
-import { CACHE_READ_MULTIPLIER, CACHE_WRITE_MULTIPLIER, MODELS, MODEL_PRICING, MTOK, STAGE_LABEL } from './constants'
+import { CACHE_READ_MULTIPLIER, CACHE_WRITE_MULTIPLIER, MODELS, MODEL_PRICING, TOKENS_PER_MILLION, STAGE_LABEL } from './constants'
 import { formatElapsed } from './utils'
 
 const TOKENS_PER_K = 1000
@@ -24,10 +24,10 @@ export function runCostUsd(p: Payload): number {
   if (reported > 0) return reported
   const pricing = MODEL_PRICING[text(p, 'model')]
   if (!pricing) return 0
-  return (count(p, 'inputTokens') / MTOK) * pricing.inputPerMtok
-    + (count(p, 'cacheCreationTokens') / MTOK) * pricing.inputPerMtok * CACHE_WRITE_MULTIPLIER
-    + (count(p, 'cacheReadTokens') / MTOK) * pricing.inputPerMtok * CACHE_READ_MULTIPLIER
-    + (count(p, 'outputTokens') / MTOK) * pricing.outputPerMtok
+  return (count(p, 'inputTokens') / TOKENS_PER_MILLION) * pricing.inputPerMtok
+    + (count(p, 'cacheCreationTokens') / TOKENS_PER_MILLION) * pricing.inputPerMtok * CACHE_WRITE_MULTIPLIER
+    + (count(p, 'cacheReadTokens') / TOKENS_PER_MILLION) * pricing.inputPerMtok * CACHE_READ_MULTIPLIER
+    + (count(p, 'outputTokens') / TOKENS_PER_MILLION) * pricing.outputPerMtok
 }
 
 export function formatCost(usd: number): string {

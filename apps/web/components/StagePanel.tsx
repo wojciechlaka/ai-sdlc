@@ -1,8 +1,8 @@
 import ReactMarkdown from 'react-markdown'
 import type { PrState, StageViewDto } from '@refinement/shared'
+import { ARTIFACT_STAGE_TITLE } from '@/lib/constants'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 
-const TITLE: Record<StageViewDto['stage'], string> = { plan: '1 Plan · Intent', design: '2 Design · Spec' }
 const PR_STATE: Record<PrState, string> = { open: 'offen', merged: 'gemergt', closed: 'geschlossen' }
 const DATE = new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium', timeZone: 'Europe/Berlin' })
 
@@ -21,7 +21,7 @@ export function StagePanel({ view }: { view: StageViewDto }) {
             <span aria-hidden="true">{view.completed ? '✓' : '○'}</span>
             <span className="sr-only">{view.completed ? 'abgeschlossen' : 'offen'}</span>
           </span>
-          {TITLE[view.stage]}
+          {ARTIFACT_STAGE_TITLE[view.stage]}
           {view.mergedAt && <span className="text-xs font-normal text-slate-400">gemergt am {DATE.format(view.mergedAt)}</span>}
         </CardTitle>
       </CardHeader>
