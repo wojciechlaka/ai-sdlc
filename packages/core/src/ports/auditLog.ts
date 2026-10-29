@@ -6,10 +6,10 @@ export type { AuditActor, AuditEventType, AuditPayloads }
 type IsUnion<T, U = T> = T extends unknown ? ([U] extends [T] ? false : true) : never
 
 /**
- * Payload of the entry type `T`, inferred from `type` only. `never` when `T` is a union of types: a payload of one
+ * Payload of the entry type `T`. `never` when `T` is a union of types: a payload of one
  * member must not pass for another (`AuditPayloads[T]` alone would accept any member's payload).
  */
-export type PayloadOf<T extends AuditEventType> = NoInfer<true extends IsUnion<T> ? never : AuditPayloads[T]>
+export type PayloadOf<T extends AuditEventType> = true extends IsUnion<T> ? never : AuditPayloads[T]
 
 /** A new log entry; `payload` must match `type` (contract in `packages/shared/src/auditEvents.ts`). */
 export interface NewAuditEvent<T extends AuditEventType> {
@@ -33,7 +33,7 @@ export interface AuditLogEntry {
   type: string
   /** Stored JSON payload; parse it with `AuditEventSchema` before use. */
   payload: unknown
-  /** When the entry was written (second precision). */
+  /** When the entry was written (millisecond precision; equal times keep insertion order). */
   createdAt: Date
 }
 

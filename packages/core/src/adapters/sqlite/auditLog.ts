@@ -25,7 +25,7 @@ export function createSqliteAuditLog(db: SqliteDb): AuditLog {
       })
         .from(auditEvents)
         .where(eq(auditEvents.ticketKey, ticketKey))
-        // Insertion order; `created_at` has only second precision.
+        // Insertion order: `created_at` has millisecond precision and entries in the same ms tie.
         .orderBy(sql`rowid`)
         .all(),
   }

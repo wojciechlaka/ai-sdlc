@@ -3,7 +3,7 @@ import type { ArtifactRepository } from '../../ports'
 import type { SqliteDb } from './database'
 import { artifacts } from './schema'
 
-/** Insertion order; `created_at` has only second precision. */
+/** Insertion order: `created_at` has millisecond precision, entries in the same ms tie, so order by rowid. */
 const insertionOrder = sql`rowid`
 
 /** `ArtifactRepository` on the `artifacts` table. @throws when an update hits no row (unknown id). */

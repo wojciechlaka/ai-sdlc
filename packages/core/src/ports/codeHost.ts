@@ -1,10 +1,10 @@
 import type { PrState } from '../domain/types'
 
-/** A pull request as the app needs it. */
+/** A pull request, reduced to what the app reads. */
 export interface PullRequest {
-  /** PR number in the repository. */
+  /** Number shown on GitHub (`#3`); the handle for get/close. */
   number: number
-  /** Web URL of the PR. */
+  /** Browser URL of the PR (not the API URL); linked from the ticket page. */
   url: string
   /** `open`, `merged` or `closed` (closed without merge). */
   state: PrState

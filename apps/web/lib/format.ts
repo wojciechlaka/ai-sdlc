@@ -13,9 +13,6 @@ const TOKENS_PER_K = 1000
 const MICRO_COST_USD = 0.001
 /** Below this four decimals are shown, above it cents. */
 const SMALL_COST_USD = 0.01
-const MICRO_COST_DECIMALS = 6
-const SMALL_COST_DECIMALS = 4
-const CENT_DECIMALS = 2
 
 /** Date and time of a log entry, e.g. "29.10.26, 14:03:12". */
 export function formatDateTime(at: Date): string {
@@ -45,7 +42,8 @@ export function formatTokens(n: number): string {
 /** Dollar amount with more decimals for tiny costs; `—` for zero (no usage known). */
 export function formatCost(usd: number): string {
   if (usd === 0) return '—'
-  if (usd < MICRO_COST_USD) return `$${usd.toFixed(MICRO_COST_DECIMALS)}`
-  if (usd < SMALL_COST_USD) return `$${usd.toFixed(SMALL_COST_DECIMALS)}`
-  return `$${usd.toFixed(CENT_DECIMALS)}`
+  // Enough decimals that a tiny cost still shows its first significant digits; cents otherwise.
+  if (usd < MICRO_COST_USD) return `$${usd.toFixed(6)}`
+  if (usd < SMALL_COST_USD) return `$${usd.toFixed(4)}`
+  return `$${usd.toFixed(2)}`
 }

@@ -23,17 +23,17 @@ export interface AgentRunnerInput {
 
 /** Usage of a run (summed over a schema retry), stored on the AgentRun and shown in the log. */
 export interface AgentRunMeta {
-  /** Model the run used. */
+  /** Model id the run was started with (same for the retry). */
   model: string
   /** Wall-clock duration of the Claude calls. */
   durationSeconds: number
-  /** Uncached input tokens. */
+  /** Input tokens neither written to nor read from the prompt cache. */
   inputTokens: number
   /** Input tokens written to the prompt cache. */
   cacheCreationTokens: number
   /** Input tokens read from the prompt cache. */
   cacheReadTokens: number
-  /** Generated tokens. */
+  /** Tokens Claude generated, summed over both Claude calls of a schema retry. */
   outputTokens: number
   /** Cost reported by the CLI, in USD. */
   costUsd: number
@@ -43,7 +43,7 @@ export interface AgentRunMeta {
 export interface AgentRunResult {
   /** Question or result, validated against the stage's schema. */
   output: StageOutput
-  /** Usage of the run. */
+  /** Model, duration, tokens and cost, summed over a schema retry. */
   meta: AgentRunMeta
 }
 

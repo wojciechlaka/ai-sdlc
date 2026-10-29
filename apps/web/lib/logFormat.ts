@@ -47,9 +47,14 @@ const FALLBACK_LABEL: Record<AuditEventType, string> = {
   tool_used:       'Werkzeugaufruf',
 }
 
+/** True for a type the contract knows, even when the entry's payload does not match it. */
+function isAuditEventType(type: string): type is AuditEventType {
+  return Object.hasOwn(FALLBACK_LABEL, type)
+}
+
 /** Line for an entry that fails the contract: the German name of a known type, otherwise `Eintrag <type>`. */
 function describeUnparsed(type: string): string {
-  return Object.hasOwn(FALLBACK_LABEL, type) ? FALLBACK_LABEL[type as AuditEventType] : `Eintrag ${type}`
+  return isAuditEventType(type) ? FALLBACK_LABEL[type] : `Eintrag ${type}`
 }
 
 /**

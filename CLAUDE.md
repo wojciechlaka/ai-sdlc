@@ -74,15 +74,18 @@ changing Next-specific code.
 
 - **Ticket** — key `CB-3` (primary key, from the source file), title, description, priority, sourcePath,
   `stage: plan | design | done`, `state: ready | running | awaiting_answer | in_review | failed`
-- **AgentRun** — per ticket and stage; `seq`, trigger `initial | answer`, input (model + Q&A history), output, cost/tokens
-- **Artifact** — stage, path `docs/work/<KEY>/intent.md|spec.md`, branch `<KEY>/intent|spec`, PR number/url/state, mergedAt
+- **AgentRun** — per ticket and stage; `seq`, trigger `initial | answer`, input (model + Q&A history), output,
+  cost/tokens
+- **Artifact** — stage, path `docs/work/<KEY>/intent.md|spec.md`, branch `<KEY>/intent|spec`, PR number/url/state,
+  mergedAt
 - **AuditEvent** — the per-ticket log shown on the ticket page (`ticket_imported`, `run_started`, `run_finished`,
   `question_asked`, `answer_given`, `pr_opened`, `pr_merged`, `pr_closed`, `stage_changed`, `cleanup`, `error`,
   `guard_blocked`, `tool_used`). Contract in `packages/shared/src/auditEvents.ts`: `AuditEventSchema` (discriminated
   union on `type`, one payload schema per type) and `AuditPayloads`. The core writes via `record(deps, ticketKey,
-  actor, type, payload)` (`application/auditTrail.ts`; `AuditLog.append` is typed by the map via `PayloadOf`, so a wrong
-  payload does not compile, not even with a union type); `apps/web/lib/logFormat.ts` parses each stored entry with `safeParse` and falls back to a
-  German type name (`FALLBACK_LABEL`, else `Eintrag <type>`) for rows that do not match (old versions).
+  actor, type, payload)` (`application/auditTrail.ts`; `AuditLog.append` is typed by the map via `PayloadOf`, so a
+  wrong payload does not compile, not even with a union type); `apps/web/lib/logFormat.ts` parses each stored entry
+  with `safeParse` and falls back to a German type name (`FALLBACK_LABEL`, else `Eintrag <type>`) for rows that do not
+  match (old versions).
 
 ### Transitions (`domain/rules.ts`)
 
@@ -113,28 +116,30 @@ running|awaiting_answer --stop--> ready
    clients call `router.refresh()` on state/question events
 
 **Agent sandbox, guard and audit hooks (spec §13):** `adapters/agentSandbox` implements the `ClaudeProcessSandbox`
-port (`ports/claudeProcessSandbox.ts`: `args`, `env(logFile)`, `claudeArgs(model)`, `createLogFile()`); it is built once in `compose.ts`
-and passed to the claudeCli and git adapters. It gives every `claude` process `--setting-sources user` (the clone's `.claude/` settings
-and hooks are never loaded), `--allowedTools Read,Glob,Grep,Bash`, `--settings` with a `PreToolUse` hook
-(`packages/core/hooks/guard.mjs`) and a `PostToolUse` hook (`hooks/audit.mjs`), and an allowlisted env (no
-`GITHUB_TOKEN`; `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null`). Policy (`hooks/guardPolicy.mjs`, no shell
-parsing): Read/Glob/Grep only inside the realpath of the clone; Bash only `git log|show|diff|blame|ls-files|status|
-rev-parse` with allowlisted options, no shell special characters (`~`/`^` only inside a revision word), no absolute
-paths or `..`; every other tool denied. The clone is checked out with `core.symlinks=false` (`adapters/git`). The guard fails closed (modules loaded inside `try`; shell fallback `|| … exit 2` if node cannot run it);
-audit fails open. Both append JSON lines to `$REFINEMENT_HOOK_LOG`, a temp file per Claude call (created by
-`sandbox.createLogFile()`) that `adapters/claudeCli/hookLog.ts` follows during the run and reports as `ToolEvent` (`{ kind: 'blocked' | 'used', tool,
-target, reason? }`) via `AgentRunner.run(input, { onProgress, onToolEvent })`. `executeRun` turns them into
-`guard_blocked` (system, plus a progress event) / `tool_used` (agent) log entries while the attempt is current. The
-summary run (`adapters/git`) only warns about blocked calls in the server log. `hooks/` holds plain Node ESM scripts
-(only `node:` modules and sibling scripts — ESLint; no imports between `hooks/` and `src/` — ArchUnitTS; type-checked
-via `checkJs`).
+port (`ports/claudeProcessSandbox.ts`: `args`, `env(logFile)`, `claudeArgs(model)`, `createLogFile()`); it is built
+once in `compose.ts` and passed to the claudeCli and git adapters. It gives every `claude` process `--setting-sources
+user` (the clone's `.claude/` settings and hooks are never loaded), `--allowedTools Read,Glob,Grep,Bash`, `--settings`
+with a `PreToolUse` hook (`packages/core/hooks/guard.mjs`) and a `PostToolUse` hook (`hooks/audit.mjs`), and an
+allowlisted env (no `GITHUB_TOKEN`; `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null`). Policy
+(`hooks/guardPolicy.mjs`, no shell parsing): Read/Glob/Grep only inside the realpath of the clone; Bash only `git
+log|show|diff|blame|ls-files|status|rev-parse` with allowlisted options, no shell special characters (`~`/`^` only
+inside a revision word), no absolute paths or `..`; every other tool denied. The clone is checked out with
+`core.symlinks=false` (`adapters/git`). The guard fails closed (modules loaded inside `try`; shell fallback `|| … exit
+2` if node cannot run it); audit fails open. Both append JSON lines to `$REFINEMENT_HOOK_LOG`, a temp file per Claude
+call (created by `sandbox.createLogFile()`) that `adapters/claudeCli/hookLog.ts` follows during the run and reports as
+`ToolEvent` (`{ kind: 'blocked' | 'used', tool, target, reason? }`) via `AgentRunner.run(input, { onProgress,
+onToolEvent })`. `executeRun` turns them into `guard_blocked` (system, plus a progress event) / `tool_used` (agent)
+log entries while the attempt is current. The summary run (`adapters/git`) only warns about blocked calls in the
+server log. `hooks/` holds plain Node ESM scripts (only `node:` modules and sibling scripts — ESLint; no imports
+between `hooks/` and `src/` — ArchUnitTS; type-checked via `checkJs`).
 
 **Guard eval (`packages/core/evals/guard.eval.ts`, `npm run eval:guard`):** creates a temp git repo (`README.md`,
-`testdir/keep.txt`), spawns the real `claude --print --output-format stream-json` with `createAgentSandbox(...).claudeArgs(model)`/
-`.env(logFile)` and the real `hooks/` (model `claude-haiku-4-5-20251001`, override with `EVAL_MODEL`), asks it to try
-each case, then asserts on the hook log (not the model's answer): expected `blocked`/`used` per case, `keep.txt` still
-there, run succeeded. Prints a German table with cost and duration, exit code 1 on failure, always removes the temp
-files. Not run by `npm test` (`*.eval.ts` is no test file name, and `evals/**` is excluded in `vitest.config.ts`); type-checked (`tsconfig`
+`testdir/keep.txt`), spawns the real `claude --print --output-format stream-json` with
+`createAgentSandbox(...).claudeArgs(model)`, `.env(logFile)` and a hook log from `.createLogFile()` and the real
+`hooks/` (model `claude-haiku-4-5-20251001`, override with `EVAL_MODEL`), asks it to try each case, then asserts on
+the hook log (not the model's answer): expected `blocked`/`used` per case, `keep.txt` still there, run succeeded.
+Prints a German table with cost and duration, exit code 1 on failure, always removes the temp files. Not run by `npm
+test` (`*.eval.ts` is no test file name, and `evals/**` is excluded in `vitest.config.ts`); type-checked (`tsconfig`
 includes `evals`) and linted.
 
 **Attempt identity:** every background step checks `isCurrentRun` (`application/runLifecycle.ts`: ticket still
@@ -180,7 +185,8 @@ makes `startStage`/`answerQuestion` throw a `ConflictError`.
   (`hold()`/`stop()`, scripted `progress`/`toolEvents`, recorded `callbacks`), `fakeRepoProvider.ts`, `samples.ts`,
   `testContext.ts` (`createTestContext({ token })`, `seedTicket`, `errorCodeOf`)
 - `packages/core/hooks/{guardPolicy,guard,audit,hookIo}.mjs` — guard/audit hook scripts for the agent (spec §13)
-- `packages/core/src/adapters/agentSandbox/agentSandbox.ts` — flags, hook settings and env allowlist of every `claude` process
+- `packages/core/src/adapters/agentSandbox/agentSandbox.ts` — flags, hook settings and env allowlist of every `claude`
+  process
 - `packages/core/skills/intent-agent.md` — stage 1 skill, included verbatim in the prompt
   (`refinement-agent.md` is kept for stage 2)
 

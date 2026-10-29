@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react'
 import type { ActionResult } from '@/lib/actionResult'
 
 /** What `useServerAction` returns. */
-export interface ServerAction {
+export interface ServerActionState {
   /** Runs `action` in a transition; calls `onSuccess` with its data, otherwise keeps its error. */
   run: <T>(action: () => Promise<ActionResult<T>>, onSuccess?: (data: T) => void) => void
   /** True while an action runs; buttons use it to disable themselves. */
@@ -13,12 +13,15 @@ export interface ServerAction {
   error: string | null
 }
 
-/** Pending flag and error state around Server Actions that return an `ActionResult`. */
-export function useServerAction(): ServerAction {
+/**
+ * Pending flag and error state around Server Actions that return an `ActionResult`. Only `{ ok: false }` sets
+ * `error`; an action that throws or rejects still reaches the error boundary (`error.tsx`).
+ */
+export function useServerAction(): ServerActionState {
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
 
-  const run: ServerAction['run'] = (action, onSuccess) =>
+  const run: ServerActionState['run'] = (action, onSuccess) =>
     startTransition(async () => {
       setError(null)
       const result = await action()

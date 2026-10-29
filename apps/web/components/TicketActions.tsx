@@ -42,9 +42,7 @@ export function TicketActions({ ticket, tokenConfigured }: Props) {
   })
   const elapsed = useElapsedSeconds(ticket.state === 'running')
 
-  const stopButton = (label: string) => (
-    <StopButton label={label} pending={pending} onStop={() => run(() => stopRunAction(ticket.key))} />
-  )
+  const stop = () => run(() => stopRunAction(ticket.key))
 
   const actionArea = (): ReactNode => {
     switch (ticket.state) {
@@ -70,7 +68,7 @@ export function TicketActions({ ticket, tokenConfigured }: Props) {
               connected={connected}
               everConnected={everConnected}
             />
-            {stopButton('Stoppen')}
+            <StopButton label="Stoppen" pending={pending} onStop={stop} />
           </>
         )
       case 'awaiting_answer':
@@ -79,7 +77,7 @@ export function TicketActions({ ticket, tokenConfigured }: Props) {
             {ticket.pendingQuestion && (
               <QuestionPanel ticketKey={ticket.key} question={ticket.pendingQuestion} onAnswered={() => router.refresh()} />
             )}
-            {stopButton('Abbrechen')}
+            <StopButton label="Abbrechen" pending={pending} onStop={stop} />
             {!ticket.pendingQuestion && <SyncingNotice />}
           </>
         )

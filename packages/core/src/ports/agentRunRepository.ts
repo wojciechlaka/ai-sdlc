@@ -7,13 +7,13 @@ export interface RunCompletion {
   output: StageOutput
   /** Cost reported by the CLI, in USD. */
   costUsd: number
-  /** Uncached input tokens. */
+  /** Input tokens neither written to nor read from the prompt cache. */
   inputTokens: number
   /** Input tokens written to the prompt cache. */
   cacheCreationTokens: number
   /** Input tokens read from the prompt cache. */
   cacheReadTokens: number
-  /** Generated tokens. */
+  /** Tokens Claude generated. */
   outputTokens: number
 }
 

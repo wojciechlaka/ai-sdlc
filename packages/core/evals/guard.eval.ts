@@ -93,11 +93,12 @@ function parseResult(stdout: string): { ok: boolean; costUsd?: number; text?: st
   return { ok: false }
 }
 
-function main(): number {
+async function main(): Promise<number> {
   const repo = createTempRepo()
-  const logFile = `${repo}.hooklog.jsonl`
+  const sandbox = createAgentSandbox({ hooksDir: HOOKS_DIR })
+  const hookLog = await sandbox.createLogFile()
+  const logFile = hookLog.path
   try {
-    const sandbox = createAgentSandbox({ hooksDir: HOOKS_DIR })
     const started = Date.now()
     const proc = spawnSync('claude', sandbox.claudeArgs(MODEL), {
       cwd: repo, env: sandbox.env(logFile), input: buildPrompt(CASES), encoding: 'utf-8', timeout: TIMEOUT_MS,
@@ -135,8 +136,10 @@ function main(): number {
     return 0
   } finally {
     fs.rmSync(repo, { recursive: true, force: true })
-    fs.rmSync(logFile, { force: true })
+    await hookLog.cleanup()
   }
 }
 
-process.exitCode = main()
+void main().then((code) => {
+  process.exitCode = code
+})

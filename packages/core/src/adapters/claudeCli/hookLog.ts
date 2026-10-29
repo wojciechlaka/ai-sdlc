@@ -41,15 +41,21 @@ export interface HookLog {
 
 /**
  * Follows the sandbox's log file of one Claude call and reports every complete line to `onEvent` while the call
- * lasts (polling; partial lines wait for their newline). `close` drains the rest and cleans the file up.
+ * lasts (polling; partial lines wait for their newline). `close` drains the rest and cleans the file up;
+ * if the file cannot be opened, it is cleaned up before the error is rethrown.
  */
 export async function openHookLog(
   logFile: HookLogFile,
   onEvent: (event: ToolEvent) => void,
   pollMs = POLL_INTERVAL_MS,
 ): Promise<HookLog> {
-  const file = logFile.path
-  const handle = await fs.open(file, 'r')
+  let handle: fs.FileHandle
+  try {
+    handle = await fs.open(logFile.path, 'r')
+  } catch (err) {
+    await logFile.cleanup()
+    throw err
+  }
   const decoder = new StringDecoder('utf8')
   const buffer = Buffer.alloc(READ_CHUNK_BYTES)
   let offset = 0
@@ -88,7 +94,7 @@ export async function openHookLog(
   const timer = setInterval(() => void drain(), pollMs)
 
   return {
-    file,
+    file: logFile.path,
     close: async () => {
       clearInterval(timer)
       await drain()
