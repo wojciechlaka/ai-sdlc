@@ -13,12 +13,14 @@ import { failStage } from './failStage'
 import { publishArtifact } from './publishArtifact'
 import { record } from './auditTrail'
 
-/** RunRequest plus what `runStage` prepared: the run id, the checkout and the codebase summary. */
+/** RunRequest plus what `runStage` prepared: the run id, the checkout, the codebase summary and the intent. */
 export interface ExecuteRunRequest extends RunRequest {
   /** The attempt's run, created by `beginRun`. */
   runId: string
   repoDir: string
   codebaseSummary: string | null
+  /** Merged `intent.md` from the base branch; only for the design stage. */
+  intent?: string
 }
 
 /** What one step of an attempt needs: deps, the ticket and its reporter, the request and the staleness check. */
@@ -57,7 +59,7 @@ export async function executeRun(deps: UseCaseDeps, ticket: Ticket, request: Exe
   }
 }
 
-/** What the agent gets: ticket text, checkout, model, summary and the Q&A history. */
+/** What the agent gets: ticket text, checkout, model, summary, intent (design) and the Q&A history. */
 function agentInput(ticket: Ticket, request: ExecuteRunRequest): AgentRunnerInput {
   return {
     ticketKey: ticket.key,
@@ -67,6 +69,7 @@ function agentInput(ticket: Ticket, request: ExecuteRunRequest): AgentRunnerInpu
     repoDir: request.repoDir,
     model: request.model,
     codebaseSummary: request.codebaseSummary ?? undefined,
+    intent: request.intent,
     answeredQuestions: request.answeredQuestions,
   }
 }

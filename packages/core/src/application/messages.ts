@@ -3,3 +3,6 @@ export const TOKEN_MISSING = 'GITHUB_TOKEN fehlt — ohne Token kann die App kei
 
 /** Shown when a stage is started or answered (or a second reset requested) while `resetSystem` runs. */
 export const RESET_RUNNING = 'Repo wird gerade zurückgesetzt — bitte kurz warten'
+
+/** Shown when stage 2 starts but `intent.md` is not on the base branch. */
+export const INTENT_MISSING = 'Intent fehlt auf showcase — erst Stufe 1 abschließen'

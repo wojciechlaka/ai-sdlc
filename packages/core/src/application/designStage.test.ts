@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { CodeHostError } from '../ports'
 import { SAMPLE_CHOICE_OUTPUT, SAMPLE_META, SAMPLE_SPEC_OUTPUT, createTestContext, seedTicket, type TestContext } from '../testing/fakes'
 import { startStage, stopRun } from './stageCommands'
 import { syncReviews } from './syncReviews'
@@ -58,6 +59,43 @@ describe('design stage — spec', () => {
     expect(ctx.deps.tickets.findByKey('CB-2')).toMatchObject({ stage: 'done', state: 'ready' })
     expect(ctx.store.audit.at(-1)).toMatchObject({ type: 'stage_changed', payload: { from: 'design', to: 'done' } })
     expect(ctx.codeHost.files.has('docs/work/CB-2/spec.md')).toBe(true)
+  })
+})
+
+describe('design stage — intent', () => {
+  it('passes the merged intent from the base branch to the agent', async () => {
+    const ctx = setup()
+    await start(ctx)
+    expect(ctx.agent.calls[0]?.intent).toBe(INTENT_MD)
+    expect(ctx.codeHost.calls).toContain('readFile')
+  })
+
+  it('fails without intent on the base branch and does not start the agent', async () => {
+    const ctx = setup()
+    ctx.codeHost.files.delete(INTENT_PATH)
+
+    expect(await start(ctx)).toMatchObject({ stage: 'design', state: 'failed' })
+    expect(ctx.store.audit.at(-1)).toMatchObject({ type: 'error', payload: { message: 'Intent fehlt auf showcase — erst Stufe 1 abschließen' } })
+    expect(ctx.store.runs[0]?.status).toBe('failed')
+    expect(ctx.agent.calls).toEqual([])
+    expect(ctx.repos.requestedUrls).toEqual([])
+  })
+
+  it('fails with the GitHub message when the intent cannot be read', async () => {
+    const ctx = setup()
+    ctx.codeHost.failures.readFile = new CodeHostError(0, 'GitHub ist nicht erreichbar')
+
+    expect(await start(ctx)).toMatchObject({ state: 'failed' })
+    expect(ctx.store.audit.at(-1)?.payload).toEqual({ message: 'GitHub ist nicht erreichbar' })
+  })
+
+  it('does not read an intent in the plan stage', async () => {
+    const ctx = createTestContext()
+    seedTicket(ctx, 'CB-3')
+    startStage(ctx.deps, 'CB-3', MODEL)
+    await ctx.settle()
+    expect(ctx.agent.calls[0]?.intent).toBeUndefined()
+    expect(ctx.codeHost.calls).not.toContain('readFile')
   })
 })
 
