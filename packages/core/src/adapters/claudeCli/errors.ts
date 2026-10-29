@@ -1,6 +1,6 @@
 import type { ZodIssue } from 'zod'
 
-/** Thrown when Claude's output cannot be parsed or does not satisfy the RefinementOutput schema. */
+/** Thrown when Claude's output cannot be parsed or does not satisfy the stage's output schema. German: it can end a run in the UI. */
 export class SchemaValidationError extends Error {
   constructor(
     public readonly issues: ZodIssue[],

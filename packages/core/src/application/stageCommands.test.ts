@@ -123,7 +123,7 @@ describe('startStage — failures', () => {
     const release = ctx.agent.hold()
     startStage(ctx.deps, 'CB-2', MODEL)
     await vi.waitFor(() => expect(ctx.agent.calls).toHaveLength(1))
-    // The real stop sets `ready` before the process ends (Task 16); simulate that order.
+    // The real stop (`stopRun`) sets `ready` before the process ends; simulate that order.
     ctx.deps.tickets.update('CB-2', { state: 'ready' })
     release()
     await ctx.settle()

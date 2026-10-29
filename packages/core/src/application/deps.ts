@@ -25,6 +25,8 @@ export interface UseCaseDeps {
   repoUrl: string
   /** Branch of the target repository the app works on (`showcase`); the code host is configured with the same name. */
   baseBranch: string
+  /** Tag that marks the initial state of the base branch (`showcase-base`); named in startup warnings. */
+  baselineTag: string
   /** Receives fire-and-forget work (agent runs). The production implementation logs rejections. */
   runInBackground: (task: Promise<void>) => void
   /** In-process state shared by all use cases; `resetting` is set while `resetSystem` runs. */

@@ -84,7 +84,7 @@ async function prepareBaseBranch(deps: UseCaseDeps, host: CodeHost, warn: Warn):
   const { createdTag, createdBranch, baselineHasWork } = await host.prepareBaseBranch()
   if (createdTag) console.log('[startup] Baseline tag created on the default branch')
   if (createdBranch) console.log(`[startup] Branch ${deps.baseBranch} created at the baseline tag`)
-  if (baselineHasWork) warn('Ausgangsstand showcase-base enthält bereits docs/work — diese Tickets starten nicht in Stufe 1')
+  if (baselineHasWork) warn(`Ausgangsstand ${deps.baselineTag} enthält bereits docs/work — diese Tickets starten nicht in Stufe 1`)
 }
 
 /**

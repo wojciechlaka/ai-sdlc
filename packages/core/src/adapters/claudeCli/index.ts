@@ -23,7 +23,9 @@ interface StageAgent {
   schema: ZodType<StageOutput>
 }
 
-/** Skill and output schema per stage. Part B adds `design`. */
+/**
+ * Skill and output schema per stage. A stage without an entry cannot run yet (see `STARTABLE_STAGES` in domain/rules).
+ */
 const STAGE_AGENTS: Partial<Record<ArtifactStage, StageAgent>> = {
   plan: { skillFile: 'intent-agent.md', schema: IntentAgentOutputSchema },
 }

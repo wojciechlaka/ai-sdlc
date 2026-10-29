@@ -61,9 +61,18 @@ export function getRepoDir(repoUrl: string): string {
 /** Clone options: symlinks of the (untrusted) target repo are checked out as plain files holding the link target. */
 const CLONE_CONFIG = ['-c', 'core.symlinks=false']
 
+// All git calls use execFileSync with an argument array: no shell interprets the URL, so it cannot inject commands.
+
 /** `git clone` without symlinks. */
 function cloneRepo(repoUrl: string, repoDir: string): void {
   execFileSync('git', ['clone', ...CLONE_CONFIG, repoUrl, repoDir], { stdio: 'pipe' })
+}
+
+/** Removes whatever is at `repoDir` and clones the repository there from scratch. */
+function freshClone(repoUrl: string, repoDir: string): void {
+  fs.rmSync(repoDir, { recursive: true, force: true })
+  fs.mkdirSync(CACHE_ROOT, { recursive: true })
+  cloneRepo(repoUrl, repoDir)
 }
 
 /**
@@ -83,7 +92,7 @@ function pullWithoutSymlinks(repoUrl: string, repoDir: string): void {
 
 /**
  * Ensures the repository is present and up-to-date in the local cache.
- * Clones the repo on first use; runs `git pull` on subsequent calls. Symlinks are always checked out as plain
+ * Clones the repo on first use; runs `git pull` on subsequent calls and clones afresh if the pull fails. Symlinks are always checked out as plain
  * files, so the agent cannot follow a link out of the clone (spec §13).
  * Uses the plain URL without credentials (the target repo is public); the agent
  * must never see a write token. Caches cloned earlier with a token in the remote
@@ -93,27 +102,22 @@ function pullWithoutSymlinks(repoUrl: string, repoDir: string): void {
  *
  * @param repoUrl - The repository URL.
  * @returns The absolute path to the cached repository directory.
- * @throws If `git clone` or `git pull` fails.
+ * @throws If `git clone` fails (a failed pull falls back to a fresh clone).
  */
 export async function ensureRepo(repoUrl: string): Promise<string> {
   const repoDir = getRepoDir(repoUrl)
 
-  if (fs.existsSync(repoDir)) {
-    try {
-      // execFileSync avoids shell interpretation — no injection risk from the URL.
-      pullWithoutSymlinks(repoUrl, repoDir)
-    } catch {
-      // Directory exists but is not a valid git repo (e.g. interrupted clone).
-      // Remove it and fall through to a fresh clone.
-      fs.rmSync(repoDir, { recursive: true, force: true })
-      fs.mkdirSync(CACHE_ROOT, { recursive: true })
-      cloneRepo(repoUrl, repoDir)
-    }
-  } else {
-    fs.mkdirSync(CACHE_ROOT, { recursive: true })
-    cloneRepo(repoUrl, repoDir)
+  if (!fs.existsSync(repoDir)) {
+    freshClone(repoUrl, repoDir)
+    return repoDir
   }
-
+  try {
+    pullWithoutSymlinks(repoUrl, repoDir)
+  } catch {
+    // Any failed update (not a git repo after an interrupted clone, network error, diverged history, …)
+    // is answered with a fresh clone; the cache has no local changes (cached summaries are regenerated).
+    freshClone(repoUrl, repoDir)
+  }
   return repoDir
 }
 

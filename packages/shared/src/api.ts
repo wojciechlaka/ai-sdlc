@@ -30,14 +30,14 @@ export const StageViewSchema = z.object({
   stage: ArtifactStageSchema,
   /** Artifact path in the target repository, e.g. `docs/work/CB-3/intent.md`. */
   path: z.string(),
-  /** Link to the file on the default branch. */
+  /** Link to the file on the base branch (`showcase`). */
   fileUrl: z.string(),
   /** True once the artifact is merged and the ticket moved on. */
   completed: z.boolean(),
   /** Latest PR the app opened for this stage. */
   pr: PullRequestRefSchema.nullable(),
   mergedAt: z.date().nullable(),
-  /** File content read live from the default branch; null if not merged or not readable. */
+  /** File content read live from the base branch; null if not merged or not readable. */
   content: z.string().nullable(),
 })
 export type StageViewDto = z.infer<typeof StageViewSchema>

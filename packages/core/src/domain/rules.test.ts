@@ -81,7 +81,7 @@ describe('stages', () => {
     expect(isStageCompleted(ticket({ stage: 'done' }), 'design')).toBe(true)
   })
 
-  it('derives the stage from the files on the default branch', () => {
+  it('derives the stage from the files on the base branch', () => {
     expect(stageFromRepo({ hasIntent: false, hasSpec: false })).toBe('plan')
     expect(stageFromRepo({ hasIntent: true, hasSpec: false })).toBe('design')
     expect(stageFromRepo({ hasIntent: true, hasSpec: true })).toBe('done')

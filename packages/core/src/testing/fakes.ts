@@ -287,6 +287,7 @@ export interface FakePullRequest extends PullRequest {
  */
 export class FakeCodeHost implements CodeHost {
   baseBranchName = 'showcase'
+  baselineTagName = 'showcase-base'
   /** Files on the repository's default branch (`master`); the app never writes there. */
   readonly defaultBranchFiles = new Map<string, string>()
   /** Files of the commit the baseline tag points to; null while the tag does not exist. */
@@ -343,7 +344,7 @@ export class FakeCodeHost implements CodeHost {
 
   async resetBaseBranch(): Promise<void> {
     this.enter('resetBaseBranch')
-    if (!this.baselineFiles) throw new CodeHostError(422, 'Tag showcase-base fehlt')
+    if (!this.baselineFiles) throw new CodeHostError(422, `Tag ${this.baselineTagName} fehlt`)
     this.replaceFiles(this.baselineFiles)
   }
 
@@ -470,6 +471,7 @@ export function createTestContext(options: { token?: boolean } = {}): TestContex
     events,
     repoUrl: TEST_REPO_URL,
     baseBranch: codeHost.baseBranchName,
+    baselineTag: codeHost.baselineTagName,
     runInBackground: (task) => {
       tasks.push(task)
     },

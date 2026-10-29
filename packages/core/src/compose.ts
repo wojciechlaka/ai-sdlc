@@ -77,6 +77,7 @@ export function createRefinementEngine(config: EngineConfig): UseCases {
     events: createNodeEventPublisher(),
     repoUrl: config.targetRepo,
     baseBranch,
+    baselineTag,
     runInBackground: (task) => {
       task.catch((err) => console.error('[background] unhandled error in agent run', err))
     },
