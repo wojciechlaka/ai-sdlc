@@ -11,6 +11,15 @@ describe('describeLogEvent', () => {
     { input: aLogEntry('run_finished', { runId: 'r1', status: 'timeout' }), text: 'Agent-Zeitlimit überschritten' },
     { input: aLogEntry('question_asked', { question: 'Wer?' }, 'agent'), text: 'Rückfrage: Wer?' },
     { input: aLogEntry('answer_given', { answer: 'Alle' }, 'human'), text: 'Antwort: Alle' },
+    {
+      input: aLogEntry('choice_offered', { question: 'Wo wird die Lesezeit berechnet?', options: [{ id: 'A', title: 'Speichern' }, { id: 'B', title: 'Lesen' }], recommended: 'A' }, 'agent'),
+      text: 'Auswahl: Wo wird die Lesezeit berechnet? — Ansatz A empfohlen',
+    },
+    {
+      input: aLogEntry('answer_given', { answer: 'Ansatz B: Lesen — Anmerkung: ohne Cache', choice: 'B' }, 'human'),
+      text: 'Antwort: Ansatz B: Lesen — Anmerkung: ohne Cache',
+    },
+    { input: aLogEntry('choice_offered', { question: 'Wo?' }, 'agent'), text: 'Auswahl' },
     { input: aLogEntry('pr_opened', { prNumber: 4, prUrl: 'https://github.com/o/r/pull/4', branch: 'CB-2/intent' }), text: 'PR #4 geöffnet (CB-2/intent)' },
     { input: aLogEntry('pr_merged', { prNumber: 4 }, 'human'), text: 'PR #4 gemergt' },
     { input: aLogEntry('pr_closed', { prNumber: 4 }, 'human'), text: 'PR #4 ohne Merge geschlossen' },

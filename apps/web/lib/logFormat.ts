@@ -41,6 +41,7 @@ const FALLBACK_LABEL: Record<AuditEventType, string> = {
   run_started:     'Agent gestartet',
   run_finished:    'Agent-Lauf beendet',
   question_asked:  'Rückfrage',
+  choice_offered:  'Auswahl',
   answer_given:    'Antwort',
   pr_opened:       'PR geöffnet',
   pr_merged:       'PR gemergt',
@@ -83,6 +84,8 @@ export function describeLogEvent(entry: AuditLogEntryDto): string {
       return describeRunFinished(event.payload)
     case 'question_asked':
       return `Rückfrage: ${event.payload.question}`
+    case 'choice_offered':
+      return `Auswahl: ${event.payload.question} — Ansatz ${event.payload.recommended} empfohlen`
     case 'answer_given':
       return `Antwort: ${event.payload.answer}`
     case 'pr_opened':

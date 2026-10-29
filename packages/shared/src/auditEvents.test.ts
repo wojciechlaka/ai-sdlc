@@ -13,6 +13,14 @@ describe('AuditEventSchema', () => {
     expect(AuditEventSchema.safeParse({ type: 'run_finished', payload: withUsage }).success).toBe(true)
   })
 
+  it('accepts an offered choice and an answer with or without the picked option', () => {
+    const offered = { question: 'Wo?', options: [{ id: 'A', title: 'Speichern' }, { id: 'B', title: 'Lesen' }], recommended: 'B' }
+    expect(AuditEventSchema.safeParse({ type: 'choice_offered', payload: offered }).success).toBe(true)
+    expect(AuditEventSchema.safeParse({ type: 'choice_offered', payload: { ...offered, recommended: 'D' } }).success).toBe(false)
+    expect(AuditEventSchema.parse({ type: 'answer_given', payload: { answer: 'Ansatz B: Lesen', choice: 'B' } }).payload).toEqual({ answer: 'Ansatz B: Lesen', choice: 'B' })
+    expect(AuditEventSchema.safeParse({ type: 'answer_given', payload: { answer: 'Alle Leser' } }).success).toBe(true)
+  })
+
   it('rejects unknown types and payloads of another type', () => {
     expect(AuditEventSchema.safeParse({ type: 'something_new', payload: {} }).success).toBe(false)
     expect(AuditEventSchema.safeParse({ type: 'pr_merged', payload: { message: 'x' } }).success).toBe(false)

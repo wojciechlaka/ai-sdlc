@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { ArtifactStageSchema, StageSchema } from './stages'
+import { ChoiceIdSchema } from './agentOutput'
 
 // Contract of the per-ticket log (AuditEvent): one payload shape per event type. The core writes entries through
 // `AuditLog.append`, which is typed by `AuditPayloads`; the web parses stored entries with `AuditEventSchema`.
@@ -41,7 +42,14 @@ export const AuditEventSchema = z.discriminatedUnion('type', [
     reason: z.string().optional(),
   })),
   event('question_asked', z.object({ question: z.string() })),
-  event('answer_given', z.object({ answer: z.string() })),
+  /** The agent offered approaches to choose from (stage 2); the options without description, pros and cons. */
+  event('choice_offered', z.object({
+    question: z.string(),
+    options: z.array(z.object({ id: ChoiceIdSchema, title: z.string() })),
+    recommended: ChoiceIdSchema,
+  })),
+  /** `answer` is the text the next run sees; `choice` is set when the human picked an option of a choice. */
+  event('answer_given', z.object({ answer: z.string(), choice: ChoiceIdSchema.optional() })),
   event('pr_opened', z.object({ prNumber, prUrl: z.string(), branch: z.string() })),
   event('pr_merged', z.object({ prNumber })),
   event('pr_closed', z.object({ prNumber })),
