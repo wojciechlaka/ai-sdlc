@@ -3,7 +3,7 @@ import { currentArtifactStage, nextStage } from '../domain/rules'
 import { CodeHostError, type CodeHost, type PullRequest } from '../ports'
 import type { UseCaseDeps } from './deps'
 import { createReporter } from './reporter'
-import { describeError } from './describeError'
+import { describeError } from '../domain/errors'
 import { requireTicket } from './requireTicket'
 
 const NOT_FOUND = 404

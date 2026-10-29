@@ -5,6 +5,7 @@ import { execFileSync, spawn } from 'child_process'
 import fs from 'fs'
 import fsPromises from 'fs/promises'
 import type { RepoProvider } from '../../ports'
+import { describeError } from '../../domain/errors'
 
 // Configurable via env var; falls back to the OS temp directory.
 const CACHE_ROOT = process.env.REPO_CACHE_DIR ?? path.join(os.tmpdir(), 'repo-cache')
@@ -171,7 +172,7 @@ async function generateAndCache(
     onProgress('Codebase-Analyse abgeschlossen.')
     return summary
   } catch (err) {
-    console.warn(`[repoCache] summary generation failed, continuing without summary: ${err}`)
+    console.warn(`[repoCache] summary generation failed, continuing without summary: ${describeError(err)}`)
     return null
   } finally {
     inFlight.delete(summaryPath)
@@ -211,7 +212,7 @@ export async function ensureRepoSummary(
     inFlight.set(summaryPath, job)
     return job
   } catch (err) {
-    console.warn(`[repoCache] ensureRepoSummary failed, continuing without summary: ${err}`)
+    console.warn(`[repoCache] ensureRepoSummary failed, continuing without summary: ${describeError(err)}`)
     return null
   }
 }

@@ -1,7 +1,7 @@
 import type { Ticket } from '../domain/types'
 import type { UseCaseDeps } from './deps'
 import { createReporter } from './reporter'
-import { describeError } from './describeError'
+import { describeError } from '../domain/errors'
 import { finishRun, isCurrentRun, type RunRequest } from './runLifecycle'
 import { executeRun } from './executeRun'
 import { failStage } from './failStage'

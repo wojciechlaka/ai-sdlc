@@ -159,7 +159,8 @@ makes `startStage`/`answerQuestion` throw a `ConflictError`.
 - `packages/core/src/application/{stageCommands,runStage,executeRun,publishArtifact,runLifecycle,syncReviews,startup,queries}.ts`
 - `packages/core/src/domain/{rules,artifacts,render,ticketKey}.ts` — transitions, names/paths, Markdown, key ordering
 - `packages/core/src/domain/errors.ts` — `NotFoundError`/`ConflictError`/`ValidationError`; adapters check
-  `errorCode(err)`, never `instanceof` (Next.js may duplicate modules across bundles)
+  `errorCode(err)`, never `instanceof` (Next.js may duplicate modules across bundles); `describeError(err)` turns
+  any thrown value into text with credentials redacted — use it instead of `${err}` in logs and messages
 - `packages/core/src/ports/codeHost.ts` + `adapters/github/githubCodeHost.ts` — GitHub via Octokit (15 s timeout,
   `CodeHostError` with user-facing German messages); base branch, `prepareBaseBranch`, `resetBaseBranch`
 - `packages/core/src/adapters/sqlite/schema.ts` — Drizzle schema: `tickets`, `agent_runs`, `artifacts`, `audit_events`

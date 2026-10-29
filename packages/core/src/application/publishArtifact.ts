@@ -3,7 +3,7 @@ import { artifactPath, artifactTitle, branchName } from '../domain/artifacts'
 import { renderPullRequestBody } from '../domain/render'
 import type { UseCaseDeps } from './deps'
 import { isCurrentRun } from './runLifecycle'
-import { describeError } from './describeError'
+import { describeError } from '../domain/errors'
 import { TOKEN_MISSING } from './messages'
 import { createReporter } from './reporter'
 

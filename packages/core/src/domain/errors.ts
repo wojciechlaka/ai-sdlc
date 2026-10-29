@@ -40,3 +40,13 @@ export function errorCode(err: unknown): DomainErrorCode | null {
   const code = (err as { code?: unknown }).code
   return DOMAIN_CODES.includes(code as DomainErrorCode) ? (code as DomainErrorCode) : null
 }
+
+/**
+ * User-facing text of any thrown value; prefers a process's stderr (git) where present.
+ * Credentials in URLs are redacted, so the text is safe for logs, warnings and the ticket page.
+ */
+export function describeError(err: unknown): string {
+  const stderr = (err as { stderr?: { toString(): string } } | null)?.stderr?.toString().trim()
+  const text = stderr || (err instanceof Error ? err.message : String(err))
+  return text.replace(/https:\/\/[^@\s/]*@/g, 'https://***@')
+}

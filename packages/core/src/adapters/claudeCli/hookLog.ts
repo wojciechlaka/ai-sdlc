@@ -3,6 +3,7 @@ import os from 'os'
 import path from 'path'
 import { StringDecoder } from 'string_decoder'
 import type { ToolEvent } from '../../ports'
+import { describeError } from '../../domain/errors'
 
 // Guard and audit hooks of the agent (spec §13). The hook scripts (`packages/core/hooks`) append one JSON line
 // per tool call to the file in REFINEMENT_HOOK_LOG (set by the sandbox); this module creates that file per run,
@@ -63,7 +64,7 @@ export async function openHookLog(onEvent: (event: ToolEvent) => void, pollMs = 
     try {
       onEvent(event)
     } catch (err) {
-      console.warn(`[claudeCli] tool event could not be handled: ${err}`)
+      console.warn(`[claudeCli] tool event could not be handled: ${describeError(err)}`)
     }
   }
 
@@ -82,7 +83,9 @@ export async function openHookLog(onEvent: (event: ToolEvent) => void, pollMs = 
   // Reads are chained so polls never overlap.
   let reading: Promise<void> = Promise.resolve()
   const drain = () => {
-    reading = reading.then(readNew).catch((err) => console.warn(`[claudeCli] hook log could not be read: ${err}`))
+    reading = reading
+      .then(readNew)
+      .catch((err) => console.warn(`[claudeCli] hook log could not be read: ${describeError(err)}`))
     return reading
   }
   const timer = setInterval(() => void drain(), pollMs)

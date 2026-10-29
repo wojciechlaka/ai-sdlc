@@ -4,7 +4,7 @@ import { AgentRunTerminatedError, AgentRunTimeoutError, type ToolEvent } from '.
 import type { UseCaseDeps } from './deps'
 import { finishRun, isCurrentRun, type RunRequest } from './runLifecycle'
 import { createReporter } from './reporter'
-import { describeError } from './describeError'
+import { describeError } from '../domain/errors'
 import { failStage } from './failStage'
 import { publishArtifact } from './publishArtifact'
 

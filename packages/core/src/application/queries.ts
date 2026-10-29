@@ -4,7 +4,7 @@ import { ARTIFACT_STAGES, artifactPath, fileUrl } from '../domain/artifacts'
 import { currentArtifactStage, isStageCompleted } from '../domain/rules'
 import type { UseCaseDeps } from './deps'
 import { toAuditEventDto, toPullRequestRef, toTicketDto } from './dto'
-import { describeError } from './describeError'
+import { describeError } from '../domain/errors'
 import { requireTicket } from './requireTicket'
 
 function openArtifact(deps: UseCaseDeps, ticket: Ticket): Artifact | null {
