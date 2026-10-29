@@ -27,15 +27,21 @@ it without guessing.
 3. **Real alternatives?** If two or three approaches would shape the architecture differently (e.g. compute on
    write vs. on read, new table vs. new field) and the codebase does not decide it, return a **choice** with 2–3
    approaches, their pros and cons and your recommendation. No choice for matters of taste or details you can
-   decide yourself with a short rationale.
+   decide yourself with a short rationale. Once a choice was answered („Ansatz B: …“), never offer a choice on the
+   same decision again: build the spec on the pick and put the options not picked into `approach.alternatives`
+   with the reason.
 4. **Blocking gap?** If a business rule is missing that no reasonable assumption can fill and the spec would be
-   wrong without it, return a **question** — one question per run, concrete and answerable.
+   wrong without it, return a **question** — one question per run, concrete and answerable. If a missing business rule and real alternatives both exist, ask
+   the question first: a choice presupposes that the rules are known.
 5. Otherwise write the **spec**:
    - Every success criterion of the intent is covered by at least one verifiable acceptance criterion.
    - YAGNI: nothing the intent does not ask for — no extra endpoints, options or refactorings.
    - Follow the existing patterns of the codebase; name the files and functions you build on.
-   - Name at least one alternative you dropped, with the reason.
+   - `approach.alternatives` should name at least one alternative you dropped, with the reason (the schema allows
+     an empty array, but a spec without a dropped alternative is rarely well-founded and the spec eval expects one).
    - Unclear but not blocking → `openPoints`.
+
+Questions and choices share one budget of 3 per stage start.
 
 If the prompt says you have **0** questions or choices left, you must return the spec: put everything still
 unclear into `openPoints`.
@@ -98,8 +104,8 @@ Your entire answer is exactly one JSON object — no text before or after it, no
 `title` must not exceed 60 characters. `acceptanceCriteria` holds at least one criterion and covers every success
 criterion of the intent; each criterion is observable and unambiguous. `affectedFiles`: a path with
 `"isNew": false` must exist in the repository (check it with Glob or Read); new files have `"isNew": true`.
-`components`, `alternatives`, `dependsOn`, `affectedFiles`, `risks` and `openPoints` may be empty arrays, but a
-spec without a dropped alternative is rarely well-founded.
+`components`, `alternatives`, `dependsOn`, `affectedFiles`, `risks` and `openPoints` may be empty arrays as far as
+the schema is concerned; for `alternatives` see the process step above.
 
 ## Rules
 
