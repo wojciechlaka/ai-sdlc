@@ -10,6 +10,9 @@ export const QuestionOutputSchema = z.object({
 })
 export type QuestionOutput = z.infer<typeof QuestionOutputSchema>
 
+/** Message for empty texts of a choice; it reaches the agent's retry prompt. */
+const EMPTY = 'darf nicht leer sein'
+
 /** Id of an option in a choice. */
 export const ChoiceIdSchema = z.enum(['A', 'B', 'C'])
 export type ChoiceId = z.infer<typeof ChoiceIdSchema>
@@ -17,8 +20,8 @@ export type ChoiceId = z.infer<typeof ChoiceIdSchema>
 /** One approach the human can pick: title, description, pros and cons. */
 export const ChoiceOptionSchema = z.object({
   id: ChoiceIdSchema,
-  title: z.string(),
-  description: z.string(),
+  title: z.string().min(1, EMPTY),
+  description: z.string().min(1, EMPTY),
   pros: z.array(z.string()),
   cons: z.array(z.string()),
 })
@@ -27,7 +30,7 @@ export type ChoiceOption = z.infer<typeof ChoiceOptionSchema>
 /** Fields of a choice, shared by the agent output and the pending choice of the ticket page. */
 const choiceFields = {
   /** What the human decides, e.g. „Wo wird die Lesezeit berechnet?“. */
-  question: z.string(),
+  question: z.string().min(1, EMPTY),
   /** 2–3 approaches with unique ids. */
   options: z.array(ChoiceOptionSchema).min(2).max(3),
   /** Id of the option the agent recommends; one of `options`. */

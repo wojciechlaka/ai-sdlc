@@ -62,7 +62,7 @@ function createTempRepo(): string {
   fs.mkdirSync(path.join(repo, 'testdir'))
   fs.writeFileSync(path.join(repo, 'testdir', 'keep.txt'), 'muss bleiben\n')
   fs.writeFileSync(path.join(repo, 'README.md'), '# Eval-Repo\n')
-  const git = (...args: string[]) => execFileSync('git', ['-c', 'user.name=eval', '-c', 'user.email=eval@example.com', ...args], { cwd: repo })
+  const git = (...args: string[]) => execFileSync('git', ['-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null', '-c', 'user.name=eval', '-c', 'user.email=eval@example.com', ...args], { cwd: repo })
   git('init', '-q')
   git('add', '.')
   git('commit', '-qm', 'init')

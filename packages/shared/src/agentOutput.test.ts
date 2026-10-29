@@ -44,3 +44,18 @@ describe('PendingChoiceSchema', () => {
     expect(PendingChoiceSchema.safeParse({ ...pending, recommended: 'C' }).success).toBe(false)
   })
 })
+
+describe('ChoiceOutputSchema — empty texts', () => {
+  it('rejects an empty question, option title and option description with a German message', () => {
+    const empties = [
+      { ...CHOICE, question: '' },
+      { ...CHOICE, options: [{ ...OPTION_A, title: '' }, OPTION_B] },
+      { ...CHOICE, options: [{ ...OPTION_A, description: '' }, OPTION_B] },
+    ]
+    for (const input of empties) {
+      const result = ChoiceOutputSchema.safeParse(input)
+      expect(result.success).toBe(false)
+      expect(result.error?.issues[0]?.message).toBe('darf nicht leer sein')
+    }
+  })
+})

@@ -68,7 +68,7 @@ function createTempRepo(evalCase: SpecEvalCase, intentMarkdown: string): string 
     const intentFile = path.join(repo, artifactPath(evalCase.key, 'plan'))
     fs.mkdirSync(path.dirname(intentFile), { recursive: true })
     fs.writeFileSync(intentFile, intentMarkdown)
-    const git = (...args: string[]) => execFileSync('git', ['-c', 'user.name=eval', '-c', 'user.email=eval@example.com', ...args], { cwd: repo })
+    const git = (...args: string[]) => execFileSync('git', ['-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null', '-c', 'user.name=eval', '-c', 'user.email=eval@example.com', ...args], { cwd: repo })
     git('init', '-q')
     git('add', '.')
     git('commit', '-qm', 'init')
