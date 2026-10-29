@@ -2,6 +2,7 @@ import { Octokit } from '@octokit/rest'
 import { WORK_DIR } from '../../domain/artifacts'
 import { CodeHostError, type CodeHost, type PullRequest } from '../../ports'
 
+/** Target repository, credentials and branch names of the GitHub adapter. */
 export interface GitHubCodeHostOptions {
   /** `https://github.com/<owner>/<repo>`, optionally with `.git`. */
   repoUrl: string

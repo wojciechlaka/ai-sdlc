@@ -40,8 +40,8 @@ export interface HookLog {
 }
 
 /**
- * Follows the sandbox's log file of one Claude call and reports every complete line to `onEvent` while the call lasts
- * (polling; partial lines wait for their newline). `close` drains the rest and cleans the file up.
+ * Follows the sandbox's log file of one Claude call and reports every complete line to `onEvent` while the call
+ * lasts (polling; partial lines wait for their newline). `close` drains the rest and cleans the file up.
  */
 export async function openHookLog(
   logFile: HookLogFile,

@@ -3,6 +3,7 @@ export type DomainErrorCode = 'NOT_FOUND' | 'CONFLICT' | 'VALIDATION'
 
 /** The requested ticket or run does not exist. */
 export class NotFoundError extends Error {
+  /** Survives module duplication across bundles, unlike `instanceof`; read via `errorCode`. */
   readonly code = 'NOT_FOUND' as const
   constructor(message: string) {
     super(message)
@@ -12,6 +13,7 @@ export class NotFoundError extends Error {
 
 /** The action is not allowed in the ticket's current state. */
 export class ConflictError extends Error {
+  /** See `NotFoundError.code`. */
   readonly code = 'CONFLICT' as const
   constructor(message: string) {
     super(message)
@@ -21,6 +23,7 @@ export class ConflictError extends Error {
 
 /** The input did not match the expected schema. */
 export class ValidationError extends Error {
+  /** See `NotFoundError.code`. */
   readonly code = 'VALIDATION' as const
   constructor(message: string) {
     super(message)

@@ -4,6 +4,7 @@ import { compareTicketKeys } from '../../domain/ticketKey'
 import type { SqliteDb } from './database'
 import { tickets } from './schema'
 
+/** `TicketRepository` on the `tickets` table; lists in key order (CB-2 before CB-10). */
 export function createSqliteTicketRepository(db: SqliteDb): TicketRepository {
   return {
     list: () => db.select().from(tickets).all().sort((a, b) => compareTicketKeys(a.key, b.key)),

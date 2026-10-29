@@ -9,11 +9,13 @@ import { sleep } from './sleep'
 import { syncReviews } from './syncReviews'
 import { record } from './auditTrail'
 
+/** Options of `startup`; a plain restart passes none. */
 export interface StartupOptions {
   /** Also resets the target repo: app branches deleted, base branch force-moved to the baseline tag (spec §12). */
   resetRepo?: boolean
 }
 
+/** Outcome of `startup` and `resetSystem`. */
 export interface StartupReport {
   /** Every problem that was caught and logged, user-facing; empty when everything worked. */
   warnings: string[]

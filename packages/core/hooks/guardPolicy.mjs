@@ -178,8 +178,8 @@ function globReason(pattern) {
 }
 
 /**
- * Confines the file tools to the clone. Read: `file_path`; Glob: `path`, `pattern`; Grep: `path`, `glob`. Grep's `pattern` is a regular expression
- * over file contents, not a path, and stays unrestricted.
+ * Confines the file tools to the clone. Read: `file_path`; Glob: `path`, `pattern`; Grep: `path`, `glob`.
+ * Grep's `pattern` is a regular expression over file contents, not a path, and stays unrestricted.
  * @param {string} tool
  * @param {Record<string, unknown>} input
  * @param {unknown} cwd

@@ -10,11 +10,17 @@ import { resetSystem, startup, type StartupOptions, type StartupReport } from '.
  * Inputs typed `unknown` are validated inside; domain errors carry `code` (see `errorCode`).
  */
 export interface UseCases {
+  /** All tickets for the board, in key order. */
   listTickets(): TicketDto[]
+  /** Ticket page data: ticket, stage views with content from the base branch, log. @throws NotFoundError */
   getTicket(key: string): Promise<TicketDetailDto>
+  /** Repo, base branch, baseline tag and whether a token is configured. */
   getSettings(): SettingsDto
+  /** Starts the ticket's current stage with `{ model }`; the agent runs in the background. */
   startStage(key: string, input: unknown): void
+  /** Answers the open question with `{ answer }` and starts the next run of the stage. */
   answerQuestion(key: string, input: unknown): void
+  /** Ends the running attempt (or the open question); the ticket goes back to `ready`. */
   stopRun(key: string): void
   /** Checks the PRs of tickets in review — all, or the one given. */
   syncReviews(key?: string): Promise<void>
@@ -22,9 +28,11 @@ export interface UseCases {
   resetSystem(): Promise<StartupReport>
   /** Events of one ticket, or of all tickets with `null`. */
   subscribe(ticketKey: string | null, handler: (event: TicketEvent) => void): () => void
+  /** Start of the app: import tickets, clean up, sync with GitHub; never throws, returns warnings. */
   startup(options?: StartupOptions): Promise<StartupReport>
 }
 
+/** Binds every use case to `deps`; `compose.ts` calls it with the real adapters, tests with fakes. */
 export function createUseCases(deps: UseCaseDeps): UseCases {
   return {
     listTickets: () => listTickets(deps),

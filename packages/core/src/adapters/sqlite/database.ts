@@ -5,6 +5,7 @@ import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import * as schema from './schema'
 
+/** Drizzle database on better-sqlite3 with the app schema; `$client` gives the raw connection. */
 export type SqliteDb = BetterSQLite3Database<typeof schema> & { $client: Database.Database }
 
 const IN_MEMORY = ':memory:'

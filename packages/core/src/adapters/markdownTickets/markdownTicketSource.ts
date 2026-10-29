@@ -27,6 +27,7 @@ export function parseTicketMarkdown(markdown: string, sourcePath: string): Sourc
   return { key: heading[1]!, title: heading[2]!, description: body.join('\n').trim(), priority, sourcePath }
 }
 
+/** Where the ticket files live and what their `sourcePath` is relative to. */
 export interface MarkdownTicketSourceOptions {
   /** Directory with the ticket files, e.g. `examples/tickets`. */
   dir: string

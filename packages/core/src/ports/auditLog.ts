@@ -13,18 +13,27 @@ export type PayloadOf<T extends AuditEventType> = NoInfer<true extends IsUnion<T
 
 /** A new log entry; `payload` must match `type` (contract in `packages/shared/src/auditEvents.ts`). */
 export interface NewAuditEvent<T extends AuditEventType> {
+  /** Ticket whose log the entry belongs to. */
   ticketKey: string
+  /** Who caused the entry: human, agent or system. */
   actor: AuditActor
+  /** Entry type; selects the payload shape. */
   type: T
+  /** Data of the entry; German texts where it is shown verbatim. */
   payload: PayloadOf<T>
 }
 
 /** A stored log entry. Type and payload stay loose: rows written by older versions may not match the contract. */
 export interface AuditLogEntry {
+  /** Ticket whose log the entry belongs to. */
   ticketKey: string
+  /** Who caused the entry: human, agent or system. */
   actor: AuditActor
+  /** Entry type as stored; may be unknown to this version. */
   type: string
+  /** Stored JSON payload; parse it with `AuditEventSchema` before use. */
   payload: unknown
+  /** When the entry was written (second precision). */
   createdAt: Date
 }
 

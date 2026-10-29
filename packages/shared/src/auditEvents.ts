@@ -56,7 +56,7 @@ export const AuditEventSchema = z.discriminatedUnion('type', [
 ])
 export type AuditEvent = z.infer<typeof AuditEventSchema>
 
-/** Every log entry type. */
+/** Union of all log entry types; the keys of `AuditPayloads`. */
 export type AuditEventType = AuditEvent['type']
 
 /** Payload per log entry type, e.g. `AuditPayloads['pr_merged']` is `{ prNumber: number }`. */

@@ -19,7 +19,9 @@ export interface FakePullRequest extends PullRequest {
  * app branches with their files, PRs.
  */
 export class FakeCodeHost implements CodeHost {
+  /** Name `baseBranch()` returns. */
   baseBranchName = 'showcase'
+  /** Tag name used in error messages. */
   baselineTagName = 'showcase-base'
   /** Files on the repository's default branch (`master`); the app never writes there. */
   readonly defaultBranchFiles = new Map<string, string>()
@@ -31,6 +33,7 @@ export class FakeCodeHost implements CodeHost {
   readonly files = new Map<string, string>()
   /** Branch name → files committed on that branch. */
   readonly branches = new Map<string, Map<string, string>>()
+  /** Every PR ever opened, with title and body for assertions. */
   readonly pulls: FakePullRequest[] = []
   /** Every called method in order. */
   readonly calls: CodeHostMethod[] = []

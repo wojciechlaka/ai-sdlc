@@ -1,8 +1,10 @@
 import type { SourceTicket, Stage, Ticket, TicketState } from '../domain/types'
 
+/** Persistent tickets with their stage and state. */
 export interface TicketRepository {
   /** All tickets ordered by key (CB-2 before CB-10). */
   list(): Ticket[]
+  /** The ticket, or null for an unknown key. */
   findByKey(key: string): Ticket | null
   /**
    * Inserts unknown tickets as `plan/ready`; updates title, description, priority and source path

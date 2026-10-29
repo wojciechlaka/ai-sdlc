@@ -14,12 +14,17 @@ import { SAMPLE_INTENT_OUTPUT, SAMPLE_META } from './samples'
  * Like the CLI, `stop` terminates a run that is still in progress.
  */
 export class FakeAgentRunner implements AgentRunner {
+  /** Input of every call, in order. */
   readonly calls: AgentRunnerInput[] = []
   /** Callbacks of every call, so a test can report events later (e.g. after the attempt became stale). */
   readonly callbacks: AgentRunCallbacks[] = []
+  /** Ticket keys passed to `stop`, also when nothing was running. */
   readonly stopped: string[] = []
+  /** Progress messages every run reports first. */
   progress: string[] = []
+  /** Tool events every run reports after the progress messages. */
   toolEvents: ToolEvent[] = []
+  /** What every run returns, or throws when it is an Error; the sample intent by default. */
   outcome: AgentRunResult | Error = { output: SAMPLE_INTENT_OUTPUT, meta: SAMPLE_META }
   private gate: Promise<void> | null = null
   private readonly active = new Set<string>()

@@ -16,10 +16,12 @@ export function canStartStage(ticket: Pick<Ticket, 'stage' | 'state'>): boolean 
   return stage !== null && STARTABLE_STAGES.includes(stage) && (ticket.state === 'ready' || ticket.state === 'failed')
 }
 
+/** Only a ticket waiting for an answer takes one. */
 export function canAnswer(ticket: Pick<Ticket, 'state'>): boolean {
   return ticket.state === 'awaiting_answer'
 }
 
+/** A running attempt or an open question can be stopped. */
 export function canStop(ticket: Pick<Ticket, 'state'>): boolean {
   return ticket.state === 'running' || ticket.state === 'awaiting_answer'
 }

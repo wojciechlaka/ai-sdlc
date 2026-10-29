@@ -16,6 +16,7 @@ function resetEffect(baseBranch: string, baselineTag: string): string {
  * Empties the database and runs the start again with a repo reset (ticket import, PR clean-up,
  * base branch back to the baseline tag, stage derivation). Warnings of the start stay visible.
  * Branch and tag come from the settings, so the texts name what the reset really touches.
+ * A client component for the confirmation dialog and the pending/warning state.
  */
 export function ResetButton({ baseBranch, baselineTag }: { baseBranch: string; baselineTag: string }) {
   const effect = resetEffect(baseBranch, baselineTag)

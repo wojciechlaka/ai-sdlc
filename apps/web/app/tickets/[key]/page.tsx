@@ -16,6 +16,7 @@ async function loadTicket(key: string): Promise<TicketDetailDto> {
   }
 }
 
+/** Ticket page; 404 for an unknown key. */
 export default async function TicketPage({ params }: { params: Promise<{ key: string }> }) {
   const { key } = await params
   const ticket = await loadTicket(key)

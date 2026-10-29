@@ -10,6 +10,7 @@ const createdAt = () => timestamp('created_at').notNull().$defaultFn(() => new D
 const ticketKey = () => text('ticket_key').notNull().references(() => tickets.key, { onDelete: 'cascade' })
 const artifactStage = () => text('stage', { enum: ['plan', 'design'] }).notNull()
 
+/** Imported tickets with their stage and state; the key from the source file is the primary key. */
 export const tickets = sqliteTable('tickets', {
   key:         text('key').primaryKey(),
   title:       text('title').notNull(),
@@ -23,6 +24,7 @@ export const tickets = sqliteTable('tickets', {
   updatedAt:   timestamp('updated_at').notNull().$defaultFn(() => new Date()),
 })
 
+/** One row per attempt (`AgentRun`): input snapshot, validated output, status and usage. */
 export const agentRuns = sqliteTable('agent_runs', {
   id:                  id(),
   ticketKey:           ticketKey(),
@@ -42,6 +44,7 @@ export const agentRuns = sqliteTable('agent_runs', {
   finishedAt:          timestamp('finished_at'),
 })
 
+/** Artifact per ticket and stage: file path, branch and the PR that gates the stage. */
 export const artifacts = sqliteTable('artifacts', {
   id:        id(),
   ticketKey: ticketKey(),
@@ -55,6 +58,7 @@ export const artifacts = sqliteTable('artifacts', {
   createdAt: createdAt(),
 })
 
+/** Per-ticket log shown on the ticket page; payload is JSON, typed by `AuditPayloads` on write. */
 export const auditEvents = sqliteTable('audit_events', {
   id:        id(),
   ticketKey: ticketKey(),

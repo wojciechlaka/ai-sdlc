@@ -2,12 +2,15 @@ import type { ArtifactStage, PrState, Stage, StageOutput, TicketState } from '@r
 
 export type { ArtifactStage, PrState, Stage, StageOutput, TicketState }
 
+/** A question of the agent and the human answer to it. */
 export interface QAPair {
   question: string
   answer: string
 }
 
+/** What started a run: the stage start or an answer to a question. */
 export type RunTrigger = 'initial' | 'answer'
+/** Life cycle of a run; `running` until it succeeds, fails or times out. */
 export type RunStatus = 'running' | 'succeeded' | 'failed' | 'timeout'
 
 /** One ticket as the ticket source (simulated Jira) delivers it. */
@@ -20,6 +23,7 @@ export interface SourceTicket {
   sourcePath: string
 }
 
+/** A ticket in the app: the source fields plus where it stands in the playbook. */
 export interface Ticket extends SourceTicket {
   stage: Stage
   state: TicketState
@@ -34,6 +38,7 @@ export interface AgentRunInput {
   answeredQuestions: QAPair[]
 }
 
+/** One attempt of a stage agent (see `isCurrentRun`), with its input snapshot, output and usage. */
 export interface AgentRun {
   id: string
   ticketKey: string

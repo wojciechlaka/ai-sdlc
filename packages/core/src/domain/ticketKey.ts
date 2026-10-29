@@ -3,6 +3,7 @@ export const TICKET_KEY_PATTERN = '[A-Z][A-Z0-9]*-\\d+'
 
 const KEY_RE = /^([A-Z][A-Z0-9]*)-(\d+)$/
 
+/** True for a whole Jira-style key such as `CB-3`. */
 export function isTicketKey(value: string): boolean {
   return KEY_RE.test(value)
 }

@@ -24,7 +24,7 @@ export interface UseCaseDeps {
   events: EventPublisher
   /** Target repository (`TARGET_REPO`): cloned for the agent, linked in the UI. */
   repoUrl: string
-  /** Branch of the target repository the app works on (`showcase`); the code host is configured with the same name. */
+  /** Branch of the target repository the app works on (`showcase`); the code host uses the same name. */
   baseBranch: string
   /** Tag that marks the initial state of the base branch (`showcase-base`); named in startup warnings. */
   baselineTag: string

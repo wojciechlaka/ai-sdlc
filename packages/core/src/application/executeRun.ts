@@ -34,7 +34,7 @@ interface Attempt {
 /**
  * Executes the agent for the attempt's run and applies its outcome: question → `awaiting_answer`,
  * intent → branch + PR → `in_review`. Never throws.
- * A stop, restart or reset makes the attempt stale while the agent may still answer; such late results are discarded.
+ * A stop, restart or reset makes the attempt stale while the agent may still answer; late results are discarded.
  */
 export async function executeRun(deps: UseCaseDeps, ticket: Ticket, request: ExecuteRunRequest): Promise<void> {
   const reporter = createReporter(deps, ticket.key)

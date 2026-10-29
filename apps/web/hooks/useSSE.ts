@@ -3,7 +3,9 @@
 import { useEffect, useRef, useState } from 'react'
 import type { TicketEvent } from '@refinement/shared'
 
+/** Callbacks of `useSSE`. */
 export interface SSEHandlers {
+  /** Called for every ticket event of the stream. */
   onMessage: (event: TicketEvent) => void
   /** Called when the browser re-established a lost connection (events may have been missed). */
   onReconnect?: () => void

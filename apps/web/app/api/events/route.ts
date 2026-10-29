@@ -1,6 +1,8 @@
 import { getEngine } from '@/lib/container'
 
+/** Node runtime: the engine uses SQLite, child processes and the in-process event bus. */
 export const runtime = 'nodejs'
+/** A stream per request; never cached. */
 export const dynamic = 'force-dynamic'
 
 const encoder = new TextEncoder()

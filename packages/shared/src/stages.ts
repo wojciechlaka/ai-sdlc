@@ -12,5 +12,6 @@ export type ArtifactStage = z.infer<typeof ArtifactStageSchema>
 export const TicketStateSchema = z.enum(['ready', 'running', 'awaiting_answer', 'in_review', 'failed'])
 export type TicketState = z.infer<typeof TicketStateSchema>
 
+/** State of a PR: open, merged, or closed without merge. */
 export const PrStateSchema = z.enum(['open', 'merged', 'closed'])
 export type PrState = z.infer<typeof PrStateSchema>

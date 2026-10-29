@@ -7,7 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 
 const PR_STATE: Record<PrState, string> = { open: 'offen', merged: 'gemergt', closed: 'geschlossen' }
 
-/** One artifact stage: done mark, links to file and PR, content (live from the base branch showcase) in a collapsible block. */
+/**
+ * One artifact stage: done mark, links to file and PR, and the content (live from the base branch) in a
+ * collapsible block — `<details>`, so it stays a server component.
+ */
 export function StagePanel({ view }: { view: StageViewDto }) {
   return (
     <Card>

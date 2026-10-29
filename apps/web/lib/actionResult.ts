@@ -1,5 +1,6 @@
 import { errorCode } from '@refinement/core'
 
+/** Outcome of a Server Action: the data, or a German error message the UI shows. */
 export type ActionResult<T = void> = { ok: true; data: T } | { ok: false; error: string }
 
 /**

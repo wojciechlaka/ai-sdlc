@@ -4,6 +4,7 @@ import { AuditActorSchema } from './auditEvents'
 
 const notBlank = (message: string) => z.string().refine((value) => value.trim().length > 0, message)
 
+/** A PR as the UI links it: number, URL and state. */
 export const PullRequestRefSchema = z.object({
   number: z.number().int(),
   url: z.string(),
@@ -11,23 +12,32 @@ export const PullRequestRefSchema = z.object({
 })
 export type PullRequestRefDto = z.infer<typeof PullRequestRefSchema>
 
+/** A ticket as the board and the ticket page show it. */
 export const TicketSchema = z.object({
   /** Ticket key from the source file, e.g. `CB-3`. */
   key: z.string().regex(/^[A-Z][A-Z0-9]*-\d+$/),
+  /** Ticket title from the `# KEY: Title` heading. */
   title: z.string(),
+  /** Ticket text below the heading (Markdown). */
   description: z.string(),
+  /** Value of the `**Priorität:**` line; null when the file has none. */
   priority: z.string().nullable(),
   /** Source file relative to the repository root, e.g. `examples/tickets/cb-3-kommentare-melden.md`. */
   sourcePath: z.string(),
+  /** Playbook stage the ticket is in. */
   stage: StageSchema,
+  /** Where the ticket stands inside its stage. */
   state: TicketStateSchema,
   /** PR of the current stage while the ticket is `in_review`. */
   openPr: PullRequestRefSchema.nullable(),
+  /** Last write of the ticket: import, stage or state change. */
   updatedAt: z.date(),
 })
 export type TicketDto = z.infer<typeof TicketSchema>
 
+/** One artifact stage on the ticket page: file, PR and content. */
 export const StageViewSchema = z.object({
+  /** Stage that produces this artifact. */
   stage: ArtifactStageSchema,
   /** Artifact path in the target repository, e.g. `docs/work/CB-3/intent.md`. */
   path: z.string(),
@@ -37,6 +47,7 @@ export const StageViewSchema = z.object({
   completed: z.boolean(),
   /** Latest PR the app opened for this stage. */
   pr: PullRequestRefSchema.nullable(),
+  /** When the stage's PR was merged; null until then. */
   mergedAt: z.date().nullable(),
   /** File content read live from the base branch; null if not merged or not readable. */
   content: z.string().nullable(),
@@ -45,7 +56,8 @@ export type StageViewDto = z.infer<typeof StageViewSchema>
 
 /**
  * One stored entry of the ticket log as the core returns it. `type` and `payload` stay loose because old rows may
- * predate the current contract; the web parses them with `AuditEventSchema` and falls back to the type name.
+ * predate the current contract; the web parses them with `AuditEventSchema` and falls back to a
+ * generic German line.
  */
 export const AuditLogEntrySchema = z.object({
   actor: AuditActorSchema,
@@ -55,16 +67,20 @@ export const AuditLogEntrySchema = z.object({
 })
 export type AuditLogEntryDto = z.infer<typeof AuditLogEntrySchema>
 
+/** Everything the ticket page shows: the ticket, its stages, its log and an open question. */
 export const TicketDetailSchema = TicketSchema.extend({
+  /** One entry per artifact stage, in playbook order. */
   stages: z.array(StageViewSchema),
+  /** Log entries, oldest first. */
   log: z.array(AuditLogEntrySchema),
   /** Question of the agent while the ticket is `awaiting_answer`. */
   pendingQuestion: z.string().nullable(),
 })
 export type TicketDetailDto = z.infer<typeof TicketDetailSchema>
 
+/** Configuration the sidebar and the reset button show. */
 export const SettingsSchema = z.object({
-  /** `TARGET_REPO` */
+  /** URL of the target repository (`TARGET_REPO`). */
   repoUrl: z.string(),
   /** Branch of the target repository the app works on; PRs target it. */
   baseBranch: z.string(),

@@ -7,11 +7,15 @@ export interface AgentRunnerInput {
   ticketKey: string
   /** Selects skill and output schema. */
   stage: ArtifactStage
+  /** Ticket title, quoted in the prompt. */
   title: string
+  /** Ticket text (Markdown), quoted in the prompt. */
   description: string
   /** Local clone of the target repository. */
   repoDir: string
+  /** Claude model id, e.g. `claude-sonnet-4-6`. */
   model: string
+  /** Summary of the checkout from `RepoProvider.ensureSummary`; absent when it failed. */
   codebaseSummary?: string
   /** Answered questions of earlier runs of this stage. */
   answeredQuestions: QAPair[]
@@ -19,18 +23,27 @@ export interface AgentRunnerInput {
 
 /** Usage of a run (summed over a schema retry), stored on the AgentRun and shown in the log. */
 export interface AgentRunMeta {
+  /** Model the run used. */
   model: string
+  /** Wall-clock duration of the Claude calls. */
   durationSeconds: number
+  /** Uncached input tokens. */
   inputTokens: number
+  /** Input tokens written to the prompt cache. */
   cacheCreationTokens: number
+  /** Input tokens read from the prompt cache. */
   cacheReadTokens: number
+  /** Generated tokens. */
   outputTokens: number
+  /** Cost reported by the CLI, in USD. */
   costUsd: number
 }
 
 /** Validated stage output plus its usage. */
 export interface AgentRunResult {
+  /** Question or result, validated against the stage's schema. */
   output: StageOutput
+  /** Usage of the run. */
   meta: AgentRunMeta
 }
 
@@ -39,11 +52,13 @@ export interface AgentRunResult {
  * `blocked`: the guard denied the call (`reason`); `used`: the call ran.
  */
 export interface ToolEvent {
+  /** `blocked`: denied by the guard; `used`: the call ran. */
   kind: 'blocked' | 'used'
   /** Tool name, e.g. `Bash`, `Read`. */
   tool: string
   /** Command, file or pattern of the call (shortened). */
   target: string
+  /** German deny reason of the guard; only for `blocked`. */
   reason?: string
 }
 

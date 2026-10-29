@@ -12,7 +12,7 @@ function toolCall({ tool, target }: { tool: string; target: string }): string {
   return tool === 'Bash' ? `${tool} \`${target}\`` : `${tool} ${target}`
 }
 
-/** " · tokens↑ tokens↓ · cost" of a run, or '' when the run has no usage (stop, restart, error before Claude answered). */
+/** " · tokens↑ tokens↓ · cost" of a run; '' without usage (stop, restart, error before Claude answered). */
 function usageSuffix(run: AuditPayloads['run_finished']): string {
   const inputTokens = run.inputTokens ?? 0
   if (inputTokens === 0) return ''
