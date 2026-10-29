@@ -46,5 +46,5 @@ describe('architecture (apps/web)', { timeout: ARCHITECTURE_TIMEOUT_MS }, () => 
       .should()
       .adhereTo(importsCoreOnlyViaPackage, 'import core only via @refinement/core, not via deep or relative paths')
     await expect(specifiers).toPassAsync()
-  }, 30_000) // parses the whole TS project; > 5 s default when the machine is busy
+  })
 })
