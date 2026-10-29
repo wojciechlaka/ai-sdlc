@@ -73,3 +73,35 @@ Gerenderte Bilder gibt es nur für die Übersichtsseite (`docs/architecture.png`
 `docs/architecture-annotated.png`).
 
 **Begründung.** Eine editorunabhängige Notation ohne Toolchain; Diffs bleiben lesbar.
+
+## E6 — Leitplanken des Agents als Code (Hook + Sandbox + Eval), kein MCP für Schreibzugriffe (2026-10-28)
+
+**Entscheidung.** Was der Agent darf, steht nicht nur im Skill, sondern wird als Code durchgesetzt und geprüft:
+
+- **Sandbox** für jeden `claude`-Prozess (`adapters/agentSandbox`): nur Nutzer-Einstellungen (nichts aus `.claude/`
+  des fremden Klons), nur lesende Werkzeuge, Umgebung aus einer Positivliste ohne `GITHUB_TOKEN`.
+- **Hooks** von Claude Code (`packages/core/hooks/`): der Guard (`PreToolUse`) lässt Lesen nur im Klon und Bash nur
+  für lesende git-Befehle zu und scheitert geschlossen; das Audit (`PostToolUse`) hält jeden Aufruf fest. Beides
+  landet als `guard_blocked`/`tool_used` im Log des Tickets.
+- **Eval** (`packages/core/evals/guard.eval.ts`, `npm run eval:guard`): ein echter Agent versucht verbotene und
+  erlaubte Aufrufe; geprüft wird das Hook-Log.
+- **Kein MCP-Server, über den der Agent in die DB schreibt.** Zustände ändern nur die Use Cases nach den Regeln
+  der Domäne; der Agent liefert Rückfrage oder Ergebnis, die App handelt.
+
+Die Regel für Bash war zuerst eine Positivliste lesender Shell-Befehle (`cat`, `ls`, `grep`, …). Nach einem Review
+mit einer Reihe von Umgehungen (Verkettung, Umleitung, Ersetzung, `sort -o`, `git grep -O`, …) wurde sie zu einer
+**minimalen git-Grammatik** gehärtet: nur `git log|show|diff|blame|ls-files|status|rev-parse` mit erlaubten Optionen,
+ohne Shell-Sonderzeichen; zum Lesen sind `Read`, `Glob` und `Grep` da. Jede bekannte Umgehung steht als
+Ablehnung in den Tabellentests.
+
+**Begründung.** Ein Prompt ist eine Bitte, kein Schutz — das Playbook fordert „Governance als Code“. Der Hook sitzt
+dort, wo das Risiko liegt: an den Werkzeugen des Agents. Eine Positivliste ohne Shell-Parser ist klein genug, um
+sie vollständig zu testen. Ein Schreibzugang über MCP würde die Zustandsmaschine umgehen und den Agent zum
+zweiten Schreiber der DB machen. Der Eval zeigt, dass die Regel mit dem echten Claude Code zusammenspielt, was
+Unit-Tests allein nicht belegen.
+
+**Trade-offs.** Der Agent kann weniger: keine beliebigen Shell-Befehle, keine Bereiche `a..b` in git. Die Hooks
+hängen am Hook-Format von Claude Code. Restrisiken bleiben (Zeitlimit eines Hooks, Startdateien der Nutzer-Shell,
+siehe [Spec §13](superpowers/specs/2026-10-28-playbook-stages-design.md#13-nachtrag-guard--und-audit-hooks-für-den-agent)).
+Der Eval kostet Geld (etwa 5 Cent mit Haiku) und hängt vom Verhalten des Modells ab; er läuft daher nur auf Aufruf,
+nicht in `npm test`.
