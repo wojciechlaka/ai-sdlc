@@ -85,7 +85,9 @@ StageOutput = IntentAgentOutput | SpecAgentOutput
 Läufe dieser Stufe (reine Funktion in `domain/rules.ts`). Der Prompt nennt „Du hast noch N von 3
 Rückfragen/Auswahlen“; bei N = 0 verlangt er ausdrücklich die Spec („Unklares unter Offene Punkte“). Kommt bei
 N = 0 trotzdem eine Rückfrage oder Auswahl, endet der Lauf `failed` mit der Meldung „Rückfragen-Grenze erreicht —
-der Agent hat keine Spec geliefert“ (erneut startbar). Stufe 1 bleibt unverändert (Intent-Agent: `question` oder
+der Agent hat keine Spec geliefert“ (erneut startbar). Die Zählung beginnt mit jedem neuen Start der Stufe (jüngster Lauf mit Trigger `initial`)
+von vorn, so dass eine fehlgeschlagene Stufe mit vollem Budget neu gestartet werden kann; frühere Antworten
+werden in einen neuen Start nicht übernommen. Stufe 1 bleibt unverändert (Intent-Agent: `question` oder
 `intent`, keine Grenze außer der bisherigen Skill-Regel).
 
 **Antwort auf eine Auswahl.** `answerQuestion(key, input)` akzeptiert zusätzlich `{ choice: 'A'|'B'|'C', note? }`
