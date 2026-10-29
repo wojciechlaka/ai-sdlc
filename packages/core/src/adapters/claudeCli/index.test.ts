@@ -20,6 +20,7 @@ const INTENT_OUTPUT = JSON.stringify({
     title: 'Lesezeit anzeigen',
     problem: 'Leser wissen nicht, wie lange ein Artikel dauert.',
     desiredOutcome: 'Die API liefert eine Lesezeit.',
+    successCriteria: ['Leser sehen vor dem Lesen, wie lange ein Artikel ungefähr dauert.'],
     affected: ['Leser'],
     openPoints: [],
   },

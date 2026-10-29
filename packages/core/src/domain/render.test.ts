@@ -8,6 +8,10 @@ const INTENT: Intent = {
   title: 'Lesezeit anzeigen',
   problem: 'Leser wissen nicht, wie lange ein Artikel dauert.\n',
   desiredOutcome: 'Die Artikel-API liefert eine geschätzte Lesezeit in Minuten.',
+  successCriteria: [
+    'Leser sehen vor dem Öffnen eines Artikels, wie lange das Lesen ungefähr dauert.',
+    'Die angezeigte Lesezeit passt spürbar zur Länge des Artikels.',
+  ],
   affected: ['Leser', 'Artikel-API'],
   openPoints: [{ question: 'Wie viele Wörter pro Minute?' }],
 }
@@ -31,6 +35,11 @@ describe('renderIntent', () => {
         '## Gewünschtes Ergebnis',
         '',
         'Die Artikel-API liefert eine geschätzte Lesezeit in Minuten.',
+        '',
+        '## Erfolgskriterien',
+        '',
+        '- Leser sehen vor dem Öffnen eines Artikels, wie lange das Lesen ungefähr dauert.',
+        '- Die angezeigte Lesezeit passt spürbar zur Länge des Artikels.',
         '',
         '## Betroffene',
         '',
@@ -62,10 +71,17 @@ describe('renderIntent line breaks', () => {
   it('keeps single-line fields on one line', () => {
     const md = renderIntent(
       TICKET,
-      { ...INTENT, title: 'Lese\nzeit', affected: ['Le\nser'], openPoints: [{ question: 'Wie\nviele?' }] },
+      {
+        ...INTENT,
+        title: 'Lese\nzeit',
+        successCriteria: ['Leser sehen\ndie Lesezeit.'],
+        affected: ['Le\nser'],
+        openPoints: [{ question: 'Wie\nviele?' }],
+      },
       [{ question: 'Frage\nzwei?', answer: 'Ja,\nklar.' }],
     )
     expect(md).toContain('# CB-2: Lese zeit\n')
+    expect(md).toContain('## Erfolgskriterien\n\n- Leser sehen die Lesezeit.\n')
     expect(md).toContain('- Le ser\n')
     expect(md).toContain('- Wie viele?\n')
     expect(md).toContain('**F:** Frage zwei?\\\n**A:** Ja, klar.')

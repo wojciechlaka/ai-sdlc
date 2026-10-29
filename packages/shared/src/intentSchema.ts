@@ -9,6 +9,12 @@ export const IntentSchema = z.object({
   problem: z.string(),
   /** What should be true once the problem is solved. */
   desiredOutcome: z.string(),
+  /**
+   * Observable, verifiable statements at outcome level, from the user's or business view, without solution
+   * details (no endpoints, fields, files). They are not acceptance criteria: those belong to the spec
+   * (stage 2) and are derived from these.
+   */
+  successCriteria: z.array(z.string()).min(1),
   /** Who or what is affected (users, areas of the code). */
   affected: z.array(z.string()),
   /** Questions that stay open but do not block the intent. */

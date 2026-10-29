@@ -11,6 +11,7 @@ export const SAMPLE_INTENT: Intent = {
   title: 'Lesezeit anzeigen',
   problem: 'Leser wissen nicht, wie lange ein Artikel dauert.',
   desiredOutcome: 'Die Artikel-API liefert eine geschätzte Lesezeit.',
+  successCriteria: ['Leser sehen vor dem Lesen, wie lange ein Artikel ungefähr dauert.'],
   affected: ['Leser'],
   openPoints: [],
 }

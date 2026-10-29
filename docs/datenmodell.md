@@ -77,6 +77,7 @@ Intent = {
   title:           string               // max. 60 Zeichen
   problem:         string
   desiredOutcome:  string
+  successCriteria: string[]             // mind. 1; Erfolgskriterien auf Ergebnisebene
   affected:        string[]
   openPoints:      { question: string }[]
 }
@@ -84,6 +85,11 @@ Intent = {
 
 Die offene Rückfrage eines Tickets ist die `question` des letzten Laufs der aktuellen Stufe. Das Ergebnis wird
 nicht als Inhalt gelesen: die App rendert daraus `intent.md` und legt die Datei per PR ab.
+
+`successCriteria` sind beobachtbare, prüfbare Aussagen aus Nutzer- oder Fachsicht ohne Lösungsdetails (keine
+Endpunkte, Felder, Dateien). Akzeptanzkriterien bleiben in der Spec (Stufe 2) und werden daraus abgeleitet.
+Gespeicherte Ausgaben älterer Läufe haben das Feld nicht; sie werden nicht erneut validiert (gelesen wird nur die
+`question` einer Rückfrage), daher ist keine Migration nötig.
 
 ### Artifact
 

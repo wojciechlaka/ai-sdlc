@@ -99,16 +99,20 @@ Treibende Adapter (Next.js): `instrumentation.ts` ruft `startup` und startet ein
 ## 6. Agent, Prompts, Artefakte
 
 - Skills: `packages/core/skills/intent-agent.md` (neu: rohes Ticket → Problem, gewünschtes Ergebnis,
-  Betroffene, offene Punkte; Code nur zum Verständnis, keine Lösung) und `spec-agent.md` (aus
+  Erfolgskriterien, Betroffene, offene Punkte; Code nur zum Verständnis, keine Lösung) und `spec-agent.md` (aus
   `refinement-agent.md`; Eingabe: gemergtes `intent.md` + Codebase).
 - Ausgabe (Zod in `packages/shared`, Prüfung + ein Retry wie heute):
   - Plan: `{type:'question', question}` | `{type:'intent', result: IntentSchema}`
   - Design: `{type:'question', question}` | `{type:'spec', result: RefinementOutputSchema}`
-  - `IntentSchema = { title (≤60), problem, desiredOutcome, affected: string[], openPoints: {question}[] }`
+  - `IntentSchema = { title (≤60), problem, desiredOutcome, successCriteria: string[] (≥1), affected: string[],
+    openPoints: {question}[] }`
+  - Nachtrag: `successCriteria` (Erfolgskriterien) sind beobachtbare, prüfbare Aussagen auf Ergebnisebene aus
+    Nutzer- oder Fachsicht, ohne Lösungsdetails (keine Endpunkte, Felder, Dateien). Die Akzeptanzkriterien der
+    Spec (Stufe 2) werden daraus abgeleitet.
 - Blockierende Unklarheiten → Rückfrage in der App; nicht blockierende → offene Punkte in der Datei.
 - Rendering als reine Funktionen `renderIntent`/`renderSpec` in `domain/`: YAML-Kopf `ticket`, `stage`,
   `source` (kein Zustand in der Datei), dann feste Abschnitte; Intent: Problem · Gewünschtes Ergebnis ·
-  Betroffene · Offene Punkte · Geklärte Rückfragen; Spec: User Story · Akzeptanzkriterien · Betroffene Dateien ·
+  Erfolgskriterien · Betroffene · Offene Punkte · Geklärte Rückfragen; Spec: User Story · Akzeptanzkriterien · Betroffene Dateien ·
   Risiken · Offene Punkte · Geklärte Rückfragen.
 - PR: Titel `CB-3: Intent` / `CB-3: Spec`; Text mit Kurzfassung, Link auf die Quelldatei, „Merge = Freigabe
   dieser Stufe“.

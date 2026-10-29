@@ -5,6 +5,7 @@ const INTENT = {
   title: 'Lesezeit anzeigen',
   problem: 'Leser wissen nicht, wie lange ein Artikel dauert.',
   desiredOutcome: 'Die Artikel-API liefert eine Lesezeit in Minuten.',
+  successCriteria: ['Leser sehen vor dem Lesen, wie lange ein Artikel ungefähr dauert.'],
   affected: ['Leser', 'Artikel-API'],
   openPoints: [{ question: 'Wörter pro Minute?' }],
 }
@@ -16,6 +17,15 @@ describe('IntentSchema', () => {
 
   it('rejects titles longer than 60 characters', () => {
     expect(IntentSchema.safeParse({ ...INTENT, title: 'x'.repeat(61) }).success).toBe(false)
+  })
+
+  it('rejects an empty list of success criteria', () => {
+    expect(IntentSchema.safeParse({ ...INTENT, successCriteria: [] }).success).toBe(false)
+  })
+
+  it('rejects an intent without success criteria', () => {
+    const { successCriteria: _omitted, ...withoutCriteria } = INTENT
+    expect(IntentSchema.safeParse(withoutCriteria).success).toBe(false)
   })
 })
 

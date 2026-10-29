@@ -243,7 +243,7 @@ Nutzers samt Startdateien; was der Agent im öffentlichen Klon liest, sieht er g
 | Stufe | Playbook-Phase eines Tickets; in der App `plan` (1 Plan), `design` (2 Design), `done` (Fertig) |
 | Zustand | wo ein Ticket innerhalb seiner Stufe steht: `ready`, `running`, `awaiting_answer`, `in_review`, `failed` |
 | Artefakt | das Ergebnis einer Stufe als Markdown-Datei im Ziel-Repo (`intent.md`, `spec.md`) |
-| Intent | geprüfte, strukturierte Fassung des rohen Tickets: Problem, Ziel, Betroffene, offene Punkte |
+| Intent | geprüfte, strukturierte Fassung des rohen Tickets: Problem, Ziel, Erfolgskriterien, Betroffene, offene Punkte |
 | Spec | Anforderungen für die Umsetzung: User Story, Akzeptanzkriterien, betroffene Dateien, Risiken |
 | Branch | pro Ticket und Stufe `<TICKET>/intent` bzw. `<TICKET>/spec`, PR gegen `showcase` |
 | `showcase` | Arbeitsbranch der App im Ziel-Repo; Tag `showcase-base` ist sein Ausgangsstand |
