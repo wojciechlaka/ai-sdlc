@@ -9,8 +9,8 @@ Grundsatzentscheidungen: [decisions.md](decisions.md) · Stufen und Ausblick:
 Eine lokale Next.js-App führt Tickets durch die Stufen des AI-Native SDLC Playbooks. Ein Agent schreibt das
 Artefakt der Stufe, die App legt es auf einem eigenen Branch im Ziel-Repo ab und öffnet einen PR; ein Mensch
 gibt per Merge frei. Die Inhalte liegen in Git, die App hält nur Stufe, Zustand, Verweise und Log (§3).
-**Stufe 1 (Plan → `intent.md`) läuft Ende zu Ende; Stufe 2 (Design → `spec.md`) ist modelliert, aber noch
-nicht startbar** (§6). Das Übersichtsbild: [architecture.png](architecture.png), erläutert in
+**Stufe 1 (Plan → `intent.md`) und Stufe 2 (Design → `spec.md`) laufen Ende zu Ende** (§6). Das Übersichtsbild:
+[architecture.png](architecture.png), erläutert in
 [architecture-annotated.png](architecture-annotated.png).
 
 ## 2. Prinzipien
@@ -41,8 +41,9 @@ nicht startbar** (§6). Das Übersichtsbild: [architecture.png](architecture.png
 ```
 
 - **Stufe pro Ticket:** Plan → Design → Fertig (Showcase), danach Build, Test, Deploy, Maintain (Ausblick).
-- **Agent und App:** Der Agent liest Ticket und Klon des Ziel-Repos und liefert eine Rückfrage oder das
-  Ergebnis; die App rendert daraus die Datei, legt Branch und PR an und führt den Zustand.
+- **Agent und App:** Der Agent liest Ticket und Klon des Ziel-Repos (Stand von `showcase`; in Stufe 2 zusätzlich
+  den gemergten Intent) und liefert eine Rückfrage, in Stufe 2 auch eine Auswahl zwischen 2–3 Ansätzen (höchstens
+  3 pro Start), oder das Ergebnis; die App rendert daraus die Datei, legt Branch und PR an und führt den Zustand.
 - **Arbeitsbranch `showcase`:** PRs gehen gegen `showcase`, Stufen und Inhalte werden von dort gelesen.
   `master` bleibt unberührt. Der Tag `showcase-base` markiert den Ausgangsstand; der Reset setzt `showcase`
   per Force darauf zurück.
@@ -145,13 +146,14 @@ Beispiel-Tickets → [`examples/tickets/`](../examples/tickets/README.md).
 ## 5. Governance als Code
 
 Das Playbook verlangt, dass Regeln für den Agent nicht nur im Prompt stehen, sondern geprüft und durchgesetzt
-werden. Für Stufe 1 gibt es dafür drei Bausteine, jeder als Code im Repo ([E6](decisions.md)):
+werden. Dafür gibt es vier Bausteine, jeder als Code im Repo ([E6](decisions.md)):
 
 | Baustein | Was er tut | Wo |
 |---|---|---|
-| **Skill** | sagt dem Agent, was er tun soll: Intent schreiben oder zurückfragen, nur lesen | `packages/core/skills/intent-agent.md` |
+| **Skill** | sagt dem Agent, was er tun soll: Intent bzw. Spec schreiben, zurückfragen oder (Stufe 2) Ansätze zur Wahl stellen, nur lesen | `packages/core/skills/intent-agent.md`, `spec-agent.md` |
 | **Hook** | setzt durch, was er darf: Guard vor jedem Werkzeugaufruf (lesen nur im Klon, Bash nur lesende git-Befehle), Audit danach; beides landet im Log des Tickets | `packages/core/hooks/` (Regel: `guardPolicy.mjs`), Sandbox: `src/adapters/agentSandbox/` |
-| **Eval** | prüft mit einem echten `claude` (Haiku), dass der Guard greift: `rm -rf`, Lesen außerhalb und `curl` blockiert, `git log` und Lesen im Repo erlaubt | `packages/core/evals/guard.eval.ts`, `npm run eval:guard` |
+| **Eval (Guard)** | prüft mit einem echten `claude` (Haiku), dass der Guard greift: `rm -rf`, Lesen außerhalb und `curl` blockiert, `git log` und Lesen im Repo erlaubt — *darf der Agent das?* | `packages/core/evals/guard.eval.ts`, `npm run eval:guard` |
+| **Eval (Spec)** | lässt den echten Spec-Agent gegen ein Beispiel-Repo laufen; feste Prüfungen plus Bewertung durch ein zweites Modell (Abdeckung, Prüfbarkeit, Passung, YAGNI, Konsistenz) — *ist das Ergebnis gut?* | `packages/core/evals/spec.eval.ts`, `npm run eval:spec` |
 
 Die Regel selbst ist zusätzlich mit Tabellentests abgedeckt (`hooks/guardPolicy.test.ts`, Teil von `npm test`);
 der Eval prüft das Zusammenspiel mit Claude Code, kostet etwa 5 Cent und läuft deshalb nur auf Aufruf.
@@ -219,21 +221,20 @@ Nutzers samt Startdateien; was der Agent im öffentlichen Klon liest, sieht er g
 
 ## 6. Stand und nächster Schritt
 
-**Gebaut (Stufe 1):**
+**Gebaut (Stufe 1 und 2):**
 
 - Tickets aus `examples/tickets/*.md`, Schlüssel wie `CB-3` als Primärschlüssel.
 - Intent-Agent mit Rückfragen; `intent.md` auf eigenem Branch mit PR gegen `showcase`.
-- Merge-Erkennung per Abfrage (Timer und Ticketseite), Übergang in Stufe 2, Inhalt live von `showcase`.
-- Log pro Ticket mit Läufen, Rückfragen, PRs, Übergängen, Kosten und Tokens.
+- Spec-Agent auf dem gemergten Intent: Rückfragen und Auswahl zwischen 2–3 Ansätzen (höchstens 3 pro Start),
+  `spec.md` auf `<KEY>/spec` mit PR `<KEY>: Spec`; Merge → Fertig.
+- Klon des Ziel-Repos auf `showcase` (fetch + `checkout -B`, robust gegen den Force-Reset).
+- Merge-Erkennung per Abfrage (Timer und Ticketseite), Inhalt live von `showcase`.
+- Log pro Ticket mit Läufen, Rückfragen, Auswahlen, PRs, Übergängen, Kosten und Tokens.
 - Aufräumen beim Start, Showcase-Reset (Tag `showcase-base`, Reset-Button, `RESET_ON_START`).
-- Leitplanken des Agents: Sandbox, Guard- und Audit-Hooks, Eval (§5).
+- Leitplanken des Agents: Sandbox, Guard- und Audit-Hooks, Guard-Eval und Spec-Eval (§5).
 
 **Offen:**
 
-- **Stufe 2 (Design):** Spec-Agent, der aus dem gemergten `intent.md` und der Codebase `spec.md` schreibt;
-  dazu Skill, Ausgabeschema und `design` in `STARTABLE_STAGES`.
-- **Klon auf `showcase`:** Der Agent liest heute den Klon des Default-Branches; für Stufe 2 muss er den Stand
-  von `showcase` sehen (dort liegt das gemergte `intent.md`).
 - **Sandbox pro Stufe:** spätestens mit Stufe 3 (Build), siehe §5 „Agent-Sandbox“.
 - **Ticket-System anbinden:** Jira o. Ä. statt `examples/tickets/*.md`, siehe unten.
 
@@ -277,7 +278,8 @@ Stellen, die das Ticket-System kennen; `compose.ts` wählt den Adapter per Konfi
 | Zustand | wo ein Ticket innerhalb seiner Stufe steht: `ready`, `running`, `awaiting_answer`, `in_review`, `failed` |
 | Artefakt | das Ergebnis einer Stufe als Markdown-Datei im Ziel-Repo (`intent.md`, `spec.md`) |
 | Intent | geprüfte, strukturierte Fassung des rohen Tickets: Problem, Ziel, Erfolgskriterien, Betroffene, offene Punkte |
-| Spec | Anforderungen für die Umsetzung: User Story, Akzeptanzkriterien, betroffene Dateien, Risiken |
+| Spec | Design der Lösung aus dem Intent: Ziel, gewählter Ansatz mit verworfenen Alternativen, Komponenten, Datenfluss, Fehlerbehandlung, Akzeptanzkriterien, Tests, betroffene Dateien, Risiken, offene Punkte |
+| Auswahl | Ausgabe des Design-Agents statt einer Rückfrage: 2–3 Ansätze mit Vor- und Nachteilen und einer Empfehlung; die Wahl landet als „Ansatz B: … — Anmerkung: …“ in der Spec |
 | Branch | pro Ticket und Stufe `<TICKET>/intent` bzw. `<TICKET>/spec`, PR gegen `showcase` |
 | `showcase` | Arbeitsbranch der App im Ziel-Repo; Tag `showcase-base` ist sein Ausgangsstand |
 | Gate | Freigabe durch einen Menschen — der Merge des PR einer Stufe |

@@ -114,14 +114,25 @@ ready / failed, Stufe 1  [Sonnet 4.6 v] [Plan starten]
                          ohne Token: Knopf aus, Hinweis "GITHUB_TOKEN fehlt ..."
 running                  Karte "Agent laeuft  0m 42s" mit Fortschrittszeilen
                          [Stoppen]
-awaiting_answer          Karte "Frage vom Agent": Frage, Textfeld, [Antworten]
+awaiting_answer          Karte "Frage vom Agent": (Stufe 2: "Rueckfrage N von 3"), Frage, Textfeld, [Antworten]
                          [Abbrechen]
+awaiting_answer,         Karte "Auswahl vom Agent": "Rueckfrage N von 3", Frage als Legende,
+Auswahl (Stufe 2)        (o) Ansatz A: Titel  [empfohlen]   Beschreibung, + Vorteile, - Nachteile
+                         ( ) Ansatz B: Titel  ...           (Empfehlung vorausgewaehlt, Radio-Gruppe)
+                         Anmerkung (optional)
+                         [Auswahl senden] [Abbrechen]
 in_review                [PR #7 oeffnen]
                          "Merge auf GitHub = Freigabe dieser Stufe. ..."
-ready, Stufe 2           [Design starten] (deaktiviert)
-                         "Der Design-Agent (Stufe 2) folgt im naechsten Schritt."
+ready / failed, Stufe 2  [Sonnet 4.6 v] [Design starten]
+                         "Der Design-Agent liest den gemergten Intent und die Codebase; er stellt hoechstens
+                          3 Rueckfragen oder Auswahlen."
 Fertig                   "Alle Stufen abgeschlossen."
 ```
+
+**`ChoicePanel`:** `fieldset` mit der Frage als `legend`, je Ansatz ein natives Radio (Tab in die Gruppe, Pfeiltasten
+wechseln); Beschreibung, Vor- und Nachteile hängen per `aria-describedby` am Radio. „Auswahl senden“ ist aktiv,
+sobald eine Option gewählt ist (die Empfehlung ist es von Anfang an). Im Log erscheinen „Auswahl: <Frage> — Ansatz A
+empfohlen“ und „Antwort: Ansatz B: <Titel> — Anmerkung: …“.
 
 Während die App den Zustand abgleicht (z. B. `in_review` ohne offenen PR), steht dort „Zustand wird
 abgeglichen …“. Fehler einer Aktion erscheinen als rote Meldung darunter.

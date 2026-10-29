@@ -11,6 +11,7 @@ npm run build        # tsc --noEmit for packages + next build
 npm test             # all workspace tests (Vitest)
 npm run lint         # ESLint in all workspaces: control-flow style; core also hexagon rule + hook scripts
 npm run eval:guard   # guard eval: real `claude` (Haiku) in the app sandbox — costs ~5 cents, needs `claude login`
+npm run eval:spec    # spec quality eval: real spec agent (Sonnet) + judge (Haiku) on a fixture repo — ~0.20–0.40 USD
 
 npm test -w packages/core                       # core only
 npm test -w packages/core -- src/domain/rules   # single file / pattern
@@ -34,8 +35,8 @@ A database in the pre-playbook schema (table `review_decisions`) is dropped and 
 stage 1 **Plan** (raw ticket → `intent.md`) and stage 2 **Design** (intent → `spec.md`). A Claude agent writes
 the artifact, the app commits it to its own branch in the target repo and opens a PR; **merging the PR is the
 gate** that moves the ticket to the next stage. Content lives in Git; the app keeps only stage, state,
-references and a log per ticket. Stage 1 runs end to end; stage 2 (Design) is modelled but not startable yet
-(`STARTABLE_STAGES` in `domain/rules.ts`).
+references and a log per ticket. Both stages run end to end; stage 2 reads the merged intent from `showcase`, may
+offer a choice between 2–3 approaches, and asks at most `QUESTION_LIMIT` (3) questions/choices per start.
 
 npm workspaces monorepo, Ports & Adapters (hexagonal):
 
@@ -48,7 +49,8 @@ packages/core/     domain/ (pure rules, naming, Markdown rendering), ports/ (int
                    agentSandbox, nodeEvents), compose.ts (createRefinementEngine wires real adapters),
                    hooks/ (guard/audit scripts Claude Code runs per tool call),
                    evals/ (evals against a real `claude`, not part of `npm test`)
-packages/shared/   Zod contracts: DTOs, inputs, TicketEvent, audit events, agent output (IntentSchema; RefinementOutputSchema for stage 2)
+packages/shared/   Zod contracts: DTOs, inputs, TicketEvent, audit events, agent output (agentOutput: question/choice;
+                   IntentSchema; SpecSchema; StageOutputSchema)
 examples/tickets/  simulated Jira tickets — the only ticket source (`# CB-3: Title`, text, `**Priorität:** …`)
 ```
 
@@ -79,7 +81,7 @@ changing Next-specific code.
 - **Artifact** — stage, path `docs/work/<KEY>/intent.md|spec.md`, branch `<KEY>/intent|spec`, PR number/url/state,
   mergedAt
 - **AuditEvent** — the per-ticket log shown on the ticket page (`ticket_imported`, `run_started`, `run_finished`,
-  `question_asked`, `answer_given`, `pr_opened`, `pr_merged`, `pr_closed`, `stage_changed`, `cleanup`, `error`,
+  `question_asked`, `choice_offered`, `answer_given` (optional `choice`), `pr_opened`, `pr_merged`, `pr_closed`, `stage_changed`, `cleanup`, `error`,
   `guard_blocked`, `tool_used`). Contract in `packages/shared/src/auditEvents.ts`: `AuditEventSchema` (discriminated
   union on `type`, one payload schema per type) and `AuditPayloads`. The core writes via `record(deps, ticketKey,
   actor, type, payload)` (`application/auditTrail.ts`; `AuditLog.append` is typed by the map via `PayloadOf`, so a
@@ -99,17 +101,24 @@ running --error/timeout--> failed
 running|awaiting_answer --stop--> ready
 ```
 
-### Flow ("Plan starten")
+### Flow ("Plan starten" / "Design starten")
 
 1. `startStageAction(ticketKey, { model })` → use case `startStage` (`application/stageCommands.ts`): validates (Zod),
    requires a code host (token), sets `running`, creates the AgentRun synchronously (`beginRun` in
    `runLifecycle.ts`) and hands `runStage` to `runInBackground`
-2. `runStage`: `RepoProvider.ensureRepo(TARGET_REPO)` (plain clone/pull into `$REPO_CACHE_DIR`, no token) →
-   `ensureSummary` → `executeRun`
+2. `runStage`: design only — read `docs/work/<KEY>/intent.md` from `showcase` via `codeHost.readFile` (missing →
+   `failed` "Intent fehlt auf showcase — erst Stufe 1 abschließen") → `RepoProvider.ensureRepo(TARGET_REPO)` (clone
+   into `$REPO_CACHE_DIR`, then `fetch origin refs/heads/showcase` + `checkout -f -B showcase FETCH_HEAD` + `reset
+   --hard`, no token; survives the force-reset of `showcase`; git calls run with `GIT_CEILING_DIRECTORIES`, so a
+   broken cache folder never resolves to a parent repo) → `ensureSummary` → `executeRun`
 3. `AgentRunner.run` (`adapters/claudeCli`) picks skill + schema per stage (`STAGE_AGENTS`: plan →
-   `skills/intent-agent.md` + `IntentAgentOutputSchema`), spawns `claude --print --output-format stream-json`,
-   validates, retries once on schema errors
-4. Question → `awaiting_answer`; `answerQuestion` starts a new run with the Q&A history. Intent → `renderIntent`
+   `skills/intent-agent.md` + `IntentAgentOutputSchema`; design → `skills/spec-agent.md` + `SpecAgentOutputSchema`),
+   builds the prompt (design: intent section and "Du hast noch N von 3 Rückfragen/Auswahlen"), spawns
+   `claude --print --output-format stream-json`, validates, retries once on schema errors
+4. Question → `awaiting_answer` (`question_asked`); choice (design) → `awaiting_answer` (`choice_offered`). A question
+   or choice with 0 left (`questionsRemaining` in `domain/rules.ts`, counted from the latest `initial` run) fails the
+   stage. `answerQuestion` takes `{ answer }` or `{ choice, note? }` (stored as "Ansatz B: <Titel> — Anmerkung: …")
+   and starts a new run with the Q&A history. Intent → `renderIntent`, spec → `renderSpec`
    → `publishArtifact`: delete leftover branch, create branch, commit file, open PR → artifact + `in_review`
 5. `syncReviews` (timer every 60 s, and on every ticket page view) reads PR state: merged → next stage; closed → ready
 6. Events reach the browser via `GET /api/events?ticketKey=` (ticket page) or `GET /api/events` (board);
@@ -151,6 +160,16 @@ Prints a German table with cost and duration, exit code 1 on failure, always rem
 test` (`*.eval.ts` is no test file name, and `evals/**` is excluded in `vitest.config.ts`); type-checked (`tsconfig`
 includes `evals`) and linted.
 
+**Spec eval (`packages/core/evals/spec.eval.ts`, `npm run eval:spec`):** copies the fixture repo
+`evals/fixtures/articles-api` into a temp git repo per case (`evals/specCases.ts`, with the intent under
+`docs/work/<KEY>/intent.md`), runs the real design agent through `runAgent` (`STAGE_AGENTS.design`, same sandbox and
+skill as the app) with `questionsRemaining: 0`, applies the fixed checks of `evals/specRubric.ts` and has a judge model
+(`claude --print --output-format json`, no tools: `--disallowedTools`, guard hooks, empty cwd; its hook log must stay
+empty) score the rubric 1–5 (JSON, Zod-checked). Models `EVAL_MODEL` (Sonnet) / `EVAL_JUDGE_MODEL` (Haiku), threshold
+`EVAL_MIN_SCORE` (3). German report, exit code 1 on failure. `evals/specRubric.test.ts` runs with `npm test`
+(`vitest.config.ts` excludes only `evals/**/*.eval.ts` and `evals/fixtures/**`); the fixture is excluded from
+`tsconfig`, ESLint and Vitest.
+
 **Attempt identity:** every background step checks `isCurrentRun` (`application/runLifecycle.ts`: ticket still
 `running` and this run is its latest). Stop, restart and reset therefore never let a stale job write state;
 a PR opened by a stale attempt is closed again.
@@ -190,7 +209,8 @@ makes `startStage`/`answerQuestion` throw a `ConflictError`.
 - `packages/core/src/adapters/claudeCli/` — `index.ts` (`runAgent`: stage agent, one retry, usage; factory),
   `claudeProcess.ts` (spawn in the sandbox, timeout, `stopAgent`), `streamJson.ts` (progress, result line),
   `agentOutput.ts` (JSON extraction, schema validation), `hookLog.ts`, `prompt.ts`
-- `packages/core/src/adapters/git/` — `repoCache.ts` (clone/pull into the cache, `getRepoDir`, factory),
+- `packages/core/src/adapters/git/` — `repoCache.ts` (clone into the cache, checkout of the base branch via fetch +
+  `checkout -B FETCH_HEAD`, `getRepoDir`, factory with `baseBranch`),
   `codebaseSummary.ts` (summary prompt, in-flight dedupe, sandboxed summary run, blocked-call warnings)
 - `packages/core/src/adapters/sqlite/schema.ts` — Drizzle schema: `tickets`, `agent_runs`, `artifacts`, `audit_events`
 - `packages/core/src/testing/` — test doubles, all re-exported by `fakes.ts` (tests import from there):
@@ -200,8 +220,7 @@ makes `startStage`/`answerQuestion` throw a `ConflictError`.
 - `packages/core/hooks/{guardPolicy,guard,audit,hookIo}.mjs` — guard/audit hook scripts for the agent (spec §13)
 - `packages/core/src/adapters/agentSandbox/agentSandbox.ts` — flags, hook settings and env allowlist of every `claude`
   process
-- `packages/core/skills/intent-agent.md` — stage 1 skill, included verbatim in the prompt
-  (`refinement-agent.md` is kept for stage 2)
+- `packages/core/skills/intent-agent.md`, `spec-agent.md` — skills of stage 1 and 2, included verbatim in the prompt
 
 ### Adding things
 
@@ -214,9 +233,10 @@ makes `startStage`/`answerQuestion` throw a `ConflictError`.
 - **Change what the agent may do**: edit `GIT_OPTIONS` / the checks in `packages/core/hooks/guardPolicy.mjs`
   (`decide()`), extend the table tests in `hooks/guardPolicy.test.ts` (keep every known bypass as a deny case); the
   scripts run per tool call, so no restart is needed. Env passed to `claude`: `ENV_ALLOWLIST` in `agentSandbox.ts`
-- **New eval case**: add an entry to `CASES` in `packages/core/evals/guard.eval.ts` (`tool`, `instruction` as written in
-  the prompt, `expected: 'blocked' | 'used'`, `matches(target)` recognising the hook-log target), then run
-  `npm run eval:guard`
+- **New eval case**: guard — add an entry to `CASES` in `packages/core/evals/guard.eval.ts` (`tool`, `instruction` as
+  written in the prompt, `expected: 'blocked' | 'used'`, `matches(target)` recognising the hook-log target), then run
+  `npm run eval:guard`; spec — add an intent to `SPEC_CASES` in `packages/core/evals/specCases.ts` (criteria and
+  threshold in `specRubric.ts`), then run `npm run eval:spec`
 - **New log event**: add `event('<type>', <payload schema>)` to `AuditEventSchema`
   (`packages/shared/src/auditEvents.ts`), write it with `record(...)`, add its `case` to `describeLogEvent`
   and its name to `FALLBACK_LABEL` (`apps/web/lib/logFormat.ts`; both are exhaustive)
@@ -235,7 +255,7 @@ makes `startStage`/`answerQuestion` throw a `ConflictError`.
   English. Everything a user or the agent sees is German: UI texts, progress events, audit/log entries shown on the
   ticket page, startup warnings, PR titles/bodies, commit messages in the target repo, prompts, skill files and the
   guard's deny reasons. A log line that echoes such a text (e.g. a progress message also written to the server log)
-  quotes it unchanged. Developer-facing CLI output such as the eval report (`npm run eval:guard`) is German too, and
+  quotes it unchanged. Developer-facing CLI output such as the eval reports (`npm run eval:guard`, `eval:spec`) is German too, and
   so are the commit messages of this repository (`refactor: …`, `feat: …`).
 - **Thrown errors:** a message that can reach the UI is German — `ConflictError`/`ValidationError`/`NotFoundError`,
   `CodeHostError`, and every error an agent run can end with (`failStage` shows `describeError(err)`: timeout, CLI

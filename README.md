@@ -6,7 +6,7 @@ es auf einem eigenen Branch im Ziel-Repo ab und öffnet einen Pull Request. **De
 schiebt das Ticket in die nächste Stufe. Die App hält nur Stufe, Zustand, Verweise und ein Log pro Ticket;
 die Inhalte liegen in Git.
 
-Stand: Stufe 1 (Plan) läuft Ende zu Ende. Stufe 2 (Design) folgt.
+Stand: Stufe 1 (Plan) und Stufe 2 (Design) laufen Ende zu Ende.
 
 ## Starten
 
@@ -104,7 +104,7 @@ Jede GitHub-Anfrage bricht nach 15 Sekunden ab. Fehlt der Ordner `examples/ticke
 (Meldung `[startup] App konnte nicht starten` im Server-Log). Der **Reset**-Button fragt vorher nach, weil er die
 Datenbank leert, offene PRs der App schließt und `showcase` zurücksetzt.
 
-## Ablauf (Stufe 1)
+## Ablauf (Stufe 1: Plan)
 
 1. Ticket auf dem Board öffnen (CB-2 ist der kleinste Lauf), Modell wählen, **Plan starten**.
 2. Der Agent liest das Ticket und den Klon des Ziel-Repos. Bei einer blockierenden Unklarheit stellt er eine
@@ -118,6 +118,20 @@ Datenbank leert, offene PRs der App schließt und `showcase` zurücksetzt.
 Ein Lauf nutzt den eigenen Claude-Login und verbraucht Tokens; Kosten und Tokens stehen im Log des Tickets, die
 Summe je Stufe im Block „Kosten“ der Ticketseite und die Summe aller Tickets oben auf dem Board (ohne den gemeinsam
 genutzten Codebase-Summary-Lauf, der keinem Ticket gehört).
+
+## Ablauf (Stufe 2: Design)
+
+1. Ticket in der Spalte „2 Design“ öffnen (der Intent ist gemergt), Modell wählen, **Design starten**.
+2. Die App liest `docs/work/<TICKET>/intent.md` von `showcase` (fehlt er: „Intent fehlt auf showcase — erst Stufe 1
+   abschließen“) und stellt den Klon des Ziel-Repos auf den aktuellen Stand von `showcase`.
+3. Der Design-Agent liest Intent und Codebase. Gibt es echte Alternativen, bietet er eine **Auswahl** mit 2–3
+   Ansätzen an (Vor- und Nachteile, eine Empfehlung ist vorausgewählt, optional eine Anmerkung); fehlt eine
+   fachliche Regel, stellt er eine **Rückfrage**. Höchstens **3** Rückfragen/Auswahlen pro Start („Rückfrage N von
+   3“); danach muss er die Spec liefern, sonst endet der Lauf mit „Rückfragen-Grenze erreicht …“ und lässt sich neu
+   starten.
+4. Die App legt `docs/work/<TICKET>/spec.md` auf dem Branch `<TICKET>/spec` an und öffnet den PR `<TICKET>: Spec`
+   gegen `showcase`. Gewählte Ansätze stehen unter „Geklärte Rückfragen“ („Ansatz B: … — Anmerkung: …“).
+5. **Mergen** setzt das Ticket auf „Fertig“; die Spec ist in der App unter „Stufen“ sichtbar.
 
 ## Leitplanken für den Agent
 
@@ -155,6 +169,14 @@ müssen blockiert sein, `git log --oneline` und `Read README.md` ausgeführt, `t
 Ausgabe als Tabelle mit Kosten und Dauer; bei einem Fehler Exit-Code 1. Ein Lauf kostet etwa 5 Cent mit Haiku
 (Modell über `EVAL_MODEL` wählbar), braucht `claude login` und ist bewusst **nicht** Teil von `npm test`. Die Fälle
 stehen als Liste in `packages/core/evals/guard.eval.ts`.
+
+**Spec-Eval.** `npm run eval:spec` prüft die Qualität der Specs mit dem echten Design-Agent (gleiche Sandbox, gleicher
+Skill, gleiches Schema wie die App) gegen ein kleines Beispiel-Repo (`packages/core/evals/fixtures/articles-api`) und
+zwei Intents, ohne Rückfragen. Feste Prüfungen: Spec geliefert, betroffene Dateien existieren (außer als neu
+markierte), mindestens so viele Akzeptanz- wie Erfolgskriterien, kein Code-Block, eine verworfene Alternative mit
+Grund. Danach bewertet ein zweites Modell (Haiku, ohne Werkzeuge) Abdeckung, Prüfbarkeit, Passung zur Codebase,
+YAGNI und Konsistenz mit 1–5; unter 3 (`EVAL_MIN_SCORE`) schlägt der Eval fehl. Ausgabe als Tabelle mit Kosten und
+Dauer, etwa 0,20–0,40 $ pro Lauf (`EVAL_MODEL`, `EVAL_JUDGE_MODEL`); nicht Teil von `npm test`.
 
 ## Neues Ticket
 
@@ -205,6 +227,7 @@ prüfen Architekturtests mit ArchUnitTS als Teil von `npm test` (`architecture.t
 | `npm test`           | alle Tests (Vitest), inkl. Architekturtests                   |
 | `npm run lint`       | Abhängigkeitsregel des Hexagons, Hook-Skripte, Evals          |
 | `npm run eval:guard` | Eval der Leitplanken mit echtem `claude` (kostet, siehe oben) |
+| `npm run eval:spec`  | Qualitäts-Eval der Specs mit echtem `claude` (kostet, siehe oben) |
 
 Die App läuft als ein dauerhafter Node-Prozess (lang laufende Agent-Prozesse, Event-Bus im Speicher, lokale
 SQLite, Abgleich-Timer). Serverless-Hosting wird nicht unterstützt (siehe [E2](docs/decisions.md)).

@@ -48,7 +48,7 @@ des Teams.
 | Stufe | Artefakt | Gate (wer gibt frei) | Leitmetrik (Tempo) | Ergebnismetrik (Qualität) | Status |
 |---|---|---|---|---|---|
 | **1 Plan** | `intent.md` | Product Owner | Zeit vom ersten Gespräch bis zum committeten `intent.md` | Anteil der Intents, die der Product Owner in Stufe 2 übernimmt | **Showcase (gebaut)** |
-| **2 Design** | `spec.md` | Product Owner; bei höherem Risiko Tech Lead, markierte Bedenken an Policy-Owner | Zeit zwischen `intent.md`- und `spec.md`-Commit | Nacharbeit an Anforderungen nach Build-Start (`spec.md`-Commits nach dem ersten `plan.md`-Commit) | **Showcase (folgt)** |
+| **2 Design** | `spec.md` | Product Owner; bei höherem Risiko Tech Lead, markierte Bedenken an Policy-Owner | Zeit zwischen `intent.md`- und `spec.md`-Commit | Nacharbeit an Anforderungen nach Build-Start (`spec.md`-Commits nach dem ersten `plan.md`-Commit) | **Showcase (gebaut)** |
 | 3 Build | `plan.md` + Code-Diff | Engineer gibt den Plan frei; Tech Lead/Architekt bei höherem Risiko | Anteil der Änderungen, die im ersten Durchgang gemergt werden | Nacharbeits-Zyklen pro Änderung; Übereinstimmung von Diff und `plan.md` | Ausblick |
 | 4 Test | Testergebnisse, Build-Logs, Screenshot-Diffs; Evals aus 20–50 echten Aufgaben | Code Owner im PR-Review | First-Pass-CI-Erfolgsquote agentengeschriebener Änderungen | Review-Zeit pro PR | Ausblick |
 | 5 Deploy | PR mit Review-Befunden, freigegebene Change-Tickets | Code Owner per Branch Protection, Release Manager für Produktion — nie der Agent, der den Code schrieb | Zeit bis zum ersten Review (Ziel: Minuten) | vor dem Merge gefundene vs. in Produktion entkommene Fehler | Ausblick |
@@ -60,9 +60,12 @@ hier schon in klein: ein **Skill** (`intent-agent.md`) sagt dem Agent, was er tu
 setzen durch, dass er im Ziel-Repo nur liest, und ein **Eval** (`npm run eval:guard`) prüft das mit einem echten
 Agent ([architecture.md](architecture.md) §5, [E6](decisions.md)).
 
-**Stufe 2 — Design.** Aus dem freigegebenen Intent und der Codebase schreibt der Agent `spec.md` — mit
-Rückfragen, wo Regeln unklar sind. Der Product Owner gibt frei, bei höherem Risiko zusätzlich der Tech
-Lead; markierte Bedenken gehen an den Policy-Owner.
+**Stufe 2 — Design.** Aus dem freigegebenen Intent und der Codebase schreibt der Agent `spec.md`: Ziel, gewählter
+Ansatz mit verworfenen Alternativen, Komponenten, Datenfluss, Fehlerbehandlung, Akzeptanzkriterien, Tests,
+betroffene Dateien, Risiken. Wo die Architektur echte Alternativen hat, stellt er 2–3 Ansätze zur Wahl; wo eine
+Regel fehlt, fragt er zurück — höchstens dreimal. Der Product Owner gibt per Merge frei, bei höherem Risiko
+zusätzlich der Tech Lead; markierte Bedenken gehen an den Policy-Owner. Ein zweiter Eval (`npm run eval:spec`)
+bewertet die Qualität der Specs.
 
 **Stufe 3 — Build (Ausblick).** Der Agent schreibt zuerst `plan.md`, nach Freigabe den Code und öffnet einen
 Code-PR. Team-Wissen liegt in `CLAUDE.md`, Skills und Hooks des Ziel-Repos. Weil der Agent hier schreibt, bekommt
@@ -93,17 +96,18 @@ und der Kreislauf beginnt von vorn.
 
 ## 6. Stand heute und nächster Schritt
 
-**Heute:** Stufe 1 läuft Ende zu Ende über Git. Die lokale App liest die Tickets aus `examples/tickets/*.md`,
+**Heute:** Stufe 1 und 2 laufen Ende zu Ende über Git. Die lokale App liest die Tickets aus `examples/tickets/*.md`,
 der Intent-Agent schreibt `intent.md` (mit Rückfragen in der App), die App legt die Datei auf dem Branch
 `<TICKET>/intent` ab und öffnet einen PR gegen den Arbeitsbranch `showcase`. Der Merge schiebt das Ticket in
-Stufe 2; Stufe, Zustand und Log liegen in der Datenbank, der Inhalt in Git. Ein Reset setzt `showcase` auf den
+Stufe 2; Stufe, Zustand und Log liegen in der Datenbank, der Inhalt in Git. In Stufe 2 schreibt der Spec-Agent aus dem
+gemergten Intent `spec.md` (Branch `<TICKET>/spec`, PR gegen `showcase`); der Merge setzt das Ticket auf Fertig. Ein Reset setzt `showcase` auf den
 Tag `showcase-base` zurück, `master` bleibt unberührt. Der Agent läuft in einer Sandbox mit Guard- und
 Audit-Hooks (nur lesen im Klon, jeder Werkzeugaufruf im Log), geprüft durch einen Eval. Ziel-Repo der Demo ist der Fork der Blog-API „Conduit“
 ([wojciechlaka/node-express-realworld-example-app](https://github.com/wojciechlaka/node-express-realworld-example-app));
 Beispiel-Tickets → [`examples/tickets/`](../examples/tickets/README.md).
 
-**Nächster Schritt:** Stufe 2 (Design) — ein Spec-Agent schreibt aus dem gemergten `intent.md` und der
-Codebase `spec.md` auf dem Branch `<TICKET>/spec`, PR gegen `showcase`; der Merge setzt das Ticket auf Fertig.
+**Nächster Schritt:** Stufe 3 (Build) — `plan.md` und Code-Diff mit eigener Sandbox (Schreibrechte nur im
+Arbeitszweig), siehe [Architektur §5](architecture.md#agent-sandbox).
 
 **Später:** Betrieb im Team und im Unternehmen (gemeinsamer Zustand, Rollen) — erst wenn das Arbeitsmodell
 in Stufe 1 und 2 trägt.
