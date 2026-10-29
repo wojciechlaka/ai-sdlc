@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { CodeHostError } from '../ports'
 import {
-  SAMPLE_CHOICE_OUTPUT, SAMPLE_META, SAMPLE_SPEC_OUTPUT, createTestContext, errorCodeOf, seedTicket, type TestContext,
+  SAMPLE_CHOICE_OUTPUT, SAMPLE_META, SAMPLE_SPEC_OUTPUT, createTestContext, errorCodeOf, seedTicket, sourceTicket, type TestContext,
 } from '../testing/fakes'
 import { answerQuestion, startStage, stopRun } from './stageCommands'
 import { syncReviews } from './syncReviews'
+import { resetSystem } from './startup'
 
 // Stage 2 (Design) end to end with fakes: start, choice, spec PR, merge → done, stop.
 
@@ -204,6 +205,20 @@ describe('design stage — question limit', () => {
     })
   })
 
+  it('offers the full budget of 3 again when started after reaching the limit', async () => {
+    const ctx = setup()
+    ctx.agent.outcome = QUESTION
+    await start(ctx)
+    for (const text of ['A1', 'A2', 'A3']) {
+      await answer(ctx, text)
+    }
+    expect(ctx.deps.tickets.findByKey('CB-2')?.state).toBe('failed')
+
+    await start(ctx)
+
+    expect(ctx.agent.calls.at(-1)?.questionsRemaining).toBe(3)
+  })
+
   it('starts again with the full budget after a stop', async () => {
     const ctx = setup()
     ctx.agent.outcome = { output: SAMPLE_CHOICE_OUTPUT, meta: SAMPLE_META }
@@ -227,6 +242,24 @@ describe('design stage — question limit', () => {
     }
     expect(ctx.deps.tickets.findByKey('CB-3')?.state).toBe('awaiting_answer')
     expect(ctx.agent.calls.every((call) => call.questionsRemaining === undefined)).toBe(true)
+  })
+})
+
+describe('design stage — reset', () => {
+  it('discards the result of a design agent that finishes after resetSystem', async () => {
+    const ctx = setup()
+    ctx.source.tickets = [sourceTicket('CB-2')]
+    const release = ctx.agent.hold()
+    startStage(ctx.deps, 'CB-2', MODEL)
+    await vi.waitFor(() => expect(ctx.agent.calls).toHaveLength(1))
+
+    await resetSystem(ctx.deps)
+    release()
+    await ctx.settle()
+
+    expect(ctx.deps.tickets.findByKey('CB-2')).toMatchObject({ stage: 'plan', state: 'ready' })
+    expect(ctx.codeHost.pulls).toEqual([])
+    expect(ctx.codeHost.branches.has('CB-2/spec')).toBe(false)
   })
 })
 
