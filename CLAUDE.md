@@ -176,6 +176,10 @@ makes `startStage`/`answerQuestion` throw a `ConflictError`.
 - `packages/core/src/application/createUseCases.ts` — the `UseCases` interface every adapter uses
 - `packages/core/src/application/{stageCommands,runStage,executeRun,publishArtifact,runLifecycle,syncReviews,startup,queries}.ts`
 - `packages/core/src/domain/{rules,artifacts,render,ticketKey}.ts` — transitions, names/paths, Markdown, key ordering
+- `packages/core/src/domain/costs.ts` — `summarizeCosts`: agent cost per stage and in total from a ticket's
+  `run_finished` log entries (CLI-reported cost; stage via `run_started`, else the AgentRun); `queries.ts` puts it on
+  `TicketDetailDto.costs` and `TicketDto.totalCostUsd`. The shared codebase-summary run has no ticket and is not
+  counted
 - `packages/core/src/domain/errors.ts` — `NotFoundError`/`ConflictError`/`ValidationError`; adapters check
   `errorCode(err)`, never `instanceof` (Next.js may duplicate modules across bundles); `describeError(err)` turns
   any thrown value into text with credentials redacted — use it instead of `${err}` in logs and messages

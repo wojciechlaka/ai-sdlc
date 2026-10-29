@@ -14,6 +14,17 @@ function openIntentPr(ctx: TestContext, key: string, prNumber: number) {
   })
 }
 
+/** A run of `stage` logged like `beginRun` + `recordSucceededRun` do (or without usage when `costUsd` is null). */
+function finishedRun(ctx: TestContext, key: string, stage: 'plan' | 'design', costUsd: number | null) {
+  const run = ctx.deps.runs.create({ ticketKey: key, stage, trigger: 'initial', model: 'm', input: { model: 'm', answeredQuestions: [] } })
+  ctx.deps.audit.append({ ticketKey: key, actor: 'system', type: 'run_started', payload: { runId: run.id, stage, trigger: 'initial', model: 'm' } })
+  const usage = costUsd === null
+    ? { status: 'failed' as const }
+    : { status: 'succeeded' as const, costUsd, inputTokens: 100, cacheCreationTokens: 900, cacheReadTokens: 5000, outputTokens: 200 }
+  ctx.deps.audit.append({ ticketKey: key, actor: 'agent', type: 'run_finished', payload: { runId: run.id, ...usage } })
+  return run
+}
+
 describe('listTickets', () => {
   it('lists tickets by key with the open PR of the current stage', () => {
     const ctx = createTestContext()
@@ -26,6 +37,16 @@ describe('listTickets', () => {
     expect(tickets.map((t) => t.key)).toEqual(['CB-2', 'CB-10'])
     expect(tickets[0]).toMatchObject({ state: 'in_review', openPr: { number: 4, url: 'https://github.com/o/r/pull/4', state: 'open' } })
     expect(tickets[1]?.openPr).toBeNull()
+  })
+
+  it('gives each ticket its total agent cost over all stages', () => {
+    const ctx = createTestContext()
+    seedTicket(ctx, 'CB-1', { stage: 'design' })
+    seedTicket(ctx, 'CB-2')
+    finishedRun(ctx, 'CB-1', 'plan', 0.25)
+    finishedRun(ctx, 'CB-1', 'design', 0.5)
+
+    expect(listTickets(ctx.deps).map((t) => [t.key, t.totalCostUsd])).toEqual([['CB-1', 0.75], ['CB-2', 0]])
   })
 })
 
@@ -90,6 +111,34 @@ describe('getTicket', () => {
 
     expect(detail.pendingQuestion).toBe('Wer?')
     expect(detail.log).toEqual([{ actor: 'agent', type: 'question_asked', payload: { question: 'Wer?' }, createdAt: expect.any(Date) }])
+  })
+
+  it('sums the agent cost per stage; runs without usage count with cost 0', async () => {
+    const ctx = createTestContext()
+    seedTicket(ctx, 'CB-1', { stage: 'design' })
+    finishedRun(ctx, 'CB-1', 'plan', 0.25)
+    finishedRun(ctx, 'CB-1', 'plan', null)
+    finishedRun(ctx, 'CB-1', 'design', 0.5)
+
+    const detail = await getTicket(ctx.deps, 'CB-1')
+
+    expect(detail.costs).toEqual({
+      totalUsd: 0.75, runs: 3, inputTokens: 2000, outputTokens: 400,
+      byStage: {
+        plan: { usd: 0.25, runs: 2, inputTokens: 1000, outputTokens: 200 },
+        design: { usd: 0.5, runs: 1, inputTokens: 1000, outputTokens: 200 },
+      },
+    })
+    expect(detail.totalCostUsd).toBe(0.75)
+  })
+
+  it('takes the stage from the AgentRun when the log has no run_started entry', async () => {
+    const ctx = createTestContext()
+    seedTicket(ctx, 'CB-1')
+    const run = ctx.deps.runs.create({ ticketKey: 'CB-1', stage: 'design', trigger: 'initial', model: 'm', input: { model: 'm', answeredQuestions: [] } })
+    ctx.deps.audit.append({ ticketKey: 'CB-1', actor: 'agent', type: 'run_finished', payload: { runId: run.id, status: 'succeeded', costUsd: 0.5 } })
+
+    expect((await getTicket(ctx.deps, 'CB-1')).costs.byStage.design).toMatchObject({ usd: 0.5, runs: 1 })
   })
 
   it('has no open question outside awaiting_answer', async () => {

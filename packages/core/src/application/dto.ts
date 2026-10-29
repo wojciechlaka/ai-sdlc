@@ -7,8 +7,11 @@ export function toPullRequestRef(artifact: Artifact): PullRequestRefDto {
   return { number: artifact.prNumber, url: artifact.prUrl, state: artifact.prState }
 }
 
-/** @param openArtifact - Artifact of the current stage whose PR is still open. */
-export function toTicketDto(ticket: Ticket, openArtifact: Artifact | null): TicketDto {
+/**
+ * @param openArtifact - Artifact of the current stage whose PR is still open.
+ * @param totalCostUsd - Agent cost of the ticket over all stages (`summarizeCosts(...).totalUsd`).
+ */
+export function toTicketDto(ticket: Ticket, openArtifact: Artifact | null, totalCostUsd: number): TicketDto {
   return {
     key: ticket.key,
     title: ticket.title,
@@ -19,6 +22,7 @@ export function toTicketDto(ticket: Ticket, openArtifact: Artifact | null): Tick
     state: ticket.state,
     openPr: openArtifact ? toPullRequestRef(openArtifact) : null,
     updatedAt: ticket.updatedAt,
+    totalCostUsd,
   }
 }
 

@@ -18,13 +18,17 @@ Architektur: [architecture.md](architecture.md) · Zustände: [datenmodell.md](d
 
 ## 2. Board
 
-Startseite `/`: drei Spalten nach Stufe mit Anzahl. Eine Karte zeigt Schlüssel, Priorität, Titel und — bis
-das Ticket fertig ist — den Zustand als Badge (`bereit`, `Agent läuft`, `Rückfrage`, `in Review: PR #n`,
-`fehlgeschlagen`). Ein Klick öffnet die Ticketseite. Leere Spalten zeigen „Keine Tickets“.
+Startseite `/`: über den Spalten die Zeile „Agent-Kosten gesamt: $0.42“ (Summe aller Tickets, `—` solange kein
+Agent gelaufen ist), darunter drei Spalten nach Stufe mit Anzahl. Eine Karte zeigt Schlüssel, Priorität, Titel und —
+bis das Ticket fertig ist — den Zustand als Badge (`bereit`, `Agent läuft`, `Rückfrage`, `in Review: PR #n`,
+`fehlgeschlagen`); hat das Ticket schon Kosten, stehen sie klein und grau rechts neben dem Badge (z. B. `$0.09`) —
+eine Zahl ohne Aufschlüsselung, damit die Karte ruhig bleibt; Details stehen auf der Ticketseite. Ein Klick öffnet
+die Ticketseite. Leere Spalten zeigen „Keine Tickets“.
 
 ```text
 +--------------------------------------------------------------------------------------------------+
-| BOARD            | +-----------------------+ +-----------------------+ +-----------------------+ |
+| BOARD            | Agent-Kosten gesamt: $0.42                                                    |
+|                  | +-----------------------+ +-----------------------+ +-----------------------+ |
 |------------------| | 1 Plan              2 | | 2 Design            1 | | Fertig              0 | |
 | Ziel-Repository  | | +-------------------+ | | +-------------------+ | | Keine Tickets         | |
 | wojciechlaka/    | | | CB-1       Mittel | | | | CB-2         Hoch | | |                       | |
@@ -70,6 +74,12 @@ das Ticket fertig ist — den Zustand als Badge (`bereit`, `Agent läuft`, `Rüc
 | | [ ] 2 Design . Spec                                                      | |
 | | docs/work/CB-2/spec.md                                                   | |
 | +--------------------------------------------------------------------------+ |
+| +--------------------------------------------------------------------------+ |
+| | Kosten                                                                   | |
+| | 1 Plan . Intent: $0.15 . 2 Laeufe . 41.2K/2.1K                           | |
+| | 2 Design . Spec: -                                                       | |
+| | Gesamt: $0.15 (2 Laeufe)                                                 | |
+| +--------------------------------------------------------------------------+ |
 | ---------------------------------------------------------------------------- |
 | Log                                                                          |
 | 28.10.26, 10:02:11  System  Ticket uebernommen aus examples/tickets/...      |
@@ -85,7 +95,11 @@ das Ticket fertig ist — den Zustand als Badge (`bereit`, `Agent läuft`, `Rüc
 - **Ticket:** Pfad der Quelldatei und der Text als Markdown.
 - **Stufen:** je Stufe ein Panel mit ✓ (abgeschlossen) oder ○, Merge-Datum, Link auf die Datei auf
   `showcase` (erst nach dem Merge), Link auf den PR mit Status (`offen`, `gemergt`, `geschlossen`) und dem
-  aufklappbaren Inhalt „Inhalt anzeigen“.
+  aufklappbaren Inhalt „Inhalt anzeigen“. Darunter der Block **Kosten**: je Stufe Kosten, Anzahl Läufe und Tokens
+  (`1 Plan · Intent: $0.09 · 3 Läufe · 12.3K↑ 1.2K↓`; `—` ohne Lauf) und fett die Summe
+  (`Gesamt: $0.11 (4 Läufe)`). Gezählt werden die von der CLI gemeldeten Kosten aller beendeten Läufe der Stufe,
+  auch verworfener; Läufe ohne Ergebnis zählen mit $0. Der gemeinsame Codebase-Summary-Lauf gehört keinem Ticket
+  und fehlt hier.
 - **Log:** Zeit, Akteur (`Mensch`, `Agent`, `System`) und eine Zeile pro Eintrag; Agent-Läufe mit Dauer,
   Tokens und Kosten. Vom Guard blockierte Werkzeugaufrufe stehen rot hervorgehoben als eigene Zeile
   („Blockiert: Bash \`rm -rf docs\` — Begründung“). Aufeinanderfolgende ausgeführte Werkzeugaufrufe werden zu

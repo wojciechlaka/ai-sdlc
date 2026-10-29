@@ -1,9 +1,10 @@
 import Link from 'next/link'
 import type { TicketDto } from '@refinement/shared'
 import { STATE_VARIANT, stateText } from '@/lib/constants'
+import { formatCost } from '@/lib/format'
 import { Badge } from './ui/badge'
 
-/** Board card: key, priority, title and — until the ticket is done — its state. */
+/** Board card: key, priority, title, — until the ticket is done — its state, and its agent cost once it has one. */
 export function TicketCard({ ticket }: { ticket: TicketDto }) {
   return (
     <Link
@@ -15,10 +16,17 @@ export function TicketCard({ ticket }: { ticket: TicketDto }) {
         {ticket.priority && <span>{ticket.priority}</span>}
       </div>
       <div className="mt-1 text-sm font-medium">{ticket.title}</div>
-      {ticket.stage !== 'done' && (
-        <Badge variant={STATE_VARIANT[ticket.state]} className="mt-2 text-xs">
-          {stateText(ticket)}
-        </Badge>
+      {(ticket.stage !== 'done' || ticket.totalCostUsd > 0) && (
+        <div className="mt-2 flex items-center justify-between gap-2">
+          {ticket.stage !== 'done' ? (
+            <Badge variant={STATE_VARIANT[ticket.state]} className="text-xs">
+              {stateText(ticket)}
+            </Badge>
+          ) : <span />}
+          {ticket.totalCostUsd > 0 && (
+            <span className="text-xs text-slate-400" title="Agent-Kosten über alle Stufen">{formatCost(ticket.totalCostUsd)}</span>
+          )}
+        </div>
       )}
     </Link>
   )

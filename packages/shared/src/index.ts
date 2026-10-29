@@ -6,6 +6,8 @@ export { IntentSchema, IntentAgentOutputSchema, StageOutputSchema } from './inte
 export type { Intent, IntentAgentOutput, StageOutput } from './intentSchema'
 export {
   PullRequestRefSchema,
+  StageCostSchema,
+  CostSummarySchema,
   TicketSchema,
   StageViewSchema,
   AuditLogEntrySchema,
@@ -15,9 +17,9 @@ export {
   AnswerInputSchema,
 } from './api'
 export type {
-  PullRequestRefDto, TicketDto, StageViewDto, AuditLogEntryDto, TicketDetailDto, SettingsDto, StartStageInput, AnswerInput,
+  PullRequestRefDto, StageCostDto, CostSummaryDto, TicketDto, StageViewDto, AuditLogEntryDto, TicketDetailDto, SettingsDto, StartStageInput, AnswerInput,
 } from './api'
 export { TicketEventSchema } from './events'
 export type { TicketEvent } from './events'
-export { AuditActorSchema, AuditEventSchema } from './auditEvents'
+export { AuditActorSchema, AuditEventSchema, runInputTokens } from './auditEvents'
 export type { AuditActor, AuditEvent, AuditEventType, AuditPayloads } from './auditEvents'

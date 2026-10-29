@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { AnswerInputSchema, StartStageInputSchema, TicketDetailSchema, TicketSchema } from './api'
+import { AnswerInputSchema, CostSummarySchema, StartStageInputSchema, TicketDetailSchema, TicketSchema } from './api'
 
 const NOW = new Date('2026-10-28T10:00:00Z')
 
@@ -13,6 +13,13 @@ const TICKET = {
   state: 'ready' as const,
   openPr: null,
   updatedAt: NOW,
+  totalCostUsd: 0.11,
+}
+
+const NO_COST = { usd: 0, runs: 0, inputTokens: 0, outputTokens: 0 }
+const COSTS = {
+  totalUsd: 0.11, runs: 4, inputTokens: 13_500, outputTokens: 1_200,
+  byStage: { plan: { usd: 0.11, runs: 4, inputTokens: 13_500, outputTokens: 1_200 }, design: NO_COST },
 }
 
 describe('TicketSchema', () => {
@@ -43,6 +50,7 @@ describe('TicketDetailSchema', () => {
       }],
       log: [{ actor: 'agent', type: 'question_asked', payload: { question: 'Wer?' }, createdAt: NOW }],
       pendingQuestion: 'Wer?',
+      costs: COSTS,
     })
     expect(detail.pendingQuestion).toBe('Wer?')
     expect(detail.stages[0]?.stage).toBe('plan')
@@ -57,5 +65,22 @@ describe('inputs', () => {
 
   it('AnswerInputSchema rejects blank answers', () => {
     expect(AnswerInputSchema.safeParse({ answer: '  ' }).success).toBe(false)
+  })
+})
+
+describe('CostSummarySchema', () => {
+  it('accepts a summary with both artifact stages', () => {
+    expect(CostSummarySchema.parse(COSTS)).toEqual(COSTS)
+  })
+
+  it('requires both stages and whole run counts', () => {
+    expect(CostSummarySchema.safeParse({ ...COSTS, byStage: { plan: NO_COST } }).success).toBe(false)
+    expect(CostSummarySchema.safeParse({ ...COSTS, runs: 1.5 }).success).toBe(false)
+  })
+
+  it('is required on the ticket page and the board ticket', () => {
+    const { totalCostUsd: _omit, ...withoutTotal } = TICKET
+    expect(TicketSchema.safeParse(withoutTotal).success).toBe(false)
+    expect(TicketDetailSchema.safeParse({ ...TICKET, stages: [], log: [], pendingQuestion: null }).success).toBe(false)
   })
 })

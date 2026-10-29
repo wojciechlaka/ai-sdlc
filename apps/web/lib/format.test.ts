@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatCost, formatDate, formatDateTime, formatElapsed, formatTokens } from './format'
+import { formatCost, formatDate, formatDateTime, formatElapsed, formatRuns, formatTokens } from './format'
 
 describe('format', () => {
   it('formats date and time in German for Europe/Berlin', () => {
@@ -25,5 +25,11 @@ describe('format', () => {
     expect(formatCost(0.0005)).toBe('$0.000500')
     expect(formatCost(0.005)).toBe('$0.0050')
     expect(formatCost(1.234)).toBe('$1.23')
+  })
+
+  it('formats run counts in German singular and plural', () => {
+    expect(formatRuns(0)).toBe('0 Läufe')
+    expect(formatRuns(1)).toBe('1 Lauf')
+    expect(formatRuns(4)).toBe('4 Läufe')
   })
 })

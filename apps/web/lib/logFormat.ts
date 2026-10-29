@@ -1,4 +1,4 @@
-import { AuditEventSchema, type AuditEventType, type AuditLogEntryDto, type AuditPayloads, type Stage } from '@refinement/shared'
+import { AuditEventSchema, runInputTokens, type AuditEventType, type AuditLogEntryDto, type AuditPayloads, type Stage } from '@refinement/shared'
 import { STAGE_LABEL } from './constants'
 import { formatCost, formatElapsed, formatTokens } from './format'
 import { modelLabel } from './models'
@@ -16,14 +16,11 @@ function toolCall({ tool, target }: { tool: string; target: string }): string {
 
 /** " · tokens↑ tokens↓ · cost" of a run; '' without usage (stop, restart, error before Claude answered). */
 function usageSuffix(run: AuditPayloads['run_finished']): string {
-  const inputTokens = run.inputTokens ?? 0
-  if (inputTokens === 0) {
+  if ((run.inputTokens ?? 0) === 0) {
     return ''
   }
-  // Claude reports uncached input, cache writes and cache reads separately. Writes are new context the model
-  // processed; reads are the same prompt prefix re-read on every turn and would inflate the count many times over.
-  const tokensIn = inputTokens + (run.cacheCreationTokens ?? 0)
-  return ` · ${formatTokens(tokensIn)}↑ ${formatTokens(run.outputTokens ?? 0)}↓ · ${formatCost(runCostUsd(run))}`
+  // Claude reports uncached input, cache writes and cache reads separately; `runInputTokens` counts the first two.
+  return ` · ${formatTokens(runInputTokens(run))}↑ ${formatTokens(run.outputTokens ?? 0)}↓ · ${formatCost(runCostUsd(run))}`
 }
 
 /** German line for a finished run: timeout, failure (with reason) or success (with duration), plus usage. */

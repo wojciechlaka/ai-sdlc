@@ -140,6 +140,28 @@ Das Log pro Ticket, append-only (Tabelle `audit_events`); die Ticketseite zeigt 
 | `guard_blocked` | system | `{ tool, target, reason }` — der Guard-Hook hat einen Werkzeugaufruf des Agents abgelehnt (`target` max. 1000 Zeichen) |
 | `tool_used` | agent | `{ tool, target }` — ausgeführter Werkzeugaufruf (`target`: Befehl, Datei oder Muster, max. 200 Zeichen) |
 
+### Kostenübersicht (abgeleitet)
+
+Keine eigene Tabelle: `summarizeCosts` (`packages/core/src/domain/costs.ts`) berechnet sie bei jedem Lesen aus den
+`run_finished`-Einträgen des Logs (`getTicket` → `costs`, `listTickets` → `totalCostUsd`; Contract `CostSummarySchema`
+in `packages/shared/src/api.ts`):
+
+```text
+CostSummary = { totalUsd, runs, inputTokens, outputTokens, byStage: { plan: StageCost, design: StageCost } }
+StageCost   = { usd, runs, inputTokens, outputTokens }
+```
+
+- **Stufe** eines Laufs: aus dem `run_started`-Eintrag mit derselben `runId` (`run_finished` trägt keine Stufe), sonst
+  aus dem `AgentRun`; ein Lauf ohne bekannte Stufe zählt nur in der Gesamtsumme.
+- **Kosten:** `costUsd`, wie die CLI sie meldet (`total_cost_usd`) — nicht die Schätzung aus der Preistabelle, die das
+  Web für einzelne Log-Zeilen ohne gemeldete Kosten nutzt (`apps/web/lib/pricing.ts`).
+- **Mitgezählt:** erfolgreiche Läufe und verworfene Ergebnisse (`reason: 'verworfen'`, mit Verbrauch); Läufe ohne
+  Claude-Ergebnis (Stopp, Neustart, Fehler, Zeitlimit) zählen als Lauf mit Kosten 0.
+- **Input-Tokens:** ungecachter Input plus Cache-Schreibvorgänge (`runInputTokens` in `auditEvents.ts`, dieselbe
+  Regel wie die Log-Zeile); Cache-Lesevorgänge bleiben außen vor.
+- **Nicht enthalten:** der Codebase-Summary-Lauf (je Commit und Modell gecacht, von allen Tickets geteilt) — er
+  gehört keinem Ticket und schreibt keinen Log-Eintrag.
+
 ## Stufe und Zustand
 
 Das Ticket hat eine **Stufe** (`plan → design → done`) und darin einen **Zustand**. Die Regeln stehen als reine

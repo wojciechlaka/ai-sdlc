@@ -3,6 +3,7 @@ import type { TicketDetailDto } from '@refinement/shared'
 import { STAGE_LABEL, STATE_VARIANT, stateText } from '@/lib/constants'
 import { Badge } from './ui/badge'
 import { Separator } from './ui/separator'
+import { CostSummary } from './CostSummary'
 import { LogList } from './LogList'
 import { StagePanel } from './StagePanel'
 import { TicketActions } from './TicketActions'
@@ -46,6 +47,7 @@ export function TicketDetail({ ticket, tokenConfigured }: Props) {
         {ticket.stages.map((view) => (
           <StagePanel key={view.stage} view={view} />
         ))}
+        <CostSummary costs={ticket.costs} />
       </section>
 
       <Separator />

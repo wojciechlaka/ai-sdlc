@@ -110,7 +110,9 @@ Datenbank leert, offene PRs der App schließt und `showcase` zurücksetzt.
    Ticket in Stufe 2 Design, der Inhalt des Intent ist in der App sichtbar. **Schließen ohne Merge** setzt das
    Ticket auf „bereit“ zurück und löscht den Branch.
 
-Ein Lauf nutzt den eigenen Claude-Login und verbraucht Tokens; Kosten und Tokens stehen im Log des Tickets.
+Ein Lauf nutzt den eigenen Claude-Login und verbraucht Tokens; Kosten und Tokens stehen im Log des Tickets, die
+Summe je Stufe im Block „Kosten“ der Ticketseite und die Summe aller Tickets oben auf dem Board (ohne den gemeinsam
+genutzten Codebase-Summary-Lauf, der keinem Ticket gehört).
 
 ## Leitplanken für den Agent
 

@@ -12,6 +12,37 @@ export const PullRequestRefSchema = z.object({
 })
 export type PullRequestRefDto = z.infer<typeof PullRequestRefSchema>
 
+/** Agent cost of one artifact stage of a ticket (or of all stages together). */
+export const StageCostSchema = z.object({
+  /** Sum of the cost the Claude CLI reported (`total_cost_usd`), in USD; 0 when no run reported usage. */
+  usd: z.number(),
+  /** Number of finished runs, including failed runs without usage. */
+  runs: z.number().int(),
+  /** Uncached input plus cache writes (cache reads are left out, as in the log line). */
+  inputTokens: z.number(),
+  /** Tokens Claude generated. */
+  outputTokens: z.number(),
+})
+export type StageCostDto = z.infer<typeof StageCostSchema>
+
+/**
+ * Agent cost of a ticket over all stages, derived from its `run_finished` log entries. The shared codebase-summary
+ * run has no ticket and is not included.
+ */
+export const CostSummarySchema = z.object({
+  /** Sum over all stages, in USD. */
+  totalUsd: z.number(),
+  /** Number of finished runs over all stages. */
+  runs: z.number().int(),
+  /** Input tokens over all stages (uncached input plus cache writes). */
+  inputTokens: z.number(),
+  /** Output tokens over all stages. */
+  outputTokens: z.number(),
+  /** Cost per artifact stage. */
+  byStage: z.object({ plan: StageCostSchema, design: StageCostSchema }),
+})
+export type CostSummaryDto = z.infer<typeof CostSummarySchema>
+
 /** A ticket as the board and the ticket page show it. */
 export const TicketSchema = z.object({
   /** Ticket key from the source file, e.g. `CB-3`. */
@@ -32,6 +63,8 @@ export const TicketSchema = z.object({
   openPr: PullRequestRefSchema.nullable(),
   /** Last write of the ticket: import, stage or state change. */
   updatedAt: z.date(),
+  /** Agent cost of the ticket over all stages, in USD (`CostSummaryDto.totalUsd`). */
+  totalCostUsd: z.number(),
 })
 export type TicketDto = z.infer<typeof TicketSchema>
 
@@ -75,6 +108,8 @@ export const TicketDetailSchema = TicketSchema.extend({
   log: z.array(AuditLogEntrySchema),
   /** Question of the agent while the ticket is `awaiting_answer`. */
   pendingQuestion: z.string().nullable(),
+  /** Agent cost of the ticket, per stage and in total. */
+  costs: CostSummarySchema,
 })
 export type TicketDetailDto = z.infer<typeof TicketDetailSchema>
 

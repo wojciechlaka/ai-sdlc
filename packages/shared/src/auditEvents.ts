@@ -61,3 +61,12 @@ export type AuditEventType = AuditEvent['type']
 
 /** Payload per log entry type, e.g. `AuditPayloads['pr_merged']` is `{ prNumber: number }`. */
 export type AuditPayloads = { [E in AuditEvent as E['type']]: E['payload'] }
+
+/**
+ * Input tokens of a finished run as the UI counts them: uncached input plus cache writes (new context the model
+ * processed). Cache reads are the same prompt prefix re-read on every turn and would inflate the count many times
+ * over, so they are left out. Used by the log line and the cost summary alike.
+ */
+export function runInputTokens(run: AuditPayloads['run_finished']): number {
+  return (run.inputTokens ?? 0) + (run.cacheCreationTokens ?? 0)
+}

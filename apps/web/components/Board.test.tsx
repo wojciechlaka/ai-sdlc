@@ -37,4 +37,21 @@ describe('Board', () => {
     render(<Board tickets={[]} />)
     expect(screen.getAllByText('Keine Tickets')).toHaveLength(3)
   })
+
+  it('shows the agent cost of all tickets and the cost on cards that have one', () => {
+    render(<Board tickets={[
+      aTicket({ key: 'CB-1', totalCostUsd: 0.3 }),
+      aTicket({ key: 'CB-2', stage: 'done', totalCostUsd: 0.12 }),
+      aTicket({ key: 'CB-3' }),
+    ]} />)
+    expect(screen.getByText(/Agent-Kosten gesamt:/)).toHaveTextContent('Agent-Kosten gesamt: $0.42')
+    expect(within(screen.getByRole('link', { name: /Titel CB-1/ })).getByText('$0.30')).toBeInTheDocument()
+    expect(within(screen.getByRole('link', { name: /Titel CB-2/ })).getByText('$0.12')).toBeInTheDocument()
+    expect(within(screen.getByRole('link', { name: /Titel CB-3/ })).queryByText(/\$/)).toBeNull()
+  })
+
+  it('shows a dash as total while no agent has run', () => {
+    render(<Board tickets={[aTicket({ key: 'CB-1' })]} />)
+    expect(screen.getByText(/Agent-Kosten gesamt:/)).toHaveTextContent('Agent-Kosten gesamt: —')
+  })
 })

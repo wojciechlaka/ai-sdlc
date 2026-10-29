@@ -57,3 +57,8 @@ export function formatCost(usd: number): string {
   }
   return `$${usd.toFixed(2)}`
 }
+
+/** Number of agent runs in German: 1 → "1 Lauf", otherwise "n Läufe". */
+export function formatRuns(n: number): string {
+  return n === 1 ? '1 Lauf' : `${n} Läufe`
+}

@@ -1,5 +1,7 @@
-import type { SettingsDto, StageViewDto, TicketDetailDto, TicketDto } from '@refinement/shared'
+import type { CostSummaryDto, SettingsDto, StageViewDto, TicketDetailDto, TicketDto } from '@refinement/shared'
 import type { Artifact, ArtifactStage, Ticket } from '../domain/types'
+import { summarizeCosts } from '../domain/costs'
+import type { AuditLogEntry } from '../ports'
 import { ARTIFACT_STAGES, artifactPath, fileUrl } from '../domain/artifacts'
 import { currentArtifactStage, isStageCompleted } from '../domain/rules'
 import type { UseCaseDeps } from './deps'
@@ -12,9 +14,20 @@ function openArtifact(deps: UseCaseDeps, ticket: Ticket): Artifact | null {
   return stage ? deps.artifacts.findOpen(ticket.key, stage) : null
 }
 
-/** All tickets for the board, each with the PR of its current stage while in review. */
+/**
+ * Agent cost of a ticket from its log (cost reported by the CLI). Runs without a `run_started` entry take their
+ * stage from the AgentRun row.
+ */
+function ticketCosts(deps: UseCaseDeps, log: AuditLogEntry[]): CostSummaryDto {
+  return summarizeCosts(log, (runId) => deps.runs.findById(runId)?.stage ?? null)
+}
+
+/** All tickets for the board, each with the PR of its current stage while in review and its total agent cost. */
 export function listTickets(deps: UseCaseDeps): TicketDto[] {
-  return deps.tickets.list().map((ticket) => toTicketDto(ticket, openArtifact(deps, ticket)))
+  return deps.tickets.list().map((ticket) => {
+    const costs = ticketCosts(deps, deps.audit.listForTicket(ticket.key))
+    return toTicketDto(ticket, openArtifact(deps, ticket), costs.totalUsd)
+  })
 }
 
 /** Content of a merged artifact, read live from the base branch; null without token or on errors. */
@@ -55,15 +68,21 @@ function pendingQuestion(deps: UseCaseDeps, ticket: Ticket): string | null {
   return output?.type === 'question' ? output.question : null
 }
 
-/** Ticket page data: stages (merged content read live), log and open question. @throws {NotFoundError} */
+/**
+ * Ticket page data: stages (merged content read live), log, open question and agent cost per stage.
+ * @throws {NotFoundError}
+ */
 export async function getTicket(deps: UseCaseDeps, key: string): Promise<TicketDetailDto> {
   const ticket = requireTicket(deps.tickets, key)
   const artifacts = deps.artifacts.listForTicket(ticket.key)
+  const log = deps.audit.listForTicket(ticket.key)
+  const costs = ticketCosts(deps, log)
   return {
-    ...toTicketDto(ticket, openArtifact(deps, ticket)),
+    ...toTicketDto(ticket, openArtifact(deps, ticket), costs.totalUsd),
     stages: await Promise.all(ARTIFACT_STAGES.map((stage) => stageView(deps, ticket, artifacts, stage))),
-    log: deps.audit.listForTicket(ticket.key).map(toAuditLogEntryDto),
+    log: log.map(toAuditLogEntryDto),
     pendingQuestion: pendingQuestion(deps, ticket),
+    costs,
   }
 }
 

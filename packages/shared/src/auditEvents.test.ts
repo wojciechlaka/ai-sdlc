@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { AuditEventSchema } from './auditEvents'
+import { AuditEventSchema, runInputTokens } from './auditEvents'
 
 describe('AuditEventSchema', () => {
   it('accepts a payload that matches its type and drops unknown keys', () => {
@@ -17,5 +17,12 @@ describe('AuditEventSchema', () => {
     expect(AuditEventSchema.safeParse({ type: 'something_new', payload: {} }).success).toBe(false)
     expect(AuditEventSchema.safeParse({ type: 'pr_merged', payload: { message: 'x' } }).success).toBe(false)
     expect(AuditEventSchema.safeParse({ type: 'error', payload: null }).success).toBe(false)
+  })
+})
+
+describe('runInputTokens', () => {
+  it('counts uncached input plus cache writes, not cache reads; missing usage is 0', () => {
+    expect(runInputTokens({ runId: 'r', status: 'succeeded', inputTokens: 100, cacheCreationTokens: 900, cacheReadTokens: 50_000 })).toBe(1000)
+    expect(runInputTokens({ runId: 'r', status: 'failed' })).toBe(0)
   })
 })
