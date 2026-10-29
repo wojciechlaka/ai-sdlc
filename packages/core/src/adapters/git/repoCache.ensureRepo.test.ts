@@ -44,7 +44,8 @@ const CHECKOUT_SHOWCASE = [
 ]
 const gitArgs = () => mockExecFileSync.mock.calls.map((call) => call[1])
 
-describe('ensureRepo', () => {
+// Real git processes (or heavy mocks) can exceed Vitest's 5 s default under load; slowness is no failure.
+describe('ensureRepo', { timeout: 30_000 }, () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockExecFileSync.mockReturnValue(Buffer.from(''))

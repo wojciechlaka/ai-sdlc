@@ -4,7 +4,8 @@ import fsPromises from 'fs/promises'
 import type { ClaudeProcessSandbox } from '../../ports'
 import { describeError } from '../../domain/errors'
 
-// Codebase summary: one sandboxed `claude` run per code state (last commit outside docs/work) and model, cached as a Markdown file in the clone and
+// Codebase summary: one sandboxed `claude` run per code state (last commit outside docs/work) and model, cached as
+// a Markdown file in the clone and
 // pasted into the agent prompt. Failures only cost the summary — the agent then starts without it.
 
 // Same value as in adapters/claudeCli/errors.ts; adapters must not import each other (architecture test).
@@ -36,6 +37,9 @@ Naming conventions, architectural patterns, code style decisions.
 
 ## Wo man was findet
 Where to add a new API endpoint, component, model, etc.
+
+Ignore the directory docs/work/: it holds work artifacts that change with every merge or reset; the summary is
+about the code.
 
 Be concise. Focus on what a developer needs to quickly understand the codebase.`
 
@@ -116,7 +120,8 @@ async function generateAndCache(
 }
 
 /**
- * Ensures a Claude-generated codebase summary exists for the current code state (last commit outside `docs/work`) and model.
+ * Ensures a Claude-generated codebase summary exists for the current code state (last commit outside
+ * `docs/work`) and model.
  * Returns the cached file immediately on a local cache hit.
  * Deduplicates concurrent generation requests for the same summary via an in-flight map.
  * Returns null without throwing if generation fails for any reason.

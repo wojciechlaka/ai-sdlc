@@ -36,7 +36,8 @@ afterAll(() => {
   fs.rmSync(base, { recursive: true, force: true })
 })
 
-describe('ensureRepo — base branch', () => {
+// Real git processes (or heavy mocks) can exceed Vitest's 5 s default under load; slowness is no failure.
+describe('ensureRepo — base branch', { timeout: 30_000 }, () => {
   it('checks out the base branch, not the default branch', async () => {
     const dir = await ensureRepo(source, cacheDir, 'showcase')
     expect(git(dir, 'rev-parse', 'HEAD')).toBe(git(source, 'rev-parse', 'showcase'))

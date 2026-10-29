@@ -250,6 +250,11 @@ describe('renderSpec — robustness against agent text', () => {
     expect(md.split('\n').filter((line) => line.startsWith('## Fake'))).toEqual([])
   })
 
+  it('demotes a heading inside a single-line bullet item', () => {
+    const md = renderSpec(TICKET, { ...SPEC, acceptanceCriteria: ['# Kein Titel'] }, [])
+    expect(md).toContain('## Akzeptanzkriterien\n\n- \\# Kein Titel\n')
+  })
+
   it('keeps a path with backticks in one code span', () => {
     const md = renderSpec(TICKET, {
       ...SPEC, affectedFiles: [{ path: 'src/`a`.ts', change: 'neu', isNew: false }],

@@ -6,10 +6,13 @@ import { z } from 'zod'
 /** Message for empty texts of a question or choice; it reaches the agent's retry prompt. */
 const EMPTY = 'darf nicht leer sein'
 
+/** Non-empty after trimming; whitespace-only texts are rejected. The value itself is not changed. */
+const nonBlank = () => z.string().refine((text) => text.trim().length > 0, EMPTY)
+
 /** A blocking question of an agent; every stage may return it instead of its result. */
 export const QuestionOutputSchema = z.object({
   type: z.literal('question'),
-  question: z.string().min(1, EMPTY),
+  question: nonBlank(),
 })
 export type QuestionOutput = z.infer<typeof QuestionOutputSchema>
 
@@ -20,8 +23,8 @@ export type ChoiceId = z.infer<typeof ChoiceIdSchema>
 /** One approach the human can pick: title, description, pros and cons. */
 export const ChoiceOptionSchema = z.object({
   id: ChoiceIdSchema,
-  title: z.string().min(1, EMPTY),
-  description: z.string().min(1, EMPTY),
+  title: nonBlank(),
+  description: nonBlank(),
   pros: z.array(z.string()),
   cons: z.array(z.string()),
 })
@@ -30,7 +33,7 @@ export type ChoiceOption = z.infer<typeof ChoiceOptionSchema>
 /** Fields of a choice, shared by the agent output and the pending choice of the ticket page. */
 const choiceFields = {
   /** What the human decides, e.g. „Wo wird die Lesezeit berechnet?“. */
-  question: z.string().min(1, EMPTY),
+  question: nonBlank(),
   /** 2–3 approaches with unique ids. */
   options: z.array(ChoiceOptionSchema).min(2).max(3),
   /** Id of the option the agent recommends; one of `options`. */

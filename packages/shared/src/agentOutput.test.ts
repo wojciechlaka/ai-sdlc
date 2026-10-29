@@ -9,6 +9,7 @@ describe('QuestionOutputSchema', () => {
   it('accepts a question and rejects one without text', () => {
     expect(QuestionOutputSchema.parse({ type: 'question', question: 'Wer?' })).toEqual({ type: 'question', question: 'Wer?' })
     expect(QuestionOutputSchema.safeParse({ type: 'question' }).success).toBe(false)
+    expect(QuestionOutputSchema.safeParse({ type: 'question', question: '  \n ' }).success).toBe(false)
     const empty = QuestionOutputSchema.safeParse({ type: 'question', question: '' })
     expect(empty.success).toBe(false)
     expect(empty.error?.issues[0]?.message).toBe('darf nicht leer sein')
@@ -52,8 +53,11 @@ describe('ChoiceOutputSchema — empty texts', () => {
   it('rejects an empty question, option title and option description with a German message', () => {
     const empties = [
       { ...CHOICE, question: '' },
+      { ...CHOICE, question: '   ' },
       { ...CHOICE, options: [{ ...OPTION_A, title: '' }, OPTION_B] },
       { ...CHOICE, options: [{ ...OPTION_A, description: '' }, OPTION_B] },
+      { ...CHOICE, options: [{ ...OPTION_A, title: ' \n' }, OPTION_B] },
+      { ...CHOICE, options: [{ ...OPTION_A, description: '  ' }, OPTION_B] },
     ]
     for (const input of empties) {
       const result = ChoiceOutputSchema.safeParse(input)

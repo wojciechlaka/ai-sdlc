@@ -8,7 +8,7 @@ const NONE = 'Keine.'
 const oneLine = (s: string) => s.replace(/\s+/g, ' ').trim()
 
 function bulletList(items: string[]): string {
-  return items.length ? items.map((item) => `- ${oneLine(item)}`).join('\n') : NONE
+  return items.length ? items.map((item) => `- ${demoteHeadings(oneLine(item))}`).join('\n') : NONE
 }
 
 /** Keeps a `#` at the start of a line from becoming a heading: agent text must not add sections. */
@@ -93,11 +93,17 @@ function componentsList(components: Spec['components']): string {
 }
 
 function affectedFilesList(files: Spec['affectedFiles']): string {
-  return bulletList(files.map((file) => `${codeSpan(oneLine(file.path))}${file.isNew ? ' (neu)' : ''} — ${oneLine(file.change)}`))
+  return bulletList(files.map((file) => {
+    const path = codeSpan(oneLine(file.path))
+    return `${path}${file.isNew ? ' (neu)' : ''} — ${oneLine(file.change)}`
+  }))
 }
 
 function risksList(risks: Spec['risks']): string {
-  return bulletList(risks.map((risk) => `[${SEVERITY_LABEL[risk.severity]}] ${oneLine(risk.description)} — ${oneLine(risk.mitigation)}`))
+  return bulletList(risks.map((risk) => {
+    const severity = SEVERITY_LABEL[risk.severity]
+    return `[${severity}] ${oneLine(risk.description)} — ${oneLine(risk.mitigation)}`
+  }))
 }
 
 /**

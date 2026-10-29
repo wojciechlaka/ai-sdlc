@@ -68,7 +68,7 @@ export async function executeRun(deps: UseCaseDeps, ticket: Ticket, request: Exe
   }
 }
 
-/** What the agent gets: ticket text, checkout, model, summary, intent (design), the Q&A history and its question budget. */
+/** What the agent gets: ticket text, checkout, model, summary, intent (design), Q&A history and question budget. */
 function agentInput(ticket: Ticket, request: ExecuteRunRequest, remaining: number | null): AgentRunnerInput {
   return {
     ticketKey: ticket.key,
@@ -152,14 +152,21 @@ function failOverLimit({ deps, ticket, reporter, request }: Attempt, meta: Agent
 }
 
 /** Stores the validated output and usage on the run and logs the successful run. */
-function recordSucceededRun({ deps, ticket, reporter, request }: Attempt, output: StageOutput, meta: AgentRunMeta): void {
+function recordSucceededRun(
+  { deps, ticket, reporter, request }: Attempt,
+  output: StageOutput,
+  meta: AgentRunMeta,
+): void {
   reporter.log(`Claude finished in ${meta.durationSeconds}s ($${meta.costUsd.toFixed(4)})`)
   deps.runs.complete(request.runId, { output, ...runUsage(meta) })
-  record(deps, ticket.key, 'agent', 'run_finished', { runId: request.runId, status: 'succeeded', ...runMetaPayload(meta) })
+  record(deps, ticket.key, 'agent', 'run_finished', {
+    runId: request.runId, status: 'succeeded', ...runMetaPayload(meta),
+  })
 }
 
 /**
- * Question or choice → `awaiting_answer`; intent or spec → rendered Markdown published as branch + PR (`in_review`).
+ * Question or choice → `awaiting_answer`; intent or spec → rendered Markdown published as branch + PR
+ * (`in_review`).
  */
 async function applyOutput({ deps, ticket, reporter, request }: Attempt, output: StageOutput): Promise<void> {
   switch (output.type) {

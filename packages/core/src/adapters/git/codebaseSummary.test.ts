@@ -14,6 +14,9 @@ import { spawn } from 'child_process'
 import { ensureRepoSummary, getCommitHash } from './codebaseSummary'
 import { createAgentSandbox } from '../agentSandbox/agentSandbox'
 
+// Real git processes can exceed Vitest's 5 s default under load; slowness is no failure.
+const GIT_TIMEOUT = { timeout: 30_000 }
+
 const mockSpawn = vi.mocked(spawn)
 const HOOKS_DIR = path.resolve(__dirname, '../../../hooks')
 const OPTIONS = { sandbox: createAgentSandbox({ hooksDir: HOOKS_DIR }) }
@@ -30,7 +33,7 @@ afterEach(() => {
   vi.unstubAllEnvs()
 })
 
-describe('getCommitHash', () => {
+describe('getCommitHash', GIT_TIMEOUT, () => {
   it('returns a 40-character hex commit hash', () => {
     const repo = makeTempRepo()
     try {
@@ -41,7 +44,7 @@ describe('getCommitHash', () => {
   })
 })
 
-describe('getCommitHash — cache key', () => {
+describe('getCommitHash — cache key', GIT_TIMEOUT, () => {
   function commit(dir: string, file: string): void {
     fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true })
     fs.writeFileSync(path.join(dir, file), String(Math.random()))
@@ -75,7 +78,7 @@ describe('getCommitHash — cache key', () => {
   })
 })
 
-describe('ensureRepoSummary — outdated files', () => {
+describe('ensureRepoSummary — outdated files', GIT_TIMEOUT, () => {
   it('removes summaries of the same model for older keys after writing a new one', async () => {
     const repo = makeTempRepo()
     mockSpawn.mockImplementation((() => {
@@ -101,7 +104,7 @@ describe('ensureRepoSummary — outdated files', () => {
   })
 })
 
-describe('ensureRepoSummary — summary run with guard and audit hooks', () => {
+describe('ensureRepoSummary — summary run with guard and audit hooks', GIT_TIMEOUT, () => {
   it('runs claude in the sandbox and reports blocked calls only as server warnings', async () => {
     vi.stubEnv('GITHUB_TOKEN', 'ghp_secret')
     const repo = makeTempRepo()
@@ -144,7 +147,7 @@ describe('ensureRepoSummary — summary run with guard and audit hooks', () => {
   })
 })
 
-describe('ensureRepoSummary', () => {
+describe('ensureRepoSummary', GIT_TIMEOUT, () => {
   it('returns cached summary and emits a single cache-hit message', async () => {
     const tmp = makeTempRepo()
     try {

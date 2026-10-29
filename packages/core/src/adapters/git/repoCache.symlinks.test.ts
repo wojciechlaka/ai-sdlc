@@ -29,7 +29,8 @@ afterAll(() => {
 
 const isSymlink = (file: string) => fs.lstatSync(file).isSymbolicLink()
 
-describe('ensureRepo — symlinks as files', () => {
+// Real git processes (or heavy mocks) can exceed Vitest's 5 s default under load; slowness is no failure.
+describe('ensureRepo — symlinks as files', { timeout: 30_000 }, () => {
   it('checks symlinks out as plain files when cloning', async () => {
     const dir = await ensureRepo(source, cacheDir, 'showcase')
     expect(isSymlink(path.join(dir, 'link'))).toBe(false)
