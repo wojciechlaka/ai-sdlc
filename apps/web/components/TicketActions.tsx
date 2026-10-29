@@ -128,5 +128,5 @@ function ReviewLink({ pr }: { pr: NonNullable<TicketDetailDto['openPr']> }) {
  * in_review without an open PR. The next state event or review sync refreshes the page.
  */
 function SyncingNotice() {
-  return <p className="text-sm text-slate-500">Zustand wird abgeglichen …</p>
+  return <p className="text-sm text-slate-500">Zustand wird abgeglichen…</p>
 }
