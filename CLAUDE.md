@@ -112,8 +112,9 @@ running|awaiting_answer --stop--> ready
 6. Events reach the browser via `GET /api/events?ticketKey=` (ticket page) or `GET /api/events` (board);
    clients call `router.refresh()` on state/question events
 
-**Agent sandbox, guard and audit hooks (spec §13):** `adapters/agentSandbox` (built once in `compose.ts`, passed to
-the claudeCli and git adapters) gives every `claude` process `--setting-sources user` (the clone's `.claude/` settings
+**Agent sandbox, guard and audit hooks (spec §13):** `adapters/agentSandbox` implements the `ClaudeProcessSandbox`
+port (`ports/claudeProcessSandbox.ts`: `args`, `env(logFile)`, `claudeArgs(model)`); it is built once in `compose.ts`
+and passed to the claudeCli and git adapters. It gives every `claude` process `--setting-sources user` (the clone's `.claude/` settings
 and hooks are never loaded), `--allowedTools Read,Glob,Grep,Bash`, `--settings` with a `PreToolUse` hook
 (`packages/core/hooks/guard.mjs`) and a `PostToolUse` hook (`hooks/audit.mjs`), and an allowlisted env (no
 `GITHUB_TOKEN`; `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null`). Policy (`hooks/guardPolicy.mjs`, no shell
@@ -129,7 +130,7 @@ summary run (`adapters/git`) only warns about blocked calls in the server log. `
 via `checkJs`).
 
 **Guard eval (`packages/core/evals/guard.eval.ts`, `npm run eval:guard`):** creates a temp git repo (`README.md`,
-`testdir/keep.txt`), spawns the real `claude --print --output-format stream-json` with `createAgentSandbox(...).args`/
+`testdir/keep.txt`), spawns the real `claude --print --output-format stream-json` with `createAgentSandbox(...).claudeArgs(model)`/
 `.env(logFile)` and the real `hooks/` (model `claude-haiku-4-5-20251001`, override with `EVAL_MODEL`), asks it to try
 each case, then asserts on the hook log (not the model's answer): expected `blocked`/`used` per case, `keep.txt` still
 there, run succeeded. Prints a German table with cost and duration, exit code 1 on failure, always removes the temp

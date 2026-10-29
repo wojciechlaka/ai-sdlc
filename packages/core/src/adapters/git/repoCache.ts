@@ -4,7 +4,7 @@ import path from 'path'
 import { execFileSync, spawn } from 'child_process'
 import fs from 'fs'
 import fsPromises from 'fs/promises'
-import type { RepoProvider } from '../../ports'
+import type { ClaudeProcessSandbox, RepoProvider } from '../../ports'
 import { describeError } from '../../domain/errors'
 
 // Configurable via env var; falls back to the OS temp directory.
@@ -17,17 +17,9 @@ const STDERR_PREVIEW_CHARS = 200
 const HOOK_LOG_DIR_PREFIX = 'refinement-hooks-'
 const HOOK_LOG_FILE_NAME = 'tools.jsonl'
 
-/** Sandbox of the `claude` processes (built in compose.ts by `adapters/agentSandbox`, spec §13). */
-export interface SummarySandbox {
-  /** Flags for settings sources, hooks and allowed tools. */
-  readonly args: readonly string[]
-  /** Environment of one process whose hooks write to `logFile`. */
-  env(logFile: string): NodeJS.ProcessEnv
-}
-
 export interface RepoCacheOptions {
   /** The summary run uses the same sandbox (guard and audit hooks, clean env) as the agent. */
-  sandbox: SummarySandbox
+  sandbox: ClaudeProcessSandbox
 }
 
 // Headings are German because the summary is pasted verbatim into the agent's German prompt.
@@ -259,15 +251,9 @@ async function runSummaryJob(cwd: string, model: string, options: RepoCacheOptio
   }
 }
 
-function spawnSummary(cwd: string, model: string, sandbox: SummarySandbox, logFile: string): Promise<string> {
+function spawnSummary(cwd: string, model: string, sandbox: ClaudeProcessSandbox, logFile: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const proc = spawn('claude', [
-      '--print',
-      '--output-format', 'stream-json',
-      '--verbose',
-      '--model', model,
-      ...sandbox.args,
-    ], {
+    const proc = spawn('claude', sandbox.claudeArgs(model), {
       cwd,
       env: sandbox.env(logFile),
       stdio: ['pipe', 'pipe', 'pipe'],

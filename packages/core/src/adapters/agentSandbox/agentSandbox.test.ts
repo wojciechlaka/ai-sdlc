@@ -30,6 +30,13 @@ describe('createAgentSandbox', () => {
     expect(settings.hooks.PreToolUse).toEqual([{ matcher: '', hooks: [{ type: 'command', timeout: 10, command: expect.stringContaining(path.join(HOOKS_DIR, 'guard.mjs')) }] }])
     expect(settings.hooks.PostToolUse).toEqual([{ matcher: '', hooks: [{ type: 'command', timeout: 10, command: expect.stringContaining(path.join(HOOKS_DIR, 'audit.mjs')) }] }])
   })
+
+  it('builds the headless stream-json call with the model and the sandbox flags', () => {
+    const sandbox = createAgentSandbox({ hooksDir: HOOKS_DIR })
+    expect(sandbox.claudeArgs('claude-haiku')).toEqual([
+      '--print', '--output-format', 'stream-json', '--verbose', '--model', 'claude-haiku', ...sandbox.args,
+    ])
+  })
 })
 
 describe('sandboxEnv', () => {

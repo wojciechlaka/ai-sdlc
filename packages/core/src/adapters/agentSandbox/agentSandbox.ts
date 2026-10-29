@@ -1,4 +1,5 @@
 import path from 'path'
+import type { ClaudeProcessSandbox } from '../../ports'
 
 // Sandbox of every `claude` process the app starts (agent and codebase summary, spec §13): which settings are
 // loaded, which hooks guard the tools, which tools are allowed and which environment the process sees.
@@ -23,13 +24,6 @@ const ENV_ALLOWLIST = new Set([
   'HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY', 'https_proxy', 'http_proxy', 'no_proxy', 'NODE_EXTRA_CA_CERTS',
 ])
 const ENV_ALLOWED_PREFIX = 'CLAUDE_CODE_'
-
-export interface AgentSandbox {
-  /** CLI flags: `--setting-sources user`, `--settings <hooks>`, `--allowedTools`. */
-  readonly args: readonly string[]
-  /** Environment of one `claude` process whose hooks write to `logFile`. */
-  env(logFile: string): NodeJS.ProcessEnv
-}
 
 /** Quotes a value for `/bin/sh -c` (Claude Code runs hook commands through the shell). */
 function shellQuote(value: string): string {
@@ -69,15 +63,22 @@ export function sandboxEnv(baseEnv: NodeJS.ProcessEnv, logFile: string): NodeJS.
   return env
 }
 
+/** Flags of a headless `claude` call whose stream-json output the adapters parse line by line. */
+const HEADLESS_ARGS = ['--print', '--output-format', 'stream-json', '--verbose']
+
 /**
  * Sandbox for the `claude` processes of the app. `--setting-sources user` keeps project and local settings of the
  * untrusted clone (`.claude/settings*.json`, including their hooks) from being loaded.
  */
-export function createAgentSandbox(options: { hooksDir: string }): AgentSandbox {
+export function createAgentSandbox(options: { hooksDir: string }): ClaudeProcessSandbox {
   const args = Object.freeze([
     '--setting-sources', 'user',
     '--settings', hookSettings(options.hooksDir),
     '--allowedTools', ALLOWED_TOOLS,
   ])
-  return { args, env: (logFile) => sandboxEnv(process.env, logFile) }
+  return {
+    args,
+    env: (logFile) => sandboxEnv(process.env, logFile),
+    claudeArgs: (model) => [...HEADLESS_ARGS, '--model', model, ...args],
+  }
 }

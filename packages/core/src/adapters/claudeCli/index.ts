@@ -5,7 +5,9 @@ import type { ZodType } from 'zod'
 import { IntentAgentOutputSchema, type StageOutput } from '@refinement/shared'
 import { SchemaValidationError, CliError } from './errors'
 import { AgentRunTerminatedError, AgentRunTimeoutError } from '../../ports'
-import type { AgentRunner, AgentRunnerInput, AgentRunMeta, AgentRunResult, AgentRunCallbacks } from '../../ports'
+import type {
+  AgentRunner, AgentRunnerInput, AgentRunMeta, AgentRunResult, AgentRunCallbacks, ClaudeProcessSandbox,
+} from '../../ports'
 import type { ArtifactStage } from '../../domain/types'
 import { buildPrompt, type RetryContext } from './prompt'
 import { openHookLog } from './hookLog'
@@ -79,17 +81,9 @@ export function stopAgent(ticketKey: string): boolean {
   return true
 }
 
-/** Sandbox of the `claude` processes (built in compose.ts by `adapters/agentSandbox`, spec §13). */
-export interface ClaudeSandbox {
-  /** Flags for settings sources, hooks and allowed tools. */
-  readonly args: readonly string[]
-  /** Environment of one process whose hooks write to `logFile`. */
-  env(logFile: string): NodeJS.ProcessEnv
-}
-
 /** Sandbox plus the hook log file of one Claude process. */
 interface SandboxRun {
-  sandbox: ClaudeSandbox
+  sandbox: ClaudeProcessSandbox
   logFile: string
 }
 
@@ -112,13 +106,11 @@ async function spawnClaude(
     let settled = false
     const settle = (fn: () => void) => { if (!settled) { settled = true; fn() } }
 
-    const proc = spawn('claude', [
-      '--print',
-      '--output-format', 'stream-json',
-      '--verbose',
-      '--model', model,
-      ...sandbox.args,
-    ], { cwd, env: sandbox.env(logFile), stdio: ['pipe', 'pipe', 'pipe'] })
+    const proc = spawn('claude', sandbox.claudeArgs(model), {
+      cwd,
+      env: sandbox.env(logFile),
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
 
     runningProcesses.set(ticketKey, proc)
     const cleanup = () => { if (runningProcesses.get(ticketKey) === proc) runningProcesses.delete(ticketKey) }
@@ -210,7 +202,7 @@ function parseAndValidate(raw: string, schema: ZodType<StageOutput>): StageOutpu
  * Tool events are reported while the process runs; the rest is drained before the call returns.
  */
 async function runClaudeOnce(
-  agent: { skill: string; schema: ZodType<StageOutput>; sandbox: ClaudeSandbox },
+  agent: { skill: string; schema: ZodType<StageOutput>; sandbox: ClaudeProcessSandbox },
   input: AgentRunnerInput,
   callbacks: AgentRunCallbacks,
   retryContext?: RetryContext,
@@ -279,7 +271,7 @@ export interface ClaudeCliOptions {
   /** Absolute path to `packages/core/skills`. */
   skillsDir: string
   /** Settings sources, guard/audit hooks, allowed tools and environment of the `claude` process (spec §13). */
-  sandbox: ClaudeSandbox
+  sandbox: ClaudeProcessSandbox
 }
 
 /**

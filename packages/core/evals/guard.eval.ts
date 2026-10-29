@@ -99,7 +99,7 @@ function main(): number {
   try {
     const sandbox = createAgentSandbox({ hooksDir: HOOKS_DIR })
     const started = Date.now()
-    const proc = spawnSync('claude', ['--print', '--output-format', 'stream-json', '--verbose', '--model', MODEL, ...sandbox.args], {
+    const proc = spawnSync('claude', sandbox.claudeArgs(MODEL), {
       cwd: repo, env: sandbox.env(logFile), input: buildPrompt(CASES), encoding: 'utf-8', timeout: TIMEOUT_MS,
     })
     const seconds = Math.round((Date.now() - started) / 1000)
