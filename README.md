@@ -22,8 +22,9 @@ Startet die Next.js-App unter http://localhost:3000. Ohne Token läuft die App, 
 
 - **Tickets kommen aus `examples/tickets/*.md` — sie simulieren Jira.** Ein Ticket-System liefert nur den rohen
   Inhalt (Titel, Text, Priorität); Intent und Spec entstehen im Repo, es gibt keinen Spiegel zurück nach Jira. Eine
-  echte Jira-Anbindung wäre ein weiterer Adapter hinter dem Port `TicketSource`
-  ([E1](docs/decisions.md), [Ticket-Eingang](examples/tickets/README.md)).
+  echte Jira-Anbindung wäre ein weiterer Adapter hinter dem Port `TicketSource` — per REST-API oder über einen
+  MCP-Server ([Ausblick](docs/architecture.md#ausblick-ticket-system-anbinden-jira-o-ä), [E1](docs/decisions.md),
+  [Ticket-Eingang](examples/tickets/README.md)).
 - **Das Ziel-Repo ist öffentlich.** Lesen und Klonen gehen ohne Token. Private Repos sind noch nicht vorgesehen.
 - **Schreiben braucht trotzdem ein Token** (GitHub-Vorgabe): Branch anlegen, Datei committen, PR öffnen.
 - Ablage im Ziel-Repo: `docs/work/<TICKET>/intent.md` (später `spec.md`) auf dem Branch `<TICKET>/intent`

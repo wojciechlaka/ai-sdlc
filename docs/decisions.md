@@ -20,7 +20,8 @@ Maintain. Jede Stufe erzeugt ein Artefakt, das Mensch und Agent lesen und das di
   Inhalten zurück; höchstens ein Statuswechsel. Branch-Namen mit Ticket-Schlüssel verknüpfen sich über die
   Git-Integration von Jira von selbst.
 - **Showcase:** Stufe 1 (Plan → `intent.md`) und Stufe 2 (Design → `spec.md`). Markdown-Dateien in
-  `examples/tickets/` simulieren die Jira-Tickets.
+  `examples/tickets/` simulieren die Jira-Tickets; die echte Anbindung (REST-Adapter oder MCP-Server) ist
+  als Ausblick beschrieben ([Architektur §6](architecture.md#ausblick-ticket-system-anbinden-jira-o-ä)).
 
 **Begründung.** Wenn Agenten Code in Stunden schreiben, liegt der Engpass bei Planung, Review und
 Freigabe. Diese Schritte brauchen nachvollziehbare Artefakte und klare Gates. Git liefert Versionen,

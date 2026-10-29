@@ -235,6 +235,39 @@ Nutzers samt Startdateien; was der Agent im öffentlichen Klon liest, sieht er g
 - **Klon auf `showcase`:** Der Agent liest heute den Klon des Default-Branches; für Stufe 2 muss er den Stand
   von `showcase` sehen (dort liegt das gemergte `intent.md`).
 - **Sandbox pro Stufe:** spätestens mit Stufe 3 (Build), siehe §5 „Agent-Sandbox“.
+- **Ticket-System anbinden:** Jira o. Ä. statt `examples/tickets/*.md`, siehe unten.
+
+### Ausblick: Ticket-System anbinden (Jira o. Ä.)
+
+Heute simulieren `examples/tickets/*.md` das Ticket-System ([E1](decisions.md)). Ein echtes System kommt über
+die vorhandenen Ports dazu, ohne dass sich Domäne oder Use Cases ändern. Es hat zwei Aufgaben:
+
+| Richtung | Was | Port |
+|---|---|---|
+| **Eingang** | rohe Tickets lesen: Schlüssel, Titel, Beschreibung, Priorität — z. B. alle Tickets eines Boards oder einer JQL-Abfrage mit Label `ai-sdlc` | `TicketSource` (gibt es) |
+| **Rückmeldung** | Stufenwechsel melden: Kommentar mit Link auf `intent.md`/PR, optional Status-Übergang („In Refinement“ → „Ready for Design“) — **kein Inhalts-Spiegel** | neu, z. B. `TicketTracker.reportStageChange(key, stage, links)` |
+
+Branches heißen schon heute wie der Ticket-Schlüssel (`CB-3/intent`); mit der Git-Integration von Jira erscheinen
+Branch und PR deshalb ohne eigenen Code am Jira-Ticket.
+
+**Zwei Wege für den Adapter:**
+
+| | A: REST-API direkt | B: über einen MCP-Server |
+|---|---|---|
+| Wie | Adapter `jiraTicketSource` spricht die Jira-REST-API (API-Token des Nutzers), wie heute `github` mit Octokit | Adapter ist ein MCP-Client (MCP-SDK für TypeScript) und ruft die Tools eines Jira-MCP-Servers auf, z. B. des Atlassian-MCP-Servers: Tickets suchen, lesen, kommentieren |
+| Austausch des Systems | pro System ein eigener Adapter | ein generischer MCP-Adapter; Linear, GitHub Issues, Azure DevOps … über ihren MCP-Server, nur das Mapping der Felder ist systemspezifisch |
+| Anmeldung | Token in `.env.local` (wie `GITHUB_TOKEN`) | OAuth bzw. Anmeldung beim MCP-Server; die App hält keine Jira-Secrets (passt zu [E4](decisions.md)) |
+| Stabilität | feste, versionierte API, gut testbar mit gemocktem `fetch` | hängt an Tool-Namen und -Schemas des MCP-Servers; Tests mit einem Fake-MCP-Server |
+| Aufwand | gering für ein System | etwas mehr am Anfang, weniger für jedes weitere System |
+
+**Zusätzlich für den Agent (optional):** Der Agent könnte den Jira-MCP-Server **nur lesend** nutzen, um Kontext zu
+holen — Kommentare, verlinkte Tickets, Epics. Das liefe über die Sandbox (`--mcp-config` mit
+`--strict-mcp-config`, Tool-Liste nur mit Lese-Tools, Guard prüft MCP-Aufrufe wie heute Read/Bash). Schreibende
+Jira-Aktionen bleiben bei den Use Cases, nicht beim Agent — wie bei der Datenbank ([E6](decisions.md)).
+
+**Empfehlung:** Für den ersten Schritt Weg A mit Jira (kleinster Aufwand, klar testbar); sobald ein zweites
+System dazukommt, Weg B. Beides passt in das Hexagon: `TicketSource` und der neue Rückmelde-Port sind die einzigen
+Stellen, die das Ticket-System kennen; `compose.ts` wählt den Adapter per Konfiguration (`TICKET_SOURCE=markdown|jira`).
 
 ## 7. Glossar
 

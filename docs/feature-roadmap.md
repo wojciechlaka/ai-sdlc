@@ -87,7 +87,7 @@ und der Kreislauf beginnt von vorn.
 | Integration | ab Stufe | Rolle |
 |---|---|---|
 | Git-Host (GitHub) | 1 | Pflicht: Branches, Dateien, PRs, Merge-Status |
-| Ticket-System (Jira o. Ä.) | 1 | optional: Eingang; später Statuswechsel, kein Inhalts-Spiegel |
+| Ticket-System (Jira o. Ä.) | 1 | optional: Eingang; später Statuswechsel, kein Inhalts-Spiegel. Im Showcase simuliert durch `examples/tickets/*.md`; Anbindung per REST-Adapter oder MCP-Server ([Architektur §6](architecture.md#ausblick-ticket-system-anbinden-jira-o-ä)) |
 | CI | 4 | Testläufe und Evals |
 | Monitoring / Alerts | 6 | Auslöser für neue Intents |
 
