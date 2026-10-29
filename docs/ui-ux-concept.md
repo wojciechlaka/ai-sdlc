@@ -1,6 +1,6 @@
 # UI/UX-Konzept
 
-Stand: die gebaute Oberfläche für Stufe 1 (Plan). Komponenten in `apps/web/components/`, Texte auf Deutsch.
+Stand: die gebaute Oberfläche für Stufe 1 und 2 (Plan, Design). Komponenten in `apps/web/components/`, Texte auf Deutsch.
 Architektur: [architecture.md](architecture.md) · Zustände: [datenmodell.md](datenmodell.md)
 
 ## 1. Prinzipien

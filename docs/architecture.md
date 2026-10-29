@@ -156,7 +156,7 @@ werden. Dafür gibt es vier Bausteine, jeder als Code im Repo ([E6](decisions.md
 | **Eval (Spec)** | lässt den echten Spec-Agent gegen ein Beispiel-Repo laufen; feste Prüfungen plus Bewertung durch ein zweites Modell (Abdeckung, Prüfbarkeit, Passung, YAGNI, Konsistenz) — *ist das Ergebnis gut?* | `packages/core/evals/spec.eval.ts`, `npm run eval:spec` |
 
 Die Regel selbst ist zusätzlich mit Tabellentests abgedeckt (`hooks/guardPolicy.test.ts`, Teil von `npm test`);
-der Eval prüft das Zusammenspiel mit Claude Code, kostet etwa 5 Cent und läuft deshalb nur auf Aufruf.
+der Guard-Eval prüft das Zusammenspiel mit Claude Code, kostet etwa 5 Cent und läuft deshalb nur auf Aufruf.
 
 ### Agent-Sandbox
 
@@ -184,7 +184,7 @@ compose.ts            createAgentSandbox({ hooksDir })               einmal pro 
    |
    +-- claudeCli       (Agent einer Stufe)          \
    +-- git             (Codebase-Summary)            >  dieselbe Sandbox
-   +-- evals           (Guard-Eval)                 /
+   +-- evals           (Evals)                      /
           |
           v
 spawn('claude', sandbox.claudeArgs(model), { cwd: Klon, env: sandbox.env(logFile) })
