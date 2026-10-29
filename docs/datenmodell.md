@@ -1,153 +1,212 @@
 # Datenmodell
 
-Stand: heutige App (vor dem Umbau auf das Playbook-Arbeitsmodell, siehe [architecture.md](architecture.md) §5).
-Persistenz: SQLite, Schema-Validierung der JSON-Spalten via Zod.
+Persistenz: SQLite über Drizzle (`packages/core/src/adapters/sqlite/schema.ts`), Typen in
+`packages/core/src/domain/types.ts`. JSON-Spalten werden über die Zod-Verträge in `packages/shared` validiert.
+
+**Inhalte liegen in Git, nicht in der Datenbank.** `intent.md` und `spec.md` stehen im Ziel-Repo auf dem
+Branch `showcase`; die App liest sie beim Anzeigen live von dort. Die Datenbank hält nur Stufe, Zustand,
+Verweise (Branch, PR) und das Log pro Ticket.
 
 ## Überblick
 
 ```text
-  +--------+ 1        n +----------+
-  | Ticket |------------| AgentRun |
-  +--------+            +----------+
-      | 1                    | 1
-      |                      |
-      | n                    | n
-  +------------+        +----------------+
-  | AuditEvent |        | ReviewDecision |
-  +------------+        +----------------+
+                  +-------------------------+
+                  | Ticket                  |
+                  |   key (PK), z. B. CB-3  |
+                  |   stage, state          |
+                  +-------------------------+
+                     | 1        | 1       | 1
+         +-----------+          |         +-----------+
+         | n                    | n                   | n
+  +----------------+  +-------------------+  +----------------+
+  | AgentRun       |  | Artifact          |  | AuditEvent     |
+  |   stage, seq   |  |   stage, branch   |  |   actor, type  |
+  |   input,output |  |   PR, merged_at   |  |   payload      |
+  +----------------+  +-------------------+  +----------------+
 ```
 
-`ReviewDecision` hängt zusätzlich am Ticket (`ticket_id`). Alle Fremdschlüssel löschen kaskadierend mit.
+Alle Tabellen hängen über `ticket_key` → `tickets.key` am Ticket und werden mit ihm gelöscht (`ON DELETE
+CASCADE`). Der **Reset** leert so mit `tickets` die ganze Datenbank.
 
 ## Entitäten
 
 ### Ticket
 
-Das Ding auf dem Board (Tabelle `tickets`).
+Ein Ticket aus `examples/tickets/*.md` (Tabelle `tickets`). Beim Start wird jede Datei per Upsert übernommen:
+neue Tickets beginnen in `plan`/`ready`, bei bekannten werden Titel, Text, Priorität und Pfad aktualisiert,
+Stufe und Zustand bleiben.
 
 | Feld | Typ | Beschreibung |
 |---|---|---|
-| `id` | integer, Autoincrement | Primärschlüssel; öffentlich (DTO, Events, Agent) als `T-1` usw. |
-| `title` | string | Kurztitel |
-| `description` | string | der rohe Stakeholder-Text, Default `''` |
-| `status` | enum | `backlog \| refining \| review \| ready \| failed`, Default `backlog`; `ready` ist reserviert und heute nicht erreichbar |
-| `iteration` | integer | Anzahl der Agent-Läufe des Tickets, startet bei 0; jeder neue Run zählt hoch (auch Antwort-Läufe) |
+| `key` | string, PK | Ticket-Schlüssel aus der ersten Zeile der Datei, z. B. `CB-3` |
+| `title` | string | Titel aus der ersten Zeile |
+| `description` | string | Text der Datei, Default `''` |
+| `priority` | string, nullable | aus `**Priorität:** …` |
+| `source_path` | string | Pfad der Datei relativ zum Repo, z. B. `examples/tickets/cb-3-kommentare-melden.md` |
+| `stage` | enum | `plan \| design \| done`, Default `plan` |
+| `state` | enum | `ready \| running \| awaiting_answer \| in_review \| failed`, Default `ready` |
 | `created_at`, `updated_at` | timestamp | |
-
-State Machine:
-
-```text
-                  Refine
-  +---------+ --------------------------> +------------+ ---+  Rueckfrage: bleibt
-  | backlog |                             |  refining  |    |  refining bis zur
-  +---------+ <-------------------------- +------------+ <--+  Antwort
-                  Stop                      |   ^    |
-                                   Ergebnis |   |    | Fehler / Timeout
-                                            v   |    v
-                                     +--------+ |  +--------+
-                                     | review |-+  | failed |  endgueltig bis Reset
-                                     +--------+    +--------+
-                                      Re-Refine
-```
-
-- **Refine** (`startRefinement`) ist nur aus `backlog` oder `review` erlaubt (`canStartRefinement`); aus
-  `review` ist es ein erneutes Refinement.
-- **Rückfrage:** Liefert der Agent eine `question`, bleibt das Ticket `refining`, bis der Mensch antwortet
-  (`answerQuestion`); die Antwort startet einen neuen Run.
-- **Ergebnis:** Liefert der Agent eine `refinement`, wechselt das Ticket nach `review`.
-- **Fehler/Timeout:** Das Ticket wechselt nach `failed`. Von dort gibt es keinen Übergang außer dem Reset
-  des Systems (`resetSystem`), der die Seed-Tickets wiederherstellt.
-- **Stop** (`stopRefinement`): ein noch laufendes `refining` geht zurück nach `backlog`.
-- Ein Ticket im Status `refining` lässt sich nicht löschen.
 
 ### AgentRun
 
-Eine Ausführung der Agent-CLI (Tabelle `agent_runs`).
+Ein Lauf des Agenten für eine Stufe (Tabelle `agent_runs`). Jede Antwort auf eine Rückfrage startet einen
+neuen Lauf.
 
 | Feld | Typ | Beschreibung |
 |---|---|---|
 | `id` | string | zufällige Hex-ID |
-| `ticket_id` | FK → Ticket | |
-| `iteration` | integer | Iteration des Tickets, die dieser Run erzeugt hat |
-| `trigger` | enum | `initial \| answer \| rework`; `initial` = Refine, `answer` = Fortsetzung nach Antwort; `rework` ist vorgesehen, wird heute nicht erzeugt |
-| `input` | JSON | Snapshot dessen, womit der Run gestartet wurde (siehe unten) |
-| `output` | JSON, nullable | Agent-Ausgabe `AgentOutput`, schema-validiert (siehe unten); `null` solange der Run läuft oder wenn er scheitert |
-| `status` | enum | `running \| succeeded \| failed \| timeout` |
-| `model` | string | gewähltes Modell (aus dem Input) |
-| `cost_usd` | number, nullable | Kosten laut CLI-Output |
-| `input_tokens`, `cache_creation_tokens`, `cache_read_tokens`, `output_tokens` | integer, nullable | Token-Verbrauch laut CLI-Output |
+| `ticket_key` | FK → Ticket | |
+| `stage` | enum | `plan \| design` |
+| `seq` | integer | laufende Nummer pro Ticket, ab 1; der Lauf mit dem höchsten `seq` ist der aktuelle Versuch |
+| `trigger` | enum | `initial` (Stufe gestartet) \| `answer` (Fortsetzung nach Antwort) |
+| `input` | JSON | `{ model, answeredQuestions: { question, answer }[] }` — Modell und Q&A-Verlauf der Stufe |
+| `output` | JSON, nullable | `StageOutput` (siehe unten); `null`, solange der Lauf läuft oder wenn er scheitert |
+| `status` | enum | `running \| succeeded \| failed \| timeout`; `succeeded` gilt für Rückfrage und Ergebnis |
+| `model` | string | gewähltes Modell |
+| `cost_usd` | number, nullable | Kosten laut CLI |
+| `input_tokens`, `cache_creation_tokens`, `cache_read_tokens`, `output_tokens` | integer, nullable | Token-Verbrauch laut CLI |
 | `started_at`, `finished_at` | timestamp | `finished_at` nullable |
 
-`input` (`AgentRunInput`):
+`output` ist eine Union über `type` (`packages/shared/src/intentSchema.ts`); Stufe 1 liefert:
 
 ```text
-{
-  ticketTitle:         string
-  ticketDescription:   string
-  acceptanceCriteria:  string
-  repo:                string                                // Git-URL oder lokaler Pfad
-  model:               string
-  previousRuns?:       { question: string, answer: string }[]  // Q&A-Verlauf bei Antwort-Laeufen
-  feedback?:           string                                // vorgesehen, heute nicht gesetzt
+{ type: "question", question: string }
+{ type: "intent",   result:   Intent }
+
+Intent = {
+  title:           string               // max. 60 Zeichen
+  problem:         string
+  desiredOutcome:  string
+  successCriteria: string[]             // mind. 1; Erfolgskriterien auf Ergebnisebene
+  affected:        string[]
+  openPoints:      { question: string }[]
 }
 ```
 
-### Agent-Ausgabe (JSON-Schema der `output`-Spalte)
+Die offene Rückfrage eines Tickets ist die `question` des letzten Laufs der aktuellen Stufe. Das Ergebnis wird
+nicht als Inhalt gelesen: die App rendert daraus `intent.md` und legt die Datei per PR ab.
 
-`AgentOutput` ist eine Union über `type` (`packages/shared/src/refinementSchema.ts`):
+`successCriteria` sind beobachtbare, prüfbare Aussagen aus Nutzer- oder Fachsicht ohne Lösungsdetails (keine
+Endpunkte, Felder, Dateien). Akzeptanzkriterien bleiben in der Spec (Stufe 2) und werden daraus abgeleitet.
+Gespeicherte Ausgaben älterer Läufe haben das Feld nicht; sie werden nicht erneut validiert (gelesen wird nur die
+`question` einer Rückfrage), daher ist keine Migration nötig.
 
-```text
-{ type: "question",   question: string }
-{ type: "refinement", result:   RefinementOutput }
-```
+### Artifact
 
-`RefinementOutput`:
-
-```text
-{
-  title:               string                     // max. 60 Zeichen
-  userStory:           string
-  acceptanceCriteria:  string[]
-  affectedFiles:       { path: string, description: string }[]
-  risks:               { description: string, severity: "low" | "medium" | "high" }[]
-  openQuestions:       { question: string, blocksImplementation: boolean }[]
-  confidence:          integer                    // 0-100
-}
-```
-
-Das aktuelle Refinement eines Tickets = `output` des letzten erfolgreichen Runs vom Typ `refinement`.
-
-### ReviewDecision
-
-Die menschliche Entscheidung zu einem Run (Tabelle `review_decisions`). **Tabelle vorhanden, derzeit
-ungenutzt** — kein Use Case schreibt oder liest sie.
+Eine Datei, die die App per Branch und PR vorgeschlagen hat (Tabelle `artifacts`). Der Inhalt steht in Git.
 
 | Feld | Typ | Beschreibung |
 |---|---|---|
 | `id` | string | zufällige Hex-ID |
-| `ticket_id` | FK → Ticket | |
-| `agent_run_id` | FK → AgentRun | der bewertete Run |
-| `decision` | enum | `approve \| request_changes` |
-| `feedback` | string, nullable | Freitext |
+| `ticket_key` | FK → Ticket | |
+| `stage` | enum | `plan \| design` |
+| `path` | string | `docs/work/<TICKET>/intent.md` bzw. `spec.md` |
+| `branch` | string | `<TICKET>/intent` bzw. `<TICKET>/spec` |
+| `pr_number`, `pr_url` | integer, string | PR gegen `showcase` |
+| `pr_state` | enum | `open \| merged \| closed`, Default `open` |
+| `merged_at` | timestamp, nullable | Zeitpunkt des Merge laut GitHub |
 | `created_at` | timestamp | |
+
+Pro Ticket und Stufe ist höchstens ein Artefakt `open`. Ein neuer Versuch nach geschlossenem PR legt ein neues
+Artefakt an; die Ticketseite zeigt das jüngste.
 
 ### AuditEvent
 
-Append-only Historie (Tabelle `audit_events`).
+Das Log pro Ticket, append-only (Tabelle `audit_events`); die Ticketseite zeigt es unter „Log“
+(`apps/web/lib/logFormat.ts` liest die Payload-Schlüssel).
 
 | Feld | Typ | Beschreibung |
 |---|---|---|
 | `id` | string | zufällige Hex-ID |
-| `ticket_id` | FK → Ticket | |
+| `ticket_key` | FK → Ticket | |
 | `actor` | enum | `human \| agent \| system` |
-| `type` | string | heute erzeugt: `ticket_created` (human), `run_started` (system), `run_finished` (agent bei Erfolg, system bei Fehler/Timeout/Abbruch) |
-| `payload` | JSON, nullable | `null` bzw. `{ runId }` oder `{ runId, status }` |
+| `type` | string | siehe Tabelle unten (`AuditEventType` in `ports/auditLog.ts`) |
+| `payload` | JSON, nullable | je nach Typ |
 | `created_at` | timestamp | |
 
-Statuswechsel des Tickets werden heute nicht als AuditEvent gespeichert, nur als Live-Event gesendet.
+| Typ | Akteur | Payload |
+|---|---|---|
+| `ticket_imported` | system | `{ sourcePath }` |
+| `run_started` | system | `{ runId, stage, trigger, model }` |
+| `run_finished` | agent (Erfolg), system (sonst) | `{ runId, status, reason? }`, bei Erfolg oder verworfenem Ergebnis zusätzlich `{ model, durationSeconds, costUsd, inputTokens, cacheCreationTokens, cacheReadTokens, outputTokens }` |
+| `question_asked` | agent | `{ question }` |
+| `answer_given` | human | `{ answer }` |
+| `pr_opened` | system | `{ prNumber, prUrl, branch }` |
+| `pr_merged` | human | `{ prNumber }` |
+| `pr_closed` | human | `{ prNumber }` |
+| `stage_changed` | system | `{ from, to }` |
+| `cleanup` | system | `{ prNumber, branch }` — beim Start geschlossener PR der App |
+| `error` | system | `{ message }` — fehlgeschlagener Lauf oder PR nicht mehr auffindbar |
+| `guard_blocked` | system | `{ tool, target, reason }` — der Guard-Hook hat einen Werkzeugaufruf des Agents abgelehnt (`target` max. 1000 Zeichen) |
+| `tool_used` | agent | `{ tool, target }` — ausgeführter Werkzeugaufruf (`target`: Befehl, Datei oder Muster, max. 200 Zeichen) |
 
-## Bewusst (noch) nicht modelliert
+### Kostenübersicht (abgeleitet)
 
-- **Project/Repo** — das Ziel-Repo ist Konfiguration
+Keine eigene Tabelle: `summarizeCosts` (`packages/core/src/domain/costs.ts`) berechnet sie bei jedem Lesen aus den
+`run_finished`-Einträgen des Logs (`getTicket` → `costs`, `listTickets` → `totalCostUsd`; Contract `CostSummarySchema`
+in `packages/shared/src/api.ts`):
+
+```text
+CostSummary = { totalUsd, runs, inputTokens, outputTokens, byStage: { plan: StageCost, design: StageCost } }
+StageCost   = { usd, runs, inputTokens, outputTokens }
+```
+
+- **Stufe** eines Laufs: aus dem `run_started`-Eintrag mit derselben `runId` (`run_finished` trägt keine Stufe), sonst
+  aus dem `AgentRun`; ein Lauf ohne bekannte Stufe zählt nur in der Gesamtsumme.
+- **Kosten:** `costUsd`, wie die CLI sie meldet (`total_cost_usd`) — nicht die Schätzung aus der Preistabelle, die das
+  Web für einzelne Log-Zeilen ohne gemeldete Kosten nutzt (`apps/web/lib/pricing.ts`).
+- **Mitgezählt:** erfolgreiche Läufe und verworfene Ergebnisse (`reason: 'verworfen'`, mit Verbrauch); Läufe ohne
+  Claude-Ergebnis (Stopp, Neustart, Fehler, Zeitlimit) zählen als Lauf mit Kosten 0.
+- **Input-Tokens:** ungecachter Input plus Cache-Schreibvorgänge (`runInputTokens` in `auditEvents.ts`, dieselbe
+  Regel wie die Log-Zeile); Cache-Lesevorgänge bleiben außen vor.
+- **Nicht enthalten:** der Codebase-Summary-Lauf (je Commit und Modell gecacht, von allen Tickets geteilt) — er
+  gehört keinem Ticket und schreibt keinen Log-Eintrag.
+
+## Stufe und Zustand
+
+Das Ticket hat eine **Stufe** (`plan → design → done`) und darin einen **Zustand**. Die Regeln stehen als reine
+Funktionen in `packages/core/src/domain/rules.ts`.
+
+```text
+                  Start                      Rueckfrage
+  +---------+ ------------> +-----------+ ------------> +-----------------+
+  |  ready  |               |  running  |               | awaiting_answer |
+  +---------+ <------------ +-----------+ <------------ +-----------------+
+    ^   ^       Stop        |        |        Antwort
+    |   |                   |        |
+    |   |          Ergebnis |        | Fehler / Timeout
+    |   |                   |        |
+    |   |                   v        v
+    |   |  PR zu    +-----------+ +--------+
+    |   +-----------| in_review | | failed | --Start--> running
+    |               +-----------+ +--------+
+    |                         |
+    +- Merge: naechste Stufe -+
+```
+
+- **Start** (`startStage`) ist nur aus `ready` oder `failed` erlaubt und nur in einer startbaren Stufe
+  (`STARTABLE_STAGES`, heute nur `plan`). Ohne Token lehnt die App ab.
+- **Rückfrage:** Der Agent fragt → `awaiting_answer`. Die Antwort (`answerQuestion`) startet einen neuen Lauf
+  mit dem ganzen Q&A-Verlauf.
+- **Ergebnis:** Datei rendern, Branch anlegen, committen, PR gegen `showcase` öffnen → `in_review`.
+- **Merge** (erkannt von `syncReviews`): Artefakt `merged`, Stufe `plan → design` bzw. `design → done`,
+  Zustand `ready`.
+- **PR ohne Merge geschlossen:** Artefakt `closed`, Branch gelöscht, `ready` in derselben Stufe. Ebenso, wenn
+  der PR nicht mehr existiert (404) oder kein offenes Artefakt da ist — dann mit `error`-Eintrag.
+  Vorübergehende GitHub-Fehler ändern nichts; der nächste Abgleich versucht es erneut.
+- **Fehler/Timeout** → `failed`; von dort startet die Stufe erneut.
+- **Stop** (`stopRun`): `running` oder `awaiting_answer` → `ready`.
+- **Start der App:** Läufe im Zustand `running` enden als `failed`, das Ticket wird `ready`. Danach wird die
+  Stufe aus den Dateien auf `showcase` abgeleitet (`spec.md` → `done`, `intent.md` → `design`, sonst `plan`);
+  ändert sie sich, oder stand das Ticket in `in_review`, wird es `ready`.
+
+## Alte Datenbank
+
+Eine Datenbank im Schema vor den Playbook-Stufen (erkennbar an der Tabelle `review_decisions`) wird beim Öffnen
+verworfen und von den Migrationen neu aufgebaut (`adapters/sqlite/database.ts`). Daten werden nicht übernommen.
+
+## Bewusst nicht modelliert
+
+- **Inhalte der Artefakte** — liegen in Git
+- **Project/Repo** — das Ziel-Repo ist Konfiguration (`TARGET_REPO`)
 - **User/Rollen** — keine Anmeldung in der lokalen App
-- **Editierte Output-Versionen** — Änderungen erfolgen künftig per PR auf das Artefakt im Repo

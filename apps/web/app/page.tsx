@@ -1,3 +1,14 @@
-export default function HomePage() {
-  return <p className="p-6 text-slate-400 text-sm">Ticket auswählen oder neu erstellen</p>
+import { getEngine } from '@/lib/container'
+import { Board } from '@/components/Board'
+import { BoardLive } from '@/components/BoardLive'
+
+/** Board of all tickets by stage; `BoardLive` refreshes it on ticket events. */
+export default function BoardPage() {
+  return (
+    <>
+      <h1 className="sr-only">Board</h1>
+      <BoardLive />
+      <Board tickets={getEngine().listTickets()} />
+    </>
+  )
 }

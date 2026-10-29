@@ -3,11 +3,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ConflictError } from '@refinement/core'
 
 const engine = vi.hoisted(() => ({
-  createTicket: vi.fn(),
-  startRefinement: vi.fn(),
+  startStage: vi.fn(),
   answerQuestion: vi.fn(),
-  stopRefinement: vi.fn(),
-  deleteTicket: vi.fn(),
+  stopRun: vi.fn(),
   resetSystem: vi.fn(),
 }))
 
@@ -15,50 +13,33 @@ vi.mock('@/lib/container', () => ({ getEngine: () => engine }))
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 
 import { revalidatePath } from 'next/cache'
-import {
-  createTicketAction,
-  startRefinementAction,
-  answerQuestionAction,
-  stopRefinementAction,
-  deleteTicketAction,
-  resetSystemAction,
-} from './actions'
+import { answerQuestionAction, resetSystemAction, startStageAction, stopRunAction } from './actions'
 
 beforeEach(() => {
   vi.clearAllMocks()
 })
 
 describe('server actions', () => {
-  it('createTicketAction returns the ticket and refreshes the whole layout', async () => {
-    engine.createTicket.mockReturnValue({ id: 'T-4', title: 'Neu' })
-    const result = await createTicketAction({ title: 'Neu', description: 'D' })
-    expect(result).toEqual({ ok: true, data: { id: 'T-4', title: 'Neu' } })
-    expect(engine.createTicket).toHaveBeenCalledWith({ title: 'Neu', description: 'D' })
+  it('passes key and input through and refreshes the whole layout', async () => {
+    expect(await startStageAction('CB-2', { model: 'm' })).toEqual({ ok: true, data: undefined })
+    await answerQuestionAction('CB-2', { answer: 'Alle Leser' })
+    await stopRunAction('CB-2')
+    expect(engine.startStage).toHaveBeenCalledWith('CB-2', { model: 'm' })
+    expect(engine.answerQuestion).toHaveBeenCalledWith('CB-2', { answer: 'Alle Leser' })
+    expect(engine.stopRun).toHaveBeenCalledWith('CB-2')
     expect(revalidatePath).toHaveBeenCalledWith('/', 'layout')
   })
 
-  it('passes ticket id and input through to the use cases', async () => {
-    const input = { repo: 'https://github.com/x/y', model: 'm', acceptanceCriteria: '' }
-    await startRefinementAction('T-1', input)
-    await answerQuestionAction('T-1', { answer: 'Postgres' })
-    await deleteTicketAction('T-2')
-    expect(engine.startRefinement).toHaveBeenCalledWith('T-1', input)
-    expect(engine.answerQuestion).toHaveBeenCalledWith('T-1', { answer: 'Postgres' })
-    expect(engine.deleteTicket).toHaveBeenCalledWith('T-2')
-  })
-
-  it('awaits the asynchronous use cases', async () => {
-    engine.stopRefinement.mockResolvedValue(undefined)
-    engine.resetSystem.mockResolvedValue([{ id: 'T-1' }])
-    expect(await stopRefinementAction('T-1')).toEqual({ ok: true, data: undefined })
-    expect(await resetSystemAction()).toEqual({ ok: true, data: [{ id: 'T-1' }] })
+  it('awaits the reset and passes its warnings on', async () => {
+    engine.resetSystem.mockResolvedValue({ warnings: ['Repo nicht zurückgesetzt'] })
+    expect(await resetSystemAction()).toEqual({ ok: true, data: { warnings: ['Repo nicht zurückgesetzt'] } })
+    expect(revalidatePath).toHaveBeenCalledWith('/', 'layout')
   })
 
   it('reports domain errors as a failed result', async () => {
-    engine.startRefinement.mockImplementation(() => {
-      throw new ConflictError('Ticket is not in a refineable state')
+    engine.startStage.mockImplementation(() => {
+      throw new ConflictError('GITHUB_TOKEN fehlt')
     })
-    const result = await startRefinementAction('T-1', { repo: 'r', model: 'm', acceptanceCriteria: '' })
-    expect(result).toEqual({ ok: false, error: 'Ticket is not in a refineable state' })
+    expect(await startStageAction('CB-2', { model: 'm' })).toEqual({ ok: false, error: 'GITHUB_TOKEN fehlt' })
   })
 })

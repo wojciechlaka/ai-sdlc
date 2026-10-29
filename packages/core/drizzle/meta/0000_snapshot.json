@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "7fa9ebf8-6484-4967-88ce-01f23eafd7e0",
+  "id": "9bd6ea69-79a8-43d6-ade7-8caaa8772dda",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "agent_runs": {
@@ -14,15 +14,22 @@
           "notNull": true,
           "autoincrement": false
         },
-        "ticket_id": {
-          "name": "ticket_id",
-          "type": "integer",
+        "ticket_key": {
+          "name": "ticket_key",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "iteration": {
-          "name": "iteration",
+        "stage": {
+          "name": "stage",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "seq": {
+          "name": "seq",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
@@ -115,15 +122,110 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "agent_runs_ticket_id_tickets_id_fk": {
-          "name": "agent_runs_ticket_id_tickets_id_fk",
+        "agent_runs_ticket_key_tickets_key_fk": {
+          "name": "agent_runs_ticket_key_tickets_key_fk",
           "tableFrom": "agent_runs",
           "tableTo": "tickets",
           "columnsFrom": [
-            "ticket_id"
+            "ticket_key"
           ],
           "columnsTo": [
-            "id"
+            "key"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "artifacts": {
+      "name": "artifacts",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ticket_key": {
+          "name": "ticket_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "stage": {
+          "name": "stage",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "path": {
+          "name": "path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "branch": {
+          "name": "branch",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "pr_number": {
+          "name": "pr_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "pr_url": {
+          "name": "pr_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "pr_state": {
+          "name": "pr_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'open'"
+        },
+        "merged_at": {
+          "name": "merged_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "artifacts_ticket_key_tickets_key_fk": {
+          "name": "artifacts_ticket_key_tickets_key_fk",
+          "tableFrom": "artifacts",
+          "tableTo": "tickets",
+          "columnsFrom": [
+            "ticket_key"
+          ],
+          "columnsTo": [
+            "key"
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
@@ -143,9 +245,9 @@
           "notNull": true,
           "autoincrement": false
         },
-        "ticket_id": {
-          "name": "ticket_id",
-          "type": "integer",
+        "ticket_key": {
+          "name": "ticket_key",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -181,94 +283,15 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "audit_events_ticket_id_tickets_id_fk": {
-          "name": "audit_events_ticket_id_tickets_id_fk",
+        "audit_events_ticket_key_tickets_key_fk": {
+          "name": "audit_events_ticket_key_tickets_key_fk",
           "tableFrom": "audit_events",
           "tableTo": "tickets",
           "columnsFrom": [
-            "ticket_id"
+            "ticket_key"
           ],
           "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "review_decisions": {
-      "name": "review_decisions",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "ticket_id": {
-          "name": "ticket_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "agent_run_id": {
-          "name": "agent_run_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "decision": {
-          "name": "decision",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "feedback": {
-          "name": "feedback",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "review_decisions_ticket_id_tickets_id_fk": {
-          "name": "review_decisions_ticket_id_tickets_id_fk",
-          "tableFrom": "review_decisions",
-          "tableTo": "tickets",
-          "columnsFrom": [
-            "ticket_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "review_decisions_agent_run_id_agent_runs_id_fk": {
-          "name": "review_decisions_agent_run_id_agent_runs_id_fk",
-          "tableFrom": "review_decisions",
-          "tableTo": "agent_runs",
-          "columnsFrom": [
-            "agent_run_id"
-          ],
-          "columnsTo": [
-            "id"
+            "key"
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
@@ -281,12 +304,12 @@
     "tickets": {
       "name": "tickets",
       "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
+        "key": {
+          "name": "key",
+          "type": "text",
           "primaryKey": true,
           "notNull": true,
-          "autoincrement": true
+          "autoincrement": false
         },
         "title": {
           "name": "title",
@@ -303,21 +326,35 @@
           "autoincrement": false,
           "default": "''"
         },
-        "status": {
-          "name": "status",
+        "priority": {
+          "name": "priority",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "source_path": {
+          "name": "source_path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "stage": {
+          "name": "stage",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "'backlog'"
+          "default": "'plan'"
         },
-        "iteration": {
-          "name": "iteration",
-          "type": "integer",
+        "state": {
+          "name": "state",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": 0
+          "default": "'ready'"
         },
         "created_at": {
           "name": "created_at",

@@ -7,14 +7,20 @@ flowchart LR
 
     subgraph Core["packages/core · Hexagon"]
         UC["Use Cases + Domäne"]
-        AD["Adapter<br/><small>sqlite · git · claudeCli · Events</small>"]
+        AD["Adapter<br/><small>sqlite · git · claudeCli<br/>agentSandbox · Events</small>"]
+        GH["Adapter github<br/><small>Octokit</small>"]
+        MT["Adapter markdownTickets"]
         UC --> AD
+        UC --> GH
+        UC --> MT
     end
 
     subgraph Ext["Extern"]
         DB[("SQLite")]
-        GIT["Git-Repo"]
-        CL["claude CLI"]
+        GIT["Repo-Klon"]
+        CL["claude CLI<br/><small>Sandbox mit Hooks<br/>guard · audit</small>"]
+        GHA["GitHub<br/><small>Ziel-Repo · Branch showcase</small>"]
+        TK["examples/tickets"]
     end
 
     B <-->|"Befehle / Live-Events"| W
@@ -22,6 +28,8 @@ flowchart LR
     AD --> DB
     AD --> GIT
     AD --> CL
+    GH --> GHA
+    MT --> TK
 
     style Web fill:#dcfce7,stroke:#16a34a
     style Core fill:#ffedd5,stroke:#ea580c

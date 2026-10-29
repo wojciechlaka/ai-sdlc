@@ -1,24 +1,34 @@
-import { desc, eq } from 'drizzle-orm'
+import { and, count, eq, sql } from 'drizzle-orm'
+import type { AgentRun, AgentRunInput, QAPair } from '../../domain/types'
 import type { AgentRunRepository } from '../../ports'
 import type { SqliteDb } from './database'
-import { agentRuns, tickets } from './schema'
+import { agentRuns } from './schema'
 
+type AgentRunRow = typeof agentRuns.$inferSelect
+
+/**
+ * Reads `agent_runs.input` tolerantly: rows written before the rename store the Q&A history as `previousRuns`.
+ */
+function toAgentRunInput(stored: AgentRunInput & { previousRuns?: QAPair[] }): AgentRunInput {
+  const { previousRuns, ...input } = stored
+  return { ...input, answeredQuestions: input.answeredQuestions ?? previousRuns ?? [] }
+}
+
+/** Domain AgentRun of a table row (input read tolerantly). */
+function toAgentRun(row: AgentRunRow): AgentRun {
+  return { ...row, input: toAgentRunInput(row.input) }
+}
+
+/** AgentRunRepository port backed by the SQLite table `agent_runs`. */
 export function createSqliteAgentRunRepository(db: SqliteDb): AgentRunRepository {
   return {
     create(input) {
-      return db.transaction((tx) => {
-        const ticket = tx.select().from(tickets).where(eq(tickets.id, input.ticketId)).get()
-        if (!ticket) throw new Error(`Ticket ${input.ticketId} not found`)
-
-        const iteration = ticket.iteration + 1
-        tx.update(tickets)
-          .set({ iteration, updatedAt: new Date() })
-          .where(eq(tickets.id, input.ticketId))
-          .run()
-
+      const row = db.transaction((tx) => {
+        const existing = tx.select({ n: count() }).from(agentRuns).where(eq(agentRuns.ticketKey, input.ticketKey)).get()
         return tx.insert(agentRuns).values({
-          ticketId: input.ticketId,
-          iteration,
+          ticketKey: input.ticketKey,
+          stage: input.stage,
+          seq: (existing?.n ?? 0) + 1,
           trigger: input.trigger,
           input: input.input,
           status: 'running',
@@ -26,9 +36,13 @@ export function createSqliteAgentRunRepository(db: SqliteDb): AgentRunRepository
           startedAt: new Date(),
         }).returning().get()
       })
+      return toAgentRun(row)
     },
 
-    findById: (id) => db.select().from(agentRuns).where(eq(agentRuns.id, id)).get() ?? null,
+    findById: (id) => {
+      const row = db.select().from(agentRuns).where(eq(agentRuns.id, id)).get()
+      return row ? toAgentRun(row) : null
+    },
 
     complete(id, result) {
       const row = db.update(agentRuns).set({
@@ -41,24 +55,25 @@ export function createSqliteAgentRunRepository(db: SqliteDb): AgentRunRepository
         outputTokens: result.outputTokens,
         finishedAt: new Date(),
       }).where(eq(agentRuns.id, id)).returning().get()
-      if (!row) throw new Error(`AgentRun ${id} not found`)
+      if (!row) {
+        throw new Error(`AgentRun ${id} not found`)
+      }
     },
 
     fail(id, status) {
       const row = db.update(agentRuns).set({ status, finishedAt: new Date() }).where(eq(agentRuns.id, id)).returning().get()
-      if (!row) throw new Error(`AgentRun ${id} not found`)
+      if (!row) {
+        throw new Error(`AgentRun ${id} not found`)
+      }
     },
 
-    listForTicket: (ticketId) =>
-      db.select().from(agentRuns).where(eq(agentRuns.ticketId, ticketId)).orderBy(agentRuns.iteration).all(),
-
-    latestForTicket: (ticketId) =>
+    listForTicket: (ticketKey, stage) =>
       db.select().from(agentRuns)
-        .where(eq(agentRuns.ticketId, ticketId))
-        .orderBy(desc(agentRuns.iteration))
-        .limit(1)
-        .get() ?? null,
+        .where(and(eq(agentRuns.ticketKey, ticketKey), stage ? eq(agentRuns.stage, stage) : undefined))
+        .orderBy(agentRuns.seq)
+        .all()
+        .map(toAgentRun),
 
-    findStuck: () => db.select().from(agentRuns).where(eq(agentRuns.status, 'running')).all(),
+    findStuck: () => db.select().from(agentRuns).where(eq(agentRuns.status, 'running')).orderBy(sql`rowid`).all().map(toAgentRun),
   }
 }

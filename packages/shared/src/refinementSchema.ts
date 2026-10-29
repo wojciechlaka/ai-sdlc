@@ -1,5 +1,6 @@
 import { z } from 'zod'
 
+/** Result of the stage 2 agent (`skills/refinement-agent.md`); not wired yet (Design is not startable). */
 export const RefinementOutputSchema = z.object({
   title:               z.string().max(60),
   userStory:           z.string(),
@@ -21,11 +22,13 @@ export const RefinementOutputSchema = z.object({
 
 export type RefinementOutput = z.infer<typeof RefinementOutputSchema>
 
+/** A blocking question of an agent; every stage may return it instead of its result. */
 export const QuestionOutputSchema = z.object({
   type: z.literal('question'),
   question: z.string(),
 })
 
+/** Agent output of stage 2: a blocking question or the refinement. */
 export const AgentOutputSchema = z.discriminatedUnion('type', [
   QuestionOutputSchema,
   z.object({
