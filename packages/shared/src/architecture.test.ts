@@ -9,7 +9,11 @@ import { projectFiles } from 'archunit'
 
 const TSCONFIG = path.resolve(__dirname, '../tsconfig.json')
 
-describe('architecture (packages/shared)', () => {
+/** Building the TypeScript program takes ~3 s alone; under load (dev server, parallel workers) it can exceed
+ * Vitest's default of 5 s. A slow run is no architecture violation, so give these tests room. */
+const ARCHITECTURE_TIMEOUT_MS = 60_000
+
+describe('architecture (packages/shared)', { timeout: ARCHITECTURE_TIMEOUT_MS }, () => {
   it('shared depends on no other workspace package', async () => {
     const rule = projectFiles(TSCONFIG)
       .inPath('src/**', { except: { withName: '*.test.ts' } })

@@ -28,7 +28,11 @@ function importsCoreOnlyViaPackage(file: FileInfo): boolean {
     !specifier.startsWith('@refinement/core/') && !/^\.{1,2}\/.*packages\/core(\/|$)/.test(specifier))
 }
 
-describe('architecture (apps/web)', () => {
+/** Building the TypeScript program takes ~3 s alone; under load (dev server, parallel workers) it can exceed
+ * Vitest's default of 5 s. A slow run is no architecture violation, so give these tests room. */
+const ARCHITECTURE_TIMEOUT_MS = 60_000
+
+describe('architecture (apps/web)', { timeout: ARCHITECTURE_TIMEOUT_MS }, () => {
   it('web imports core only via the package entry @refinement/core', async () => {
     const rule = projectFiles(TSCONFIG)
       .inPath(WEB_SOURCES, NO_TESTS)
@@ -42,5 +46,5 @@ describe('architecture (apps/web)', () => {
       .should()
       .adhereTo(importsCoreOnlyViaPackage, 'import core only via @refinement/core, not via deep or relative paths')
     await expect(specifiers).toPassAsync()
-  })
+  }, 30_000) // parses the whole TS project; > 5 s default when the machine is busy
 })

@@ -32,7 +32,11 @@ function filesIn(folder: string) {
   return projectFiles(TSCONFIG).inFolder(`src/${folder}/**`, PRODUCTION)
 }
 
-describe('architecture (packages/core)', () => {
+/** Building the TypeScript program takes ~3 s alone; under load (dev server, parallel workers) it can exceed
+ * Vitest's default of 5 s. A slow run is no architecture violation, so give these tests room. */
+const ARCHITECTURE_TIMEOUT_MS = 60_000
+
+describe('architecture (packages/core)', { timeout: ARCHITECTURE_TIMEOUT_MS }, () => {
   it('domain depends only on itself', async () => {
     const rule = filesIn('domain')
       .shouldNot()
