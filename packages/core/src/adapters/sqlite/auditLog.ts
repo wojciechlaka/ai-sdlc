@@ -3,6 +3,7 @@ import type { AuditLog } from '../../ports'
 import type { SqliteDb } from './database'
 import { auditEvents } from './schema'
 
+/** `AuditLog` on the `audit_events` table; payloads are stored as JSON. */
 export function createSqliteAuditLog(db: SqliteDb): AuditLog {
   return {
     append(event) {
@@ -10,7 +11,7 @@ export function createSqliteAuditLog(db: SqliteDb): AuditLog {
         ticketKey: event.ticketKey,
         actor: event.actor,
         type: event.type,
-        payload: event.payload ?? null,
+        payload: event.payload,
       }).run()
     },
 
