@@ -30,6 +30,17 @@ afterEach(() => {
   vi.unstubAllEnvs()
 })
 
+describe('getCommitHash', () => {
+  it('returns a 40-character hex commit hash', () => {
+    const repo = makeTempRepo()
+    try {
+      expect(getCommitHash(repo)).toMatch(/^[a-f0-9]{40}$/)
+    } finally {
+      fs.rmSync(repo, { recursive: true, force: true })
+    }
+  })
+})
+
 describe('ensureRepoSummary — summary run with guard and audit hooks', () => {
   it('runs claude in the sandbox and reports blocked calls only as server warnings', async () => {
     vi.stubEnv('GITHUB_TOKEN', 'ghp_secret')
