@@ -25,7 +25,7 @@ export function Sidebar({ settings }: { settings: SettingsDto }) {
         )}
       </div>
       <div className="p-3">
-        <ResetButton />
+        <ResetButton baseBranch={settings.baseBranch} baselineTag={settings.baselineTag} />
       </div>
     </aside>
   )

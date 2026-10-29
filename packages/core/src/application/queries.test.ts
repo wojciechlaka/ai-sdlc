@@ -108,7 +108,9 @@ describe('getTicket', () => {
 
 describe('getSettings', () => {
   it('reports the target repository, its base branch and whether a token is configured', () => {
-    expect(getSettings(createTestContext().deps)).toEqual({ repoUrl: 'https://github.com/o/r', baseBranch: 'showcase', tokenConfigured: true })
+    expect(getSettings(createTestContext().deps)).toEqual({
+      repoUrl: 'https://github.com/o/r', baseBranch: 'showcase', baselineTag: 'showcase-base', tokenConfigured: true,
+    })
     expect(getSettings(createTestContext({ token: false }).deps)).toMatchObject({ baseBranch: 'showcase', tokenConfigured: false })
   })
 })

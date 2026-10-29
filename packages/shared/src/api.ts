@@ -68,6 +68,8 @@ export const SettingsSchema = z.object({
   repoUrl: z.string(),
   /** Branch of the target repository the app works on; PRs target it. */
   baseBranch: z.string(),
+  /** Tag marking the initial state of the base branch; the reset moves the branch back to it. */
+  baselineTag: z.string(),
   /** False without `GITHUB_TOKEN`: stages cannot be started. */
   tokenConfigured: z.boolean(),
 })

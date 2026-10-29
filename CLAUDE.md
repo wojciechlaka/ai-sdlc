@@ -99,8 +99,8 @@ running|awaiting_answer --stop--> ready
 ### Flow ("Plan starten")
 
 1. `startStageAction(ticketKey, { model })` → use case `startStage` (`application/stageCommands.ts`): validates (Zod),
-   requires a code host (token), sets `running`, creates the AgentRun synchronously (`beginRun`) and hands
-   `runStage` to `runInBackground`
+   requires a code host (token), sets `running`, creates the AgentRun synchronously (`beginRun` in
+   `runLifecycle.ts`) and hands `runStage` to `runInBackground`
 2. `runStage`: `RepoProvider.ensureRepo(TARGET_REPO)` (plain clone/pull into `$REPO_CACHE_DIR`, no token) →
    `ensureSummary` → `executeRun`
 3. `AgentRunner.run` (`adapters/claudeCli`) picks skill + schema per stage (`STAGE_AGENTS`: plan →
@@ -198,8 +198,9 @@ makes `startStage`/`answerQuestion` throw a `ConflictError`.
 - **New eval case**: add an entry to `CASES` in `packages/core/evals/guard.eval.ts` (`tool`, `instruction` as written in
   the prompt, `expected: 'blocked' | 'used'`, `matches(target)` recognising the hook-log target), then run
   `npm run eval:guard`
-- **New log event**: add `event('<type>', <payload schema>)` to `AuditEventSchema` (`packages/shared/src/auditEvents.ts`),
-  write it with `record(...)` and add its `case` to `describeLogEvent` (`apps/web/lib/logFormat.ts`; the switch is exhaustive)
+- **New log event**: add `event('<type>', <payload schema>)` to `AuditEventSchema`
+  (`packages/shared/src/auditEvents.ts`), write it with `record(...)` and add its `case` to `describeLogEvent`
+  (`apps/web/lib/logFormat.ts`; the switch is exhaustive)
 - **New UI**: `apps/web/components/`; mutations as Server Actions in `apps/web/app/actions.ts` using `runAction`;
   UI primitives in `apps/web/components/ui/` (shadcn/Base UI)
 - **New ticket**: Markdown file in `examples/tickets/`; appears after restart or reset
@@ -212,7 +213,8 @@ makes `startStage`/`answerQuestion` throw a `ConflictError`.
   English. Everything a user or the agent sees is German: UI texts, progress events, audit/log entries shown on the
   ticket page, startup warnings, PR titles/bodies, commit messages in the target repo, prompts, skill files and the
   guard's deny reasons. A log line that echoes such a text (e.g. a progress message also written to the server log)
-  quotes it unchanged.
+  quotes it unchanged. Developer-facing CLI output such as the eval report (`npm run eval:guard`) is German too, and
+  so are the commit messages of this repository (`refactor: …`, `feat: …`).
 - **Thrown errors:** a message that can reach the UI is German — `ConflictError`/`ValidationError`/`NotFoundError`,
   `CodeHostError`, and every error an agent run can end with (`failStage` shows `describeError(err)`: timeout, CLI
   and schema errors, missing stage agent). Purely internal errors (repository invariants such as "AgentRun … not

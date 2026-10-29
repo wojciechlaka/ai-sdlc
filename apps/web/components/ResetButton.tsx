@@ -6,13 +6,18 @@ import { resetSystemAction } from '@/app/actions'
 import { useAppState } from './AppStateProvider'
 
 /** What the reset does; shown as tooltip and, as a question, in the confirmation dialog. */
-const RESET_EFFECT = 'Datenbank leeren, Tickets neu einlesen, offene PRs der App schließen und den Branch showcase auf showcase-base zurücksetzen'
+function resetEffect(baseBranch: string, baselineTag: string): string {
+  return 'Datenbank leeren, Tickets neu einlesen, offene PRs der App schließen und den Branch '
+    + `${baseBranch} auf ${baselineTag} zurücksetzen`
+}
 
 /**
  * Empties the database and runs the start again with a repo reset (ticket import, PR clean-up,
- * branch `showcase` back to tag `showcase-base`, stage derivation). Warnings of the start stay visible.
+ * base branch back to the baseline tag, stage derivation). Warnings of the start stay visible.
+ * Branch and tag come from the settings, so the texts name what the reset really touches.
  */
-export function ResetButton() {
+export function ResetButton({ baseBranch, baselineTag }: { baseBranch: string; baselineTag: string }) {
+  const effect = resetEffect(baseBranch, baselineTag)
   const router = useRouter()
   const { clearProgress } = useAppState()
   const [pending, startTransition] = useTransition()
@@ -21,7 +26,7 @@ export function ResetButton() {
   const [warnings, setWarnings] = useState<string[]>([])
 
   const handleReset = () => {
-    if (!window.confirm(`${RESET_EFFECT}?`)) return
+    if (!window.confirm(`${effect}?`)) return
     startTransition(async () => {
       setError(null)
       setWarnings([])
@@ -42,7 +47,7 @@ export function ResetButton() {
         onClick={handleReset}
         disabled={pending}
         className="btn-ghost-xs"
-        title={RESET_EFFECT}
+        title={effect}
       >
         {pending ? 'Setze zurück…' : 'Reset'}
       </button>

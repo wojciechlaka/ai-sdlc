@@ -65,5 +65,10 @@ export async function getTicket(deps: UseCaseDeps, key: string): Promise<TicketD
 
 /** Target repo, base branch and whether a token is configured — for the sidebar. */
 export function getSettings(deps: UseCaseDeps): SettingsDto {
-  return { repoUrl: deps.repoUrl, baseBranch: deps.baseBranch, tokenConfigured: deps.codeHost !== null }
+  return {
+    repoUrl: deps.repoUrl,
+    baseBranch: deps.baseBranch,
+    baselineTag: deps.baselineTag,
+    tokenConfigured: deps.codeHost !== null,
+  }
 }

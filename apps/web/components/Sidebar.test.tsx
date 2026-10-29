@@ -11,7 +11,7 @@ describe('Sidebar', () => {
   it('shows the target repository and the branch the app works on', () => {
     render(
       <AppStateProvider>
-        <Sidebar settings={{ repoUrl: 'https://github.com/o/r', baseBranch: 'showcase', tokenConfigured: true }} />
+        <Sidebar settings={{ repoUrl: 'https://github.com/o/r', baseBranch: 'showcase', baselineTag: 'showcase-base', tokenConfigured: true }} />
       </AppStateProvider>,
     )
     expect(screen.getByRole('link', { name: 'o/r' })).toHaveAttribute('href', 'https://github.com/o/r')

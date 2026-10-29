@@ -12,7 +12,7 @@ import { ResetButton } from './ResetButton'
 function renderButton() {
   return render(
     <AppStateProvider>
-      <ResetButton />
+      <ResetButton baseBranch="demo" baselineTag="demo-base" />
     </AppStateProvider>,
   )
 }
@@ -22,12 +22,12 @@ beforeEach(() => {
 })
 
 describe('ResetButton', () => {
-  it('asks before resetting and names the showcase branch', () => {
+  it('asks before resetting and names the base branch and baseline tag from the settings', () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
     renderButton()
     fireEvent.click(screen.getByRole('button', { name: 'Reset' }))
     expect(confirm).toHaveBeenCalledWith(
-      'Datenbank leeren, Tickets neu einlesen, offene PRs der App schließen und den Branch showcase auf showcase-base zurücksetzen?',
+      'Datenbank leeren, Tickets neu einlesen, offene PRs der App schließen und den Branch demo auf demo-base zurücksetzen?',
     )
     expect(resetSystemAction).not.toHaveBeenCalled()
   })
