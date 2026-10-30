@@ -101,7 +101,7 @@ Your entire answer is exactly one JSON object — no text before or after it, no
   }
 }
 
-`title` must not exceed 60 characters. `acceptanceCriteria` holds at least one criterion and covers every success
+`title` must not exceed 60 characters and must NOT contain the ticket key (the app adds it), e.g. "Lesezeit anzeigen", not "CB-2: Lesezeit anzeigen". `acceptanceCriteria` holds at least one criterion and covers every success
 criterion of the intent; each criterion is observable and unambiguous. `affectedFiles`: a path with
 `"isNew": false` must exist in the repository (check it with Glob or Read); new files have `"isNew": true`.
 `components`, `alternatives`, `dependsOn`, `affectedFiles`, `risks` and `openPoints` may be empty arrays as far as

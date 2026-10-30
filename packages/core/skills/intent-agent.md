@@ -46,7 +46,7 @@ Your entire answer is exactly one JSON object — no text before or after it, no
   }
 }
 
-`affected` and `openPoints` may be empty arrays. `title` must not exceed 60 characters.
+`affected` and `openPoints` may be empty arrays. `title` must not exceed 60 characters and must NOT contain the ticket key (the app adds it), e.g. "Lesezeit anzeigen", not "CB-2: Lesezeit anzeigen".
 
 `successCriteria` holds 2–5 criteria. Each one is observable from the user's or business perspective and can
 be checked once the change is delivered. Do not describe the implementation: no endpoints, fields, files or

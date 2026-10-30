@@ -7,6 +7,16 @@ const NONE = 'Keine.'
 /** Collapses whitespace so a single-line field cannot break Markdown structure. */
 const oneLine = (s: string) => s.replace(/\s+/g, ' ').trim()
 
+/**
+ * Strips a leading ticket key (plus `:`, `-` and whitespace) from an agent title, because the app adds the key itself.
+ * Falls back to the original title when nothing would remain.
+ */
+export function titleWithoutKey(key: string, title: string): string {
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const stripped = title.replace(new RegExp(`^\\s*${escaped}(?![\\w-])[\\s:-]*`, 'i'), '').trim()
+  return stripped || title.trim()
+}
+
 function bulletList(items: string[]): string {
   return items.length ? items.map((item) => `- ${demoteHeadings(oneLine(item))}`).join('\n') : NONE
 }
@@ -44,7 +54,7 @@ export function renderIntent(ticket: Pick<Ticket, 'key' | 'sourcePath'>, intent:
     `source: ${ticket.sourcePath}`,
     '---',
     '',
-    `# ${ticket.key}: ${oneLine(intent.title)}`,
+    `# ${ticket.key}: ${oneLine(titleWithoutKey(ticket.key, intent.title))}`,
     '',
     '## Problem',
     '',
@@ -119,7 +129,7 @@ export function renderSpec(ticket: Pick<Ticket, 'key' | 'sourcePath'>, spec: Spe
     `intent: ${artifactPath(ticket.key, 'plan')}`,
     '---',
     '',
-    `# ${ticket.key}: ${oneLine(spec.title)}`,
+    `# ${ticket.key}: ${oneLine(titleWithoutKey(ticket.key, spec.title))}`,
     '',
     '## Ziel',
     '',

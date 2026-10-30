@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { Intent, Spec } from '@refinement/shared'
-import { renderIntent, renderPullRequestBody, renderSpec } from './render'
+import { renderIntent, renderPullRequestBody, renderSpec, titleWithoutKey } from './render'
 
 const TICKET = { key: 'CB-2', title: 'Lesezeit bei Artikeln anzeigen', sourcePath: 'examples/tickets/cb-2-lesezeit.md' }
 
@@ -278,5 +278,33 @@ describe('renderPullRequestBody — design', () => {
         'Merge = Freigabe dieser Stufe. Schließen ohne Merge setzt das Ticket in der App auf „bereit“ zurück.',
       ].join('\n'),
     )
+  })
+})
+
+describe('titleWithoutKey', () => {
+  it.each([
+    ['CB-1: X', 'X'],
+    ['cb-1 - X', 'X'],
+    ['CB-1 X', 'X'],
+    ['  CB-1:   X  ', 'X'],
+    ['Folge von CB-1', 'Folge von CB-1'],
+    ['CB-1', 'CB-1'],
+    ['CB-1: ', 'CB-1:'],
+    ['CB-10: X', 'CB-10: X'],
+  ])('%j -> %j', (title, expected) => {
+    expect(titleWithoutKey('CB-1', title)).toBe(expected)
+  })
+})
+
+describe('headings with an agent title that contains the key', () => {
+  const ticket = { key: 'CB-1', sourcePath: 'x.md' }
+
+  it('renderIntent does not repeat the key', () => {
+    expect(renderIntent(ticket, { ...INTENT, title: 'CB-1: X' }, [])).toContain('\n# CB-1: X\n')
+  })
+
+  it('renderSpec does not repeat the key', () => {
+    const spec = { title: 'cb-1 - X', goal: '', approach: { chosen: '', rationale: '', alternatives: [] }, components: [], dataFlow: '', errorHandling: '', acceptanceCriteria: [], tests: '', affectedFiles: [], risks: [], openPoints: [] } as unknown as Spec
+    expect(renderSpec(ticket, spec, [])).toContain('\n# CB-1: X\n')
   })
 })
