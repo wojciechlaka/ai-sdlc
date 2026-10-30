@@ -1,7 +1,7 @@
 # Feature Roadmap: Agentic AI SDLC Platform
 
 Ausrichtung: Anthropics [AI-Native SDLC Playbook](https://claude.com/resources/articles/the-ai-native-sdlc-playbook).
-Grundsatzentscheidungen: [decisions.md](decisions.md) (E1–E5).
+Grundsatzentscheidungen: [decisions.md](decisions.md) (E1–E6).
 
 ## 1. Ziel und Leitprinzipien
 

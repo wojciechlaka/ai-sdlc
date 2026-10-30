@@ -38,7 +38,7 @@ export const AuditEventSchema = z.discriminatedUnion('type', [
   event('run_finished', RunUsageSchema.extend({
     runId: z.string(),
     status: z.enum(['succeeded', 'failed', 'timeout']),
-    /** Why a run failed without an error of its own, e.g. `Neustart` or `verworfen` (German: shown in the log). */
+    /** Why a run failed without an error of its own, e.g. `Neustart`, `verworfen` or `grenze` (German: shown in the log). */
     reason: z.string().optional(),
   })),
   event('question_asked', z.object({ question: z.string() })),

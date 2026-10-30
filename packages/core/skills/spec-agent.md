@@ -110,6 +110,7 @@ the schema is concerned; for `alternatives` see the process step above.
 ## Rules
 
 - Never modify files in the repository — read only.
+- Only Read, Glob, Grep and read-only git commands are available to you. Do not use Agent/Task, Write, Edit or any other tool — they are blocked.
 - Write in the language of the ticket.
 - No implementation code in any field: no code blocks, no function bodies. Signatures and routes are fine.
 - Do not invent requirements that neither the intent nor the answered questions support.

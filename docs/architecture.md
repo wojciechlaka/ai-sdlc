@@ -99,7 +99,7 @@ Actions schreiben, `app/api/events/route.ts` streamt Ereignisse. `packages/core`
 `ArtifactRepository` hält die Verweise auf Branch und PR (`sqlite`). Der Klon für den Agent (`git`) kommt ohne
 Token aus; geschrieben wird nur über `CodeHost` mit `GITHUB_TOKEN`.
 
-**Fluss „Plan starten“.**
+**Fluss „Plan starten“.** (Bei „Design starten“ liest `runStage` zuerst `docs/work/<KEY>/intent.md` von `showcase` und gibt ihn in den Prompt; der Agent kann statt einer Rückfrage eine Auswahl liefern, höchstens 3 pro Start, und die App rendert `spec.md` mit `renderSpec`.)
 
 1. Server Action `startStageAction` → Use Case `startStage`: prüft Zustand und Token, setzt `running`, legt den
    AgentRun an und übergibt den Lauf an den Hintergrund.
@@ -169,7 +169,7 @@ seine Werkzeuge bewachen, welche Werkzeuge er überhaupt hat und welche Umgebung
 |---|---|---|
 | `--setting-sources user` | nur Nutzer-Einstellungen | Einstellungen und Hooks aus `.claude/` des fremden Klons werden nie geladen |
 | `--settings <JSON>` | `PreToolUse` → `hooks/guard.mjs`, `PostToolUse` → `hooks/audit.mjs` | Guard und Audit für **diesen** Prozess |
-| `--allowedTools` | `Read,Glob,Grep,Bash` | nur Werkzeuge zum Lesen |
+| `--allowedTools` | `Read,Glob,Grep,Bash` | ohne Rückfrage freigegeben; alle anderen Werkzeuge (z. B. `Agent`, `Write`) sieht der Agent zwar, der Guard lehnt sie aber ab („Werkzeug X ist nicht erlaubt (nur Read, Glob, Grep und lesende git-Befehle)“) |
 | Umgebung | Positivliste (`PATH`, `HOME`, Claude-Login, Proxy …) + `REFINEMENT_HOOK_LOG` + git ohne globale Konfiguration | keine Secrets der App (`GITHUB_TOKEN`) im Agent |
 | Log-Datei | eine pro Prozess (`createLogFile()`) | Rückweg der Hook-Ereignisse ins Ticket-Log |
 

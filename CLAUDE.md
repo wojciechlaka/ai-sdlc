@@ -11,7 +11,7 @@ npm run build        # tsc --noEmit for packages + next build
 npm test             # all workspace tests (Vitest)
 npm run lint         # ESLint in all workspaces: control-flow style; core also hexagon rule + hook scripts
 npm run eval:guard   # guard eval: real `claude` (Haiku) in the app sandbox — costs ~5 cents, needs `claude login`
-npm run eval:spec    # spec quality eval: real spec agent (Sonnet) + judge (Haiku) on a fixture repo — ~0.20–0.40 USD
+npm run eval:spec    # spec quality eval: real spec agent (Sonnet) + judge (Haiku) on a fixture repo — ~0.5–0.8 USD (measured 0.76)
 
 npm test -w packages/core                       # core only
 npm test -w packages/core -- src/domain/rules   # single file / pattern
@@ -117,8 +117,9 @@ running|awaiting_answer --stop--> ready
    `claude --print --output-format stream-json`, validates, retries once on schema errors
 4. Question → `awaiting_answer` (`question_asked`); choice (design) → `awaiting_answer` (`choice_offered`). A question
    or choice with 0 left (`questionsRemaining` in `domain/rules.ts`, counted from the latest `initial` run) fails the
-   stage. `answerQuestion` takes `{ answer }` or `{ choice, note? }` (stored as "Ansatz B: <Titel> — Anmerkung: …")
-   and starts a new run with the Q&A history. Intent → `renderIntent`, spec → `renderSpec`
+   stage; `executeRun` checks this before `recordSucceededRun`, so the run is stored as failed (log reason `grenze`,
+   usage kept) and does not count as a question. `answerQuestion` takes `{ answer }` or `{ choice, note? }` (stored as "Ansatz B: <Titel> — Anmerkung: …")
+   and starts a new run with the Q&A history. Intent → `renderIntent`, spec → `renderSpec` (heading `# KEY: title` via `titleWithoutKey`, since the app adds the key; `#` at a line start of agent text is escaped, so the agent cannot add sections)
    → `publishArtifact`: delete leftover branch, create branch, commit file, open PR → artifact + `in_review`
 5. `syncReviews` (timer every 60 s, and on every ticket page view) reads PR state: merged → next stage; closed → ready
 6. Events reach the browser via `GET /api/events?ticketKey=` (ticket page) or `GET /api/events` (board);
@@ -221,6 +222,7 @@ makes `startStage`/`answerQuestion` throw a `ConflictError`.
 - `packages/core/hooks/{guardPolicy,guard,audit,hookIo}.mjs` — guard/audit hook scripts for the agent (spec §13)
 - `packages/core/src/adapters/agentSandbox/agentSandbox.ts` — flags, hook settings and env allowlist of every `claude`
   process
+- `apps/web/lib/inlineCode.tsx` — backtick pairs in question/choice texts rendered as `<code>` (`ChoicePanel`, `QuestionPanel`)
 - `packages/core/skills/intent-agent.md`, `spec-agent.md` — skills of stage 1 and 2, included verbatim in the prompt
 
 ### Adding things
@@ -254,8 +256,9 @@ makes `startStage`/`answerQuestion` throw a `ConflictError`.
 
 - **Language:** identifiers, code comments, JSDoc, test names and server log lines (`console.*`, `reporter.log`) are
   English. Everything a user or the agent sees is German: UI texts, progress events, audit/log entries shown on the
-  ticket page, startup warnings, PR titles/bodies, commit messages in the target repo, prompts, skill files and the
-  guard's deny reasons. A log line that echoes such a text (e.g. a progress message also written to the server log)
+  ticket page, startup warnings, PR titles/bodies, commit messages in the target repo, the prompts sent to the agent and the
+  guard's deny reasons. Skill files give their instructions in English; their output templates, section names and
+  everything the agent produces are German. A log line that echoes such a text (e.g. a progress message also written to the server log)
   quotes it unchanged. Developer-facing CLI output such as the eval reports (`npm run eval:guard`, `eval:spec`) is German too, and
   so are the commit messages of this repository (`refactor: …`, `feat: …`).
 - **Thrown errors:** a message that can reach the UI is German — `ConflictError`/`ValidationError`/`NotFoundError`,

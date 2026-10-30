@@ -80,12 +80,15 @@ Gerenderte Bilder gibt es nur für die Übersichtsseite (`docs/architecture.png`
 **Entscheidung.** Was der Agent darf, steht nicht nur im Skill, sondern wird als Code durchgesetzt und geprüft:
 
 - **Sandbox** für jeden `claude`-Prozess (`adapters/agentSandbox`): nur Nutzer-Einstellungen (nichts aus `.claude/`
-  des fremden Klons), nur lesende Werkzeuge, Umgebung aus einer Positivliste ohne `GITHUB_TOKEN`.
+  des fremden Klons), nur lesende Werkzeuge freigegeben (alle anderen sieht der Agent, der Guard lehnt sie ab), Umgebung aus einer Positivliste ohne `GITHUB_TOKEN`.
 - **Hooks** von Claude Code (`packages/core/hooks/`): der Guard (`PreToolUse`) lässt Lesen nur im Klon und Bash nur
   für lesende git-Befehle zu und scheitert geschlossen; das Audit (`PostToolUse`) hält jeden Aufruf fest. Beides
   landet als `guard_blocked`/`tool_used` im Log des Tickets.
 - **Eval** (`packages/core/evals/guard.eval.ts`, `npm run eval:guard`): ein echter Agent versucht verbotene und
   erlaubte Aufrufe; geprüft wird das Hook-Log.
+- **Eval Spec** (`packages/core/evals/spec.eval.ts`, `npm run eval:spec`): der echte Design-Agent läuft gegen ein
+  Fixture-Repo; feste Prüfungen plus Bewertung durch ein zweites Modell ohne Werkzeuge. Kostet etwa 0,50–0,80 $ pro
+  Lauf, läuft nur auf Aufruf und nicht in `npm test`.
 - **Kein MCP-Server, über den der Agent in die DB schreibt.** Zustände ändern nur die Use Cases nach den Regeln
   der Domäne; der Agent liefert Rückfrage oder Ergebnis, die App handelt.
 

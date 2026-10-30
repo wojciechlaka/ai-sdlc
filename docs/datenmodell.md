@@ -106,7 +106,7 @@ Spec = {
 Die offene Rückfrage oder Auswahl eines Tickets ist die `question` bzw. `choice` des letzten Laufs der aktuellen Stufe
 (`TicketDetailDto.pendingQuestion` / `pendingChoice`). In Stufe 2 zählt die App Rückfragen und Auswahlen ab dem
 letzten Lauf mit `trigger: initial` (`questionsAsked`, Grenze `questionLimit` = 3). Das Ergebnis wird
-nicht als Inhalt gelesen: die App rendert daraus `intent.md` und legt die Datei per PR ab.
+nicht als Inhalt gelesen: die App rendert daraus `intent.md` bzw. `spec.md` und legt die Datei per PR ab.
 
 `successCriteria` sind beobachtbare, prüfbare Aussagen aus Nutzer- oder Fachsicht ohne Lösungsdetails (keine
 Endpunkte, Felder, Dateien). Akzeptanzkriterien bleiben in der Spec (Stufe 2) und werden daraus abgeleitet.
@@ -142,7 +142,7 @@ Das Log pro Ticket, append-only (Tabelle `audit_events`); die Ticketseite zeigt 
 | `id` | string | zufällige Hex-ID |
 | `ticket_key` | FK → Ticket | |
 | `actor` | enum | `human \| agent \| system` |
-| `type` | string | siehe Tabelle unten (`AuditEventType` in `ports/auditLog.ts`) |
+| `type` | string | siehe Tabelle unten (`AuditEventType` in `packages/shared/src/auditEvents.ts`) |
 | `payload` | JSON, nullable | je nach Typ |
 | `created_at` | timestamp | |
 
@@ -150,7 +150,7 @@ Das Log pro Ticket, append-only (Tabelle `audit_events`); die Ticketseite zeigt 
 |---|---|---|
 | `ticket_imported` | system | `{ sourcePath }` |
 | `run_started` | system | `{ runId, stage, trigger, model }` |
-| `run_finished` | agent (Erfolg), system (sonst) | `{ runId, status, reason? }`, bei Erfolg oder verworfenem Ergebnis zusätzlich `{ model, durationSeconds, costUsd, inputTokens, cacheCreationTokens, cacheReadTokens, outputTokens }` |
+| `run_finished` | agent (Erfolg), system (sonst) | `{ runId, status, reason? }` (`reason` z. B. `Neustart`, `verworfen`, `grenze`), bei Erfolg oder verworfenem Ergebnis zusätzlich `{ model, durationSeconds, costUsd, inputTokens, cacheCreationTokens, cacheReadTokens, outputTokens }` |
 | `question_asked` | agent | `{ question }` |
 | `choice_offered` | agent | `{ question, options: { id, title }[], recommended }` — Auswahl des Design-Agents |
 | `answer_given` | human | `{ answer, choice? }` — bei einer Auswahl ist `answer` „Ansatz B: <Titel> — Anmerkung: …“ und `choice` die id |
@@ -178,7 +178,7 @@ StageCost   = { usd, runs, inputTokens, outputTokens }
   aus dem `AgentRun`; ein Lauf ohne bekannte Stufe zählt nur in der Gesamtsumme.
 - **Kosten:** `costUsd`, wie die CLI sie meldet (`total_cost_usd`) — nicht die Schätzung aus der Preistabelle, die das
   Web für einzelne Log-Zeilen ohne gemeldete Kosten nutzt (`apps/web/lib/pricing.ts`).
-- **Mitgezählt:** erfolgreiche Läufe und verworfene Ergebnisse (`reason: 'verworfen'`, mit Verbrauch); Läufe ohne
+- **Mitgezählt:** erfolgreiche Läufe und verworfene Ergebnisse (`reason: 'verworfen'`, mit Verbrauch) und Läufe über der Rückfragen-Grenze (`reason: 'grenze'`, mit Verbrauch); Läufe ohne
   Claude-Ergebnis (Stopp, Neustart, Fehler, Zeitlimit) zählen als Lauf mit Kosten 0.
 - **Input-Tokens:** ungecachter Input plus Cache-Schreibvorgänge (`runInputTokens` in `auditEvents.ts`, dieselbe
   Regel wie die Log-Zeile); Cache-Lesevorgänge bleiben außen vor.

@@ -3,7 +3,7 @@
 // started with 0 questions left. Fixed checks (no model) plus a judge model scoring the rubric of specRubric.ts.
 // The printed report is German (it is read by the user like the rest of the app).
 //
-// Run: `npm run eval:spec` (repo root). Needs `claude login`, costs about 0.20–0.40 USD (Sonnet + Haiku).
+// Run: `npm run eval:spec` (repo root). Needs `claude login`, costs about 0.5–0.8 USD (Sonnet + Haiku).
 // Not part of `npm test`. Models: `EVAL_MODEL` (spec agent, default Sonnet), `EVAL_JUDGE_MODEL` (judge, default
 // Haiku); threshold: `EVAL_MIN_SCORE` (default 3). New case: add it to SPEC_CASES in specCases.ts.
 import { execFileSync, spawnSync } from 'child_process'

@@ -55,6 +55,7 @@ technologies. These are not acceptance criteria — those follow in stage 2 (Des
 ## Rules
 
 - Never modify files in the repository — read only.
+- Only Read, Glob, Grep and read-only git commands are available to you. Do not use Agent/Task, Write, Edit or any other tool — they are blocked.
 - Write in the language of the ticket.
 - Do not invent requirements that neither the ticket nor the answered questions support.
 - Stay at the level of problem and outcome; mention code only where it explains today's behaviour.

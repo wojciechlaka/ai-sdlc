@@ -176,7 +176,7 @@ zwei Intents, ohne Rückfragen. Feste Prüfungen: Spec geliefert, betroffene Dat
 markierte), mindestens so viele Akzeptanz- wie Erfolgskriterien, kein Code-Block, eine verworfene Alternative mit
 Grund. Danach bewertet ein zweites Modell (Haiku, ohne Werkzeuge) Abdeckung, Prüfbarkeit, Passung zur Codebase,
 YAGNI und Konsistenz mit 1–5; unter 3 (`EVAL_MIN_SCORE`) schlägt der Eval fehl. Ausgabe als Tabelle mit Kosten und
-Dauer, etwa 0,20–0,40 $ pro Lauf (`EVAL_MODEL`, Vorgabe Sonnet; `EVAL_JUDGE_MODEL`); nicht Teil von `npm test`.
+Dauer, etwa 0,50–0,80 $ pro Lauf (gemessen: 0,76 $) (`EVAL_MODEL`, Vorgabe Sonnet; `EVAL_JUDGE_MODEL`); nicht Teil von `npm test`.
 
 ## Neues Ticket
 
