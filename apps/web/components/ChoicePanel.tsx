@@ -4,6 +4,7 @@ import { useState } from 'react'
 import type { ChoiceId, PendingChoice } from '@refinement/shared'
 import { answerQuestionAction } from '@/app/actions'
 import { useServerAction } from '@/hooks/useServerAction'
+import { inlineCode } from '@/lib/inlineCode'
 import { Button } from './ui/button'
 import { Textarea } from './ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
@@ -48,7 +49,7 @@ export function ChoicePanel({ ticketKey, choice, counter, onAnswered, onCancel, 
       </CardHeader>
       <CardContent className="space-y-3">
         <fieldset className="space-y-2">
-          <legend className="mb-2 text-sm">{choice.question}</legend>
+          <legend className="mb-2 text-sm">{inlineCode(choice.question)}</legend>
           {choice.options.map((option) => {
             const recommended = option.id === choice.recommended
             const baseId = `choice-${ticketKey}-${option.id}`
@@ -66,16 +67,16 @@ export function ChoicePanel({ ticketKey, choice, counter, onAnswered, onCancel, 
                 />
                 <span className="block space-y-1">
                   <span id={`${baseId}-title`} className="font-medium">
-                    Ansatz {option.id}: {option.title}
+                    Ansatz {option.id}: {inlineCode(option.title)}
                     {recommended && <span className="ml-2 rounded bg-amber-200 px-1.5 py-0.5 text-xs">empfohlen</span>}
                   </span>
                   <span id={`${baseId}-details`} className="block space-y-1">
-                    <span className="block text-slate-700">{option.description}</span>
+                    <span className="block text-slate-700">{inlineCode(option.description)}</span>
                     {option.pros.map((pro, index) => (
-                      <span key={index} className="block text-emerald-700">+ {pro}</span>
+                      <span key={index} className="block text-emerald-700">+ {inlineCode(pro)}</span>
                     ))}
                     {option.cons.map((con, index) => (
-                      <span key={index} className="block text-red-700">− {con}</span>
+                      <span key={index} className="block text-red-700">− {inlineCode(con)}</span>
                     ))}
                   </span>
                 </span>

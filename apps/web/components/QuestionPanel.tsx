@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { answerQuestionAction } from '@/app/actions'
 import { useServerAction } from '@/hooks/useServerAction'
+import { inlineCode } from '@/lib/inlineCode'
 import { Button } from './ui/button'
 import { Textarea } from './ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
@@ -39,7 +40,7 @@ export function QuestionPanel({ ticketKey, question, counter, onAnswered }: Prop
         {counter && <p className="text-xs text-amber-800">{counter}</p>}
       </CardHeader>
       <CardContent className="space-y-3">
-        <p className="text-sm">{question}</p>
+        <p className="text-sm">{inlineCode(question)}</p>
         <Textarea value={answer} onChange={(e) => setAnswer(e.target.value)} rows={3} placeholder="Antwort eingeben…" />
         {error && (
           <p role="alert" className="text-sm text-red-600">

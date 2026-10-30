@@ -105,4 +105,15 @@ describe('ChoicePanel', () => {
     radios[0]!.focus()
     expect(radios[0]).toHaveFocus()
   })
+
+  it('renders backtick text as code elements instead of literal backticks', () => {
+    const choice: PendingChoice = {
+      ...CHOICE,
+      options: [{ ...CHOICE.options[0], description: 'Setzt `draft=true` beim Anlegen.' }, CHOICE.options[1]],
+    }
+    renderPanel({ choice })
+    const code = screen.getByText('draft=true')
+    expect(code.tagName).toBe('CODE')
+    expect(screen.queryByText(/`/)).not.toBeInTheDocument()
+  })
 })
