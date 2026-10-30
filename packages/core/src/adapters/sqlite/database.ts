@@ -32,13 +32,19 @@ function dropLegacySchema(sqlite: Database.Database): void {
   console.warn('[db] Database in the old schema found — rebuilt')
 }
 
+/** Where the database file and its migrations are. */
+export interface SqliteDatabaseOptions {
+  /** File path, or `:memory:` for tests. */
+  path: string
+  /** Absolute path to `packages/core/drizzle`. */
+  migrationsFolder: string
+}
+
 /**
  * Opens (or creates) the SQLite database, enables foreign keys and applies all migrations.
- * @param options.path             - File path, or `:memory:` for tests.
- * @param options.migrationsFolder - Absolute path to `packages/core/drizzle`.
  * @throws If a migration fails — the app must not start on a broken schema.
  */
-export function createSqliteDatabase(options: { path: string; migrationsFolder: string }): SqliteDb {
+export function createSqliteDatabase(options: SqliteDatabaseOptions): SqliteDb {
   if (options.path !== IN_MEMORY) {
     fs.mkdirSync(path.dirname(options.path), { recursive: true })
   }

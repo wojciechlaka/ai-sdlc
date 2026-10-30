@@ -84,11 +84,17 @@ export async function createHookLogFile(): Promise<HookLogFile> {
 /** Flags of a headless `claude` call whose stream-json output the adapters parse line by line. */
 const HEADLESS_ARGS = ['--print', '--output-format', 'stream-json', '--verbose']
 
+/** Where the guard and audit hook scripts are. */
+export interface AgentSandboxOptions {
+  /** `packages/core/hooks` */
+  hooksDir: string
+}
+
 /**
  * Sandbox for the `claude` processes of the app. `--setting-sources user` keeps project and local settings of the
  * untrusted clone (`.claude/settings*.json`, including their hooks) from being loaded.
  */
-export function createAgentSandbox(options: { hooksDir: string }): ClaudeProcessSandbox {
+export function createAgentSandbox(options: AgentSandboxOptions): ClaudeProcessSandbox {
   const args = Object.freeze([
     '--setting-sources', 'user',
     '--settings', hookSettings(options.hooksDir),
