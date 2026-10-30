@@ -70,7 +70,35 @@ function runInBackground(task: Promise<void>): void {
   task.catch((err) => console.error('[background] unhandled error in agent run', err))
 }
 
-/** Composition of the production adapters. Call once per process and keep the result. */
+/**
+ * Composition root of the core: builds every production adapter, wires them into the use cases and returns the
+ * engine the app talks to. This is the only place that knows the concrete adapters; everything else sees ports.
+ *
+ * Wiring:
+ * - **Sandbox** (`agentSandbox`): one instance shared by every `claude` process — the stage agents (claudeCli) and
+ *   the codebase summary (git) — so no agent runs without the guard/audit hooks.
+ * - **Database** (SQLite/Drizzle): opened at `dbPath`, migrations applied; tickets, runs, artifacts and the audit
+ *   log share this one connection.
+ * - **Ticket source** (`examples/tickets/*.md`): the simulated Jira; read by `startup`.
+ * - **Code host** (GitHub): only with `githubToken`; without it `codeHost` is null, the app still shows tickets but
+ *   stages cannot be started.
+ * - **Agent runner** (Claude CLI) and **repo provider** (git clone in `repoCacheDir`, checkout of `baseBranch`).
+ * - **Events** (in-process bus) for the SSE route; **runInBackground** runs agent work detached from the request.
+ *
+ * Defaults for the optional fields: `baseBranch` = `SHOWCASE_BRANCH`, `baselineTag` = `BASELINE_TAG`,
+ * `agentTimeoutMs` = `DEFAULT_AGENT_TIMEOUT_MS`, `repoCacheDir` = `$TMPDIR/repo-cache`.
+ *
+ * Side effects: creates the database file (and its folder) and applies migrations. It does not touch GitHub or
+ * the tickets — call `startup()` on the result for that.
+ *
+ * Call once per process and keep the result (the web app keeps it on `globalThis`, see `apps/web/lib/container.ts`):
+ * a second engine would open a second connection, bus and reset flag.
+ *
+ * @param config - Paths, target repository, token and optional overrides; see `EngineConfig`.
+ * @returns The use cases (`UseCases`) — the only API of the core.
+ * @throws If `config.targetRepo` is not a GitHub repository URL (checked first, with or without token), or if a
+ *   database migration fails.
+ */
 export function createRefinementEngine(config: EngineConfig): UseCases {
   // Fail at start with the clear message, with or without token.
   parseGitHubRepoUrl(config.targetRepo)
