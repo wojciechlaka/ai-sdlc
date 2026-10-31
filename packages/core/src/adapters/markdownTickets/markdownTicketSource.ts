@@ -55,32 +55,39 @@ export interface MarkdownTicketSourceOptions {
  */
 export function createMarkdownTicketSource(options: MarkdownTicketSourceOptions): TicketSource {
   return {
-    list() {
-      if (!fs.existsSync(options.dir)) {
-        throw new Error(`Ticket-Ordner fehlt: ${options.dir}`)
-      }
-      const tickets: ExternalTicket[] = []
-      const seen = new Set<string>()
-      const names = fs.readdirSync(options.dir).filter((name) => name.endsWith(TICKET_FILE_EXTENSION)).sort()
-
-      for (const name of names) {
-        const file = path.join(options.dir, name)
-        const sourcePath = path.relative(options.rootDir, file).split(path.sep).join('/')
-        const ticket = parseTicketMarkdown(fs.readFileSync(file, TICKET_FILE_ENCODING), sourcePath)
-        if (!ticket) {
-          if (name !== README) {
-            console.warn(`[tickets] ${sourcePath}: first line is not a heading "# KEY-n: Title" — skipped`)
-          }
-          continue
-        }
-        if (seen.has(ticket.key)) {
-          console.warn(`[tickets] ${sourcePath}: duplicate key ${ticket.key} — skipped`)
-          continue
-        }
-        seen.add(ticket.key)
-        tickets.push(ticket)
-      }
-      return tickets.sort((a, b) => compareTicketKeys(a.key, b.key))
-    },
+    list: () => getAllMarkdownTickets(options),
   }
+}
+
+/**
+ * Reads every ticket file in `options.dir`, ordered by key. Files without a ticket heading and files with a key
+ * that was already read are skipped with a warning (README.md silently).
+ * @throws If `options.dir` does not exist.
+ */
+function getAllMarkdownTickets(options: MarkdownTicketSourceOptions): ExternalTicket[] {
+  if (!fs.existsSync(options.dir)) {
+    throw new Error(`Ticket-Ordner fehlt: ${options.dir}`)
+  }
+  const tickets: ExternalTicket[] = []
+  const seen = new Set<string>()
+  const names = fs.readdirSync(options.dir).filter((name) => name.endsWith(TICKET_FILE_EXTENSION)).sort()
+
+  for (const name of names) {
+    const file = path.join(options.dir, name)
+    const sourcePath = path.relative(options.rootDir, file).split(path.sep).join('/')
+    const ticket = parseTicketMarkdown(fs.readFileSync(file, TICKET_FILE_ENCODING), sourcePath)
+    if (!ticket) {
+      if (name !== README) {
+        console.warn(`[tickets] ${sourcePath}: first line is not a heading "# KEY-n: Title" — skipped`)
+      }
+      continue
+    }
+    if (seen.has(ticket.key)) {
+      console.warn(`[tickets] ${sourcePath}: duplicate key ${ticket.key} — skipped`)
+      continue
+    }
+    seen.add(ticket.key)
+    tickets.push(ticket)
+  }
+  return tickets.sort((a, b) => compareTicketKeys(a.key, b.key))
 }
