@@ -1,14 +1,14 @@
 import { describe, it, expect, vi } from 'vitest'
 import { AgentRunTerminatedError, CodeHostError } from '../ports'
-import { createTestContext, seedTicket, sourceTicket } from './fakes'
+import { createTestContext, seedTicket, externalTicket } from './doubles'
 
 describe('in-memory ticket repository', () => {
   it('inserts new tickets as plan/ready and keeps stage and state on update', () => {
     const { deps } = createTestContext()
-    expect(deps.tickets.upsertFromSource([sourceTicket('CB-10'), sourceTicket('CB-2')])).toEqual(['CB-10', 'CB-2'])
+    expect(deps.tickets.upsertFromSource([externalTicket('CB-10'), externalTicket('CB-2')])).toEqual(['CB-10', 'CB-2'])
     deps.tickets.update('CB-2', { stage: 'design', state: 'failed' })
 
-    expect(deps.tickets.upsertFromSource([sourceTicket('CB-2', { title: 'Neu' })])).toEqual([])
+    expect(deps.tickets.upsertFromSource([externalTicket('CB-2', { title: 'Neu' })])).toEqual([])
     expect(deps.tickets.findByKey('CB-2')).toMatchObject({ title: 'Neu', stage: 'design', state: 'failed' })
     expect(deps.tickets.list().map((t) => t.key)).toEqual(['CB-2', 'CB-10'])
   })
@@ -21,7 +21,7 @@ describe('in-memory ticket repository', () => {
   })
 })
 
-describe('FakeCodeHost', () => {
+describe('InMemoryCodeHost', () => {
   it('merges a PR like GitHub: the branch files land on the base branch', async () => {
     const { codeHost } = createTestContext()
     await codeHost.createBranch('CB-1/intent')
@@ -91,7 +91,7 @@ describe('FakeCodeHost', () => {
   })
 })
 
-describe('stricter fakes', () => {
+describe('stricter test doubles', () => {
   it('rejects PRs for missing, empty or already opened branches', async () => {
     const { codeHost } = createTestContext()
     await expect(codeHost.openPullRequest({ branch: 'x', title: 't', body: 'b' })).rejects.toMatchObject({ status: 422 })
@@ -128,7 +128,7 @@ describe('stricter fakes', () => {
   })
 })
 
-describe('FakeAgentRunner', () => {
+describe('ScriptedAgentRunner', () => {
   it('terminates a held run when it is stopped', async () => {
     const { agent } = createTestContext()
     const release = agent.hold()

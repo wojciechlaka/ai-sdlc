@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createTestDatabase } from '../../testing/testDb'
-import { sourceTicket } from '../../testing/fakes'
+import { externalTicket } from '../../testing/doubles'
 import { createSqliteTicketRepository } from './ticketRepository'
 import { createSqliteArtifactRepository } from './artifactRepository'
 import type { ArtifactRepository, TicketRepository } from '../../ports'
@@ -12,7 +12,7 @@ beforeEach(() => {
   const db = createTestDatabase()
   tickets = createSqliteTicketRepository(db)
   artifacts = createSqliteArtifactRepository(db)
-  tickets.upsertFromSource([sourceTicket('CB-1')])
+  tickets.upsertFromSource([externalTicket('CB-1')])
 })
 
 const open = (prNumber: number) =>

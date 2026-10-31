@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { CodeHostError } from '../ports'
 import {
-  SAMPLE_CHOICE_OUTPUT, SAMPLE_META, SAMPLE_SPEC_OUTPUT, createTestContext, errorCodeOf, seedTicket, sourceTicket, type TestContext,
-} from '../testing/fakes'
+  SAMPLE_CHOICE_OUTPUT, SAMPLE_META, SAMPLE_SPEC_OUTPUT, createTestContext, errorCodeOf, seedTicket, externalTicket, type TestContext,
+} from '../testing/doubles'
 import { answerQuestion, startStage, stopRun } from './stageCommands'
 import { syncReviews } from './syncReviews'
 import { resetSystem } from './startup'
 
-// Stage 2 (Design) end to end with fakes: start, choice, spec PR, merge → done, stop.
+// Stage 2 (Design) end to end with test doubles: start, choice, spec PR, merge → done, stop.
 
 const MODEL = { model: 'claude-sonnet-4-6' }
 const INTENT_PATH = 'docs/work/CB-2/intent.md'
@@ -248,7 +248,7 @@ describe('design stage — question limit', () => {
 describe('design stage — reset', () => {
   it('discards the result of a design agent that finishes after resetSystem', async () => {
     const ctx = setup()
-    ctx.source.tickets = [sourceTicket('CB-2')]
+    ctx.source.tickets = [externalTicket('CB-2')]
     const release = ctx.agent.hold()
     startStage(ctx.deps, 'CB-2', MODEL)
     await vi.waitFor(() => expect(ctx.agent.calls).toHaveLength(1))

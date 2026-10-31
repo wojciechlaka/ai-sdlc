@@ -215,9 +215,10 @@ makes `startStage`/`answerQuestion` throw a `ConflictError`.
   `codebaseSummary.ts` (summary prompt, in-flight dedupe, sandboxed summary run, blocked-call warnings; cache key = last
   commit outside `docs/work`, so showcase merges keep the summary; outdated files of the same model are deleted)
 - `packages/core/src/adapters/sqlite/schema.ts` — Drizzle schema: `tickets`, `agent_runs`, `artifacts`, `audit_events`
-- `packages/core/src/testing/` — test doubles, all re-exported by `fakes.ts` (tests import from there):
-  `inMemoryRepositories.ts`, `fakeCodeHost.ts` (GitHub-like semantics), `fakeTicketSource.ts`, `fakeAgentRunner.ts`
-  (`hold()`/`stop()`, scripted `progress`/`toolEvents`, recorded `callbacks`), `fakeRepoProvider.ts`, `samples.ts`,
+- `packages/core/src/testing/` — test doubles, all re-exported by `doubles.ts` (tests import from there):
+  `inMemoryRepositories.ts`, `inMemoryCodeHost.ts` (GitHub-like semantics), `inMemoryTicketSource.ts`,
+  `scriptedAgentRunner.ts` (`hold()`/`stop()`, scripted `progress`/`toolEvents`, recorded `callbacks`),
+  `inMemoryRepoProvider.ts`, `samples.ts` (`externalTicket()`, sample outputs),
   `testContext.ts` (`createTestContext({ token })`, `seedTicket`, `errorCodeOf`)
 - `packages/core/hooks/{guardPolicy,guard,audit,hookIo}.mjs` — guard/audit hook scripts for the agent (spec §13)
 - `packages/core/src/adapters/agentSandbox/agentSandbox.ts` — flags, hook settings and env allowlist of every `claude`
@@ -230,7 +231,7 @@ makes `startStage`/`answerQuestion` throw a `ConflictError`.
 - **New use case**: function in `packages/core/src/application/`, add it to `UseCases` in `createUseCases.ts`,
   test with `createTestContext()`
 - **New DB column/table**: `adapters/sqlite/schema.ts`, `npx drizzle-kit generate` in `packages/core`, extend the
-  port + both implementations (SQLite and in-memory fake)
+  port + both implementations (SQLite and in-memory)
 - **New stage agent**: skill file in `packages/core/skills/`, output schema in `packages/shared`, entry in
   `STAGE_AGENTS` (`adapters/claudeCli/index.ts`), add the stage to `STARTABLE_STAGES`
 - **Change what the agent may do**: edit `GIT_OPTIONS` / the checks in `packages/core/hooks/guardPolicy.mjs`

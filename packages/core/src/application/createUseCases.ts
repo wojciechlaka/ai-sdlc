@@ -32,7 +32,7 @@ export interface UseCases {
   startup(options?: StartupOptions): Promise<StartupReport>
 }
 
-/** Binds every use case to `deps`; `compose.ts` calls it with the real adapters, tests with fakes. */
+/** Binds every use case to `deps`; `compose.ts` calls it with the real adapters, tests with test doubles. */
 export function createUseCases(deps: UseCaseDeps): UseCases {
   return {
     listTickets: () => listTickets(deps),

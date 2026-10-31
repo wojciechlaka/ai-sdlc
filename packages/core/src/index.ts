@@ -8,7 +8,7 @@ export type { UseCaseDeps } from './application/deps'
 
 export { NotFoundError, ConflictError, ValidationError, errorCode } from './domain/errors'
 export type { DomainErrorCode } from './domain/errors'
-export type { Ticket, SourceTicket, AgentRun, AgentRunInput, Artifact, QAPair } from './domain/types'
+export type { Ticket, ExternalTicket, AgentRun, AgentRunInput, Artifact, QAPair } from './domain/types'
 
 export * from './ports'
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { CodeHostError } from '../ports'
-import { SAMPLE_CHOICE_OUTPUT, createTestContext, seedTicket, type TestContext } from '../testing/fakes'
+import { SAMPLE_CHOICE_OUTPUT, createTestContext, seedTicket, type TestContext } from '../testing/doubles'
 import { getSettings, getTicket, listTickets } from './queries'
 
 afterEach(() => {
