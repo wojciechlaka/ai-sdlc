@@ -1,6 +1,6 @@
 import { Octokit } from '@octokit/rest'
 import { WORK_DIR } from '../../domain/artifacts'
-import { CodeHostError, type CodeHost, type PullRequest } from '../../ports'
+import { CodeHostError, HTTP_NOT_FOUND, type CodeHost, type PullRequest } from '../../ports'
 
 /** Target repository, credentials and branch names of the GitHub adapter. */
 export interface GitHubCodeHostOptions {
@@ -19,7 +19,6 @@ export interface GitHubCodeHostOptions {
 const REQUEST_TIMEOUT_MS = 15_000
 const HTTP_UNAUTHORIZED = 401
 const HTTP_FORBIDDEN = 403
-const HTTP_NOT_FOUND = 404
 /** GitHub's answer for a rejected request, e.g. a ref that already exists or a protected branch. */
 const HTTP_UNPROCESSABLE = 422
 const HTTP_TOO_MANY_REQUESTS = 429
@@ -28,15 +27,15 @@ const MAX_TAG_DEPTH = 5
 /** Messages of a rejected force-update: classic branch protection or a ruleset. */
 const PROTECTED_RE = /protected|rule violation|force-push/i
 
-const REPO_URL_RE = /^https:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/
+const REPO_URL_RE = /^https:\/\/github\.com\/(?<owner>[^/]+)\/(?<repo>[^/]+?)(?:\.git)?\/?$/
 
 /** Owner and repository name of a GitHub URL. @throws {Error} (German, shown at startup) for any other URL. */
 export function parseGitHubRepoUrl(url: string): { owner: string; repo: string } {
-  const match = REPO_URL_RE.exec(url.trim())
+  const match = REPO_URL_RE.exec(url.trim())?.groups
   if (!match) {
     throw new Error(`TARGET_REPO ist keine GitHub-URL (https://github.com/<owner>/<repo>): ${url}`)
   }
-  return { owner: match[1]!, repo: match[2]! }
+  return { owner: match.owner!, repo: match.repo! }
 }
 
 const STATUS_HINT: Record<number, string> = {

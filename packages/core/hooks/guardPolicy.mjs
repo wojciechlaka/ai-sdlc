@@ -26,6 +26,14 @@ import path from 'node:path'
  * @typedef {string | RegExp} OptionRule
  */
 
+const READ_TOOL = 'Read'
+const GLOB_TOOL = 'Glob'
+const GREP_TOOL = 'Grep'
+const BASH_TOOL = 'Bash'
+/** Tools the agent may use; same list as SANDBOX_TOOLS in src/ports (checked by guardPolicy.test.ts). */
+export const ALLOWED_TOOLS = [READ_TOOL, GLOB_TOOL, GREP_TOOL, BASH_TOOL]
+const FILE_TOOLS = [READ_TOOL, GLOB_TOOL, GREP_TOOL]
+
 const MAX_COMMAND_CHARS = 300
 const DEFAULT_TARGET_CHARS = 200
 
@@ -209,7 +217,7 @@ function decideFileTool(tool, input, cwd) {
   }
   /** @type {(string | null)[]} */
   const reasons = []
-  if (tool === 'Read') {
+  if (tool === READ_TOOL) {
     const file = optionalString(input, 'file_path')
     reasons.push(file ? outsideReason(file, cwd) : 'Datei fehlt')
   } else {
@@ -217,7 +225,7 @@ function decideFileTool(tool, input, cwd) {
     if (dir !== undefined) {
       reasons.push(outsideReason(dir, cwd))
     }
-    const pattern = optionalString(input, tool === 'Glob' ? 'pattern' : 'glob')
+    const pattern = optionalString(input, tool === GLOB_TOOL ? 'pattern' : 'glob')
     if (pattern !== undefined) {
       reasons.push(globReason(pattern))
     }
@@ -234,10 +242,10 @@ function decideFileTool(tool, input, cwd) {
 export function decide(call) {
   const tool = typeof call.tool_name === 'string' ? call.tool_name : ''
   const input = /** @type {Record<string, unknown>} */ (call.tool_input && typeof call.tool_input === 'object' ? call.tool_input : {})
-  if (tool === 'Read' || tool === 'Glob' || tool === 'Grep') {
+  if (FILE_TOOLS.includes(tool)) {
     return decideFileTool(tool, input, call.cwd)
   }
-  if (tool === 'Bash') {
+  if (tool === BASH_TOOL) {
     return typeof input.command === 'string' ? decideBash(input.command) : denyBash('Bash ohne Befehl')
   }
   return deny(`Werkzeug ${tool || 'unbekannt'} ist nicht erlaubt (nur Read, Glob, Grep und lesende git-Befehle)`)

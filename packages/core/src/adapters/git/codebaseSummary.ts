@@ -1,8 +1,9 @@
 import path from 'path'
 import { execFileSync, spawn } from 'child_process'
 import fsPromises from 'fs/promises'
-import type { ClaudeProcessSandbox } from '../../ports'
+import { parseToolEvent, type ClaudeProcessSandbox } from '../../ports'
 import { describeError } from '../../domain/errors'
+import { WORK_DIR } from '../../domain/artifacts'
 
 // Codebase summary: one sandboxed `claude` run per code state (last commit outside docs/work) and model, cached as
 // a Markdown file in the clone and
@@ -10,6 +11,9 @@ import { describeError } from '../../domain/errors'
 
 // Same value as in adapters/claudeCli/errors.ts; adapters must not import each other (architecture test).
 const STDERR_PREVIEW_CHARS = 200
+/** Summary files live in the clone root: `codebase-summary-<commit>-<model>.md`. */
+const SUMMARY_FILE_PREFIX = 'codebase-summary-'
+const SUMMARY_FILE_EXTENSION = '.md'
 
 /** Configuration of the summary run. */
 export interface CodebaseSummaryOptions {
@@ -38,7 +42,7 @@ Naming conventions, architectural patterns, code style decisions.
 ## Wo man was findet
 Where to add a new API endpoint, component, model, etc.
 
-Ignore the directory docs/work/: it holds work artifacts that change with every merge or reset; the summary is
+Ignore the directory ${WORK_DIR}/: it holds work artifacts that change with every merge or reset; the summary is
 about the code.
 
 Be concise. Focus on what a developer needs to quickly understand the codebase.`
@@ -49,7 +53,7 @@ Be concise. Focus on what a developer needs to quickly understand the codebase.`
  * @param repoDir - Absolute path to the cloned repository directory.
  */
 export function getCommitHash(repoDir: string): string {
-  const last = execFileSync('git', ['log', '-1', '--format=%H', '--', '.', ':(exclude)docs/work'], {
+  const last = execFileSync('git', ['log', '-1', '--format=%H', '--', '.', `:(exclude)${WORK_DIR}`], {
     cwd: repoDir,
     stdio: 'pipe',
   })
@@ -61,13 +65,22 @@ export function getCommitHash(repoDir: string): string {
   return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repoDir, stdio: 'pipe' }).toString().trim()
 }
 
+/** File name of the summary of one code state and model. */
+function summaryFileName(commitHash: string, model: string): string {
+  return `${SUMMARY_FILE_PREFIX}${commitHash}-${model}${SUMMARY_FILE_EXTENSION}`
+}
+
+/** True for a summary file of `model`, whatever its commit hash. */
+function isSummaryFileOf(name: string, model: string): boolean {
+  return name.startsWith(SUMMARY_FILE_PREFIX) && name.endsWith(`-${model}${SUMMARY_FILE_EXTENSION}`)
+}
+
 /** Removes summaries of the same model for other keys; failures are irrelevant. */
 async function removeOutdatedSummaries(repoDir: string, keepPath: string, model: string): Promise<void> {
   const names = await fsPromises.readdir(repoDir).catch(() => [] as string[])
-  const suffix = `-${model}.md`
   for (const name of names) {
     const full = path.join(repoDir, name)
-    if (name.startsWith('codebase-summary-') && name.endsWith(suffix) && full !== keepPath) {
+    if (isSummaryFileOf(name, model) && full !== keepPath) {
       await fsPromises.rm(full, { force: true }).catch(() => {})
     }
   }
@@ -80,12 +93,10 @@ const inFlight = new Map<string, Promise<string | null>>()
 async function warnBlockedCalls(logFile: string): Promise<void> {
   const content = await fsPromises.readFile(logFile, 'utf-8').catch(() => '')
   for (const line of content.split('\n')) {
-    try {
-      const entry = JSON.parse(line) as Record<string, unknown>
-      if (entry.kind === 'blocked') {
-        console.warn(`[codebaseSummary] Blocked: ${entry.tool} ${entry.target} — ${entry.reason}`)
-      }
-    } catch { /* empty or partial line */ }
+    const event = parseToolEvent(line)
+    if (event?.kind === 'blocked') {
+      console.warn(`[codebaseSummary] Blocked: ${event.tool} ${event.target} — ${event.reason}`)
+    }
   }
 }
 
@@ -138,7 +149,7 @@ export async function ensureRepoSummary(
 ): Promise<string | null> {
   try {
     const hash = getCommitHash(repoDir)
-    const summaryPath = path.join(repoDir, `codebase-summary-${hash}-${model}.md`)
+    const summaryPath = path.join(repoDir, summaryFileName(hash, model))
 
     const cached = await fsPromises.readFile(summaryPath, 'utf-8').catch(() => null)
     if (cached) {

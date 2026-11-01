@@ -1,7 +1,7 @@
 /** Ticket keys as in Jira: upper-case prefix, dash, number (`CB-3`). */
 export const TICKET_KEY_PATTERN = '[A-Z][A-Z0-9]*-\\d+'
 
-const KEY_RE = /^([A-Z][A-Z0-9]*)-(\d+)$/
+const KEY_RE = /^(?<prefix>[A-Z][A-Z0-9]*)-(?<number>\d+)$/
 
 /** True for a whole Jira-style key such as `CB-3`. */
 export function isTicketKey(value: string): boolean {
@@ -10,10 +10,10 @@ export function isTicketKey(value: string): boolean {
 
 /** Orders by prefix, then by number, so CB-2 comes before CB-10. */
 export function compareTicketKeys(a: string, b: string): number {
-  const ma = KEY_RE.exec(a)
-  const mb = KEY_RE.exec(b)
-  if (!ma || !mb) {
+  const ka = KEY_RE.exec(a)?.groups
+  const kb = KEY_RE.exec(b)?.groups
+  if (!ka || !kb) {
     return a.localeCompare(b)
   }
-  return ma[1]!.localeCompare(mb[1]!) || Number(ma[2]) - Number(mb[2])
+  return ka.prefix!.localeCompare(kb.prefix!) || Number(ka.number) - Number(kb.number)
 }

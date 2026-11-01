@@ -2,21 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { openHookLog, parseToolEvent } from './hookLog'
-
-describe('parseToolEvent', () => {
-  it.each([
-    ['{"kind":"used","tool":"Read","target":"a.ts","at":"x"}', { kind: 'used', tool: 'Read', target: 'a.ts' }],
-    ['{"kind":"blocked","tool":"Bash","target":"rm x","reason":"nein"}', { kind: 'blocked', tool: 'Bash', target: 'rm x', reason: 'nein' }],
-    ['{"kind":"used","tool":"Bash","target":"git status","exitCode":2}', { kind: 'used', tool: 'Bash', target: 'git status' }],
-    ['{"kind":"other","tool":"Bash"}', null],
-    ['{"kind":"used"}', null],
-    ['kein json', null],
-    ['', null],
-  ])('parses %s', (line, expected) => {
-    expect(parseToolEvent(line)).toEqual(expected)
-  })
-})
+import { openHookLog } from './hookLog'
 
 describe('openHookLog', () => {
   it('cleans up the log file and rethrows when it cannot be opened', async () => {

@@ -1,5 +1,5 @@
 import { WORK_DIR } from '../domain/artifacts'
-import { CodeHostError, type BaseBranchPreparation, type CodeHost, type PullRequest } from '../ports'
+import { CodeHostError, HTTP_NOT_FOUND, type BaseBranchPreparation, type CodeHost, type PullRequest } from '../ports'
 import { TEST_REPO_URL } from './samples'
 
 type CodeHostMethod = keyof CodeHost
@@ -49,7 +49,7 @@ export class InMemoryCodeHost implements CodeHost {
 
   private requirePull(number: number): RecordedPullRequest {
     const pr = this.pulls.find((p) => p.number === number)
-    if (!pr) throw new CodeHostError(404, `PR #${number} nicht gefunden`)
+    if (!pr) throw new CodeHostError(HTTP_NOT_FOUND, `PR #${number} nicht gefunden`)
     return pr
   }
 
@@ -103,7 +103,7 @@ export class InMemoryCodeHost implements CodeHost {
   async commitFile(input: { branch: string; path: string; content: string; message: string }): Promise<void> {
     this.enter('commitFile')
     const files = this.branches.get(input.branch)
-    if (!files) throw new CodeHostError(404, `Branch ${input.branch} nicht gefunden`)
+    if (!files) throw new CodeHostError(HTTP_NOT_FOUND, `Branch ${input.branch} nicht gefunden`)
     files.set(input.path, input.content)
   }
 

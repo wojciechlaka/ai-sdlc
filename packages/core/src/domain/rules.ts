@@ -1,11 +1,13 @@
 import type { AnswerInput, ChoiceId, ChoiceOption, ChoiceOutput, QuestionOutput } from '@refinement/shared'
 import type { AgentRun, ArtifactStage, QAPair, Stage, Ticket, TicketState } from './types'
 import { ValidationError } from './errors'
+import { ARTIFACT_STAGES } from './artifacts'
 
 /** Stages that can be started; a stage is added once it has an agent (`STAGE_AGENTS` in adapters/claudeCli). */
 export const STARTABLE_STAGES: readonly ArtifactStage[] = ['plan', 'design']
 
-const STAGE_ORDER: readonly Stage[] = ['plan', 'design', 'done']
+/** Playbook order: every artifact stage, then `done`. */
+const STAGE_ORDER: readonly Stage[] = [...ARTIFACT_STAGES, 'done']
 
 /** The artifact stage the ticket is in; null once it is `done`. */
 export function currentArtifactStage(ticket: Pick<Ticket, 'stage'>): ArtifactStage | null {
