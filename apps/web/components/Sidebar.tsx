@@ -2,13 +2,14 @@ import Link from 'next/link'
 import type { SettingsDto } from '@refinement/shared'
 import { Separator } from './ui/separator'
 import { ResetButton } from './ResetButton'
+import { BOARD_PATH } from '@/lib/routes'
 
 /** Navigation, target repository (from `TARGET_REPO`, read-only) with the branch the app works on, and reset. */
 export function Sidebar({ settings }: { settings: SettingsDto }) {
   const repoSlug = settings.repoUrl.replace('https://github.com/', '')
   return (
     <aside className="flex w-64 shrink-0 flex-col border-r border-slate-200">
-      <Link href="/" className="px-4 py-3 text-sm font-semibold uppercase tracking-wide text-slate-500 hover:text-slate-900">
+      <Link href={BOARD_PATH} className="px-4 py-3 text-sm font-semibold uppercase tracking-wide text-slate-500 hover:text-slate-900">
         Board
       </Link>
       <Separator />

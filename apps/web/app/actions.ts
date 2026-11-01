@@ -5,10 +5,11 @@ import type { StartupReport } from '@refinement/core'
 import type { AnswerInput } from '@refinement/shared'
 import { getEngine } from '@/lib/container'
 import { runAction, type ActionResult } from '@/lib/actionResult'
+import { APP_ROOT } from '@/lib/routes'
 
 /** Board and ticket pages both show ticket state — refresh the whole tree. */
 function refreshAll(): void {
-  revalidatePath('/', 'layout')
+  revalidatePath(APP_ROOT, 'layout')
 }
 
 /** Starts the ticket's current stage with the chosen model; the agent runs in the background. */
