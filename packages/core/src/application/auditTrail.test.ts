@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { AuditEventType } from '../ports'
-import { createTestContext, seedTicket } from '../testing/doubles'
+import { createTestContext, seedTicket } from '../testing'
 import { record } from './auditTrail'
 
 describe('record', () => {

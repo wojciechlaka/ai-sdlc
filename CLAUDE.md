@@ -207,7 +207,7 @@ makes `startStage`/`answerQuestion` throw a `ConflictError`.
   `CodeHostError` with user-facing German messages); base branch, `prepareBaseBranch`, `resetBaseBranch`
 - `packages/core/src/compose.ts` — `EngineConfig`; `REPO_CACHE_DIR` and `REFINEMENT_TIMEOUT_MS` are read by
   `apps/web/lib/container.ts` and passed as `repoCacheDir`/`agentTimeoutMs` (defaults in `compose.ts`)
-- `packages/core/src/adapters/claudeCli/` — `index.ts` (`runAgent`: stage agent, one retry, usage; factory),
+- `packages/core/src/adapters/claudeCli/` — `claudeCliAgentRunner.ts` (`runAgent`: stage agent, one retry, usage; factory),
   `claudeProcess.ts` (spawn in the sandbox, timeout, `stopAgent`), `streamJson.ts` (progress, result line),
   `agentOutput.ts` (JSON extraction, schema validation), `hookLog.ts`, `prompt.ts`
 - `packages/core/src/adapters/git/` — `repoCache.ts` (clone into the cache, checkout of the base branch via fetch +
@@ -215,7 +215,7 @@ makes `startStage`/`answerQuestion` throw a `ConflictError`.
   `codebaseSummary.ts` (summary prompt, in-flight dedupe, sandboxed summary run, blocked-call warnings; cache key = last
   commit outside `docs/work`, so showcase merges keep the summary; outdated files of the same model are deleted)
 - `packages/core/src/adapters/sqlite/schema.ts` — Drizzle schema: `tickets`, `agent_runs`, `artifacts`, `audit_events`
-- `packages/core/src/testing/` — test doubles, all re-exported by `doubles.ts` (tests import from there):
+- `packages/core/src/testing/` — test doubles, all re-exported by `index.ts` (tests import from there):
   `inMemoryRepositories.ts`, `inMemoryCodeHost.ts` (GitHub-like semantics), `inMemoryTicketSource.ts`,
   `scriptedAgentRunner.ts` (`hold()`/`stop()`, scripted `progress`/`toolEvents`, recorded `callbacks`),
   `inMemoryRepoProvider.ts`, `samples.ts` (`externalTicket()`, sample outputs),
@@ -233,7 +233,7 @@ makes `startStage`/`answerQuestion` throw a `ConflictError`.
 - **New DB column/table**: `adapters/sqlite/schema.ts`, `npx drizzle-kit generate` in `packages/core`, extend the
   port + both implementations (SQLite and in-memory)
 - **New stage agent**: skill file in `packages/core/skills/`, output schema in `packages/shared`, entry in
-  `STAGE_AGENTS` (`adapters/claudeCli/index.ts`), add the stage to `STARTABLE_STAGES`
+  `STAGE_AGENTS` (`adapters/claudeCli/claudeCliAgentRunner.ts`), add the stage to `STARTABLE_STAGES`
 - **Change what the agent may do**: edit `GIT_OPTIONS` / the checks in `packages/core/hooks/guardPolicy.mjs`
   (`decide()`), extend the table tests in `hooks/guardPolicy.test.ts` (keep every known bypass as a deny case); the
   scripts run per tool call, so no restart is needed. Env passed to `claude`: `ENV_ALLOWLIST` in `agentSandbox.ts`

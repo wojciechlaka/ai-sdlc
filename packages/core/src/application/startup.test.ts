@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { CodeHostError } from '../ports'
-import { createTestContext, errorCodeOf, seedTicket, externalTicket, type TestContext } from '../testing/doubles'
+import { createTestContext, errorCodeOf, seedTicket, externalTicket, type TestContext } from '../testing'
 import { answerQuestion, startStage } from './stageCommands'
 import { resetSystem, startup } from './startup'
 

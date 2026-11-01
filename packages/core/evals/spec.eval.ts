@@ -14,7 +14,7 @@ import { SpecSchema, type Spec } from '@refinement/shared'
 import {
   createAgentSandbox, createHookLogFile, hookSettings, sandboxEnv,
 } from '../src/adapters/agentSandbox/agentSandbox'
-import { STAGE_AGENTS, runAgent } from '../src/adapters/claudeCli'
+import { STAGE_AGENTS, runAgent } from '../src/adapters/claudeCli/claudeCliAgentRunner'
 import { extractJsonString } from '../src/adapters/claudeCli/agentOutput'
 import { renderIntent, renderSpec } from '../src/domain/render'
 import { artifactPath } from '../src/domain/artifacts'

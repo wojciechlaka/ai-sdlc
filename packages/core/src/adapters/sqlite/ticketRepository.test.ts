@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createTestDatabase } from '../../testing/testDb'
-import { externalTicket } from '../../testing/doubles'
+import { externalTicket } from '../../testing'
 import { createSqliteTicketRepository } from './ticketRepository'
 import type { TicketRepository } from '../../ports'
 

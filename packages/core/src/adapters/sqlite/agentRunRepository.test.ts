@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createTestDatabase } from '../../testing/testDb'
-import { SAMPLE_INTENT_OUTPUT, externalTicket } from '../../testing/doubles'
+import { SAMPLE_INTENT_OUTPUT, externalTicket } from '../../testing'
 import { createSqliteTicketRepository } from './ticketRepository'
 import { createSqliteAgentRunRepository } from './agentRunRepository'
 import type { AgentRunRepository, TicketRepository } from '../../ports'

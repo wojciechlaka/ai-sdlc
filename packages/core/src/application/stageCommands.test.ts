@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { AgentRunTerminatedError, AgentRunTimeoutError, CodeHostError } from '../ports'
-import { SAMPLE_INTENT_OUTPUT, SAMPLE_META, createTestContext, errorCodeOf, seedTicket, type TestContext } from '../testing/doubles'
+import { SAMPLE_INTENT_OUTPUT, SAMPLE_META, createTestContext, errorCodeOf, seedTicket, type TestContext } from '../testing'
 import { answerQuestion, startStage, stopRun } from './stageCommands'
 
 const MODEL = { model: 'claude-sonnet-4-6' }

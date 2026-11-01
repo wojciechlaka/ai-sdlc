@@ -10,7 +10,7 @@ import { createSqliteArtifactRepository } from './adapters/sqlite/artifactReposi
 import { createSqliteAuditLog } from './adapters/sqlite/auditLog'
 import { createMarkdownTicketSource, type MarkdownTicketSourceOptions } from './adapters/markdownTickets/markdownTicketSource'
 import { createGitHubCodeHost, parseGitHubRepoUrl, type GitHubCodeHostOptions } from './adapters/github/githubCodeHost'
-import { createClaudeCliAgentRunner, type ClaudeCliOptions } from './adapters/claudeCli'
+import { createClaudeCliAgentRunner, type ClaudeCliOptions } from './adapters/claudeCli/claudeCliAgentRunner'
 import { createGitRepoProvider, type RepoCacheOptions } from './adapters/git/repoCache'
 import { createNodeEventPublisher } from './adapters/nodeEvents/nodeEventPublisher'
 import { createAgentSandbox, type AgentSandboxOptions } from './adapters/agentSandbox/agentSandbox'

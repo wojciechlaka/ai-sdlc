@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { AgentRunTerminatedError, CodeHostError } from '../ports'
-import { createTestContext, seedTicket, externalTicket } from './doubles'
+import { createTestContext, seedTicket, externalTicket } from '.'
 
 describe('in-memory ticket repository', () => {
   it('inserts new tickets as plan/ready and keeps stage and state on update', () => {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { AgentRun, Ticket } from './types'
-import { errorCodeOf } from '../testing/doubles'
+import { errorCodeOf } from '../testing'
 import {
   canAnswer,
   canStartStage,

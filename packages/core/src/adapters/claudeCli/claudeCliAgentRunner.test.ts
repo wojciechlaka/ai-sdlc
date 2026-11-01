@@ -73,7 +73,7 @@ describe('runAgent (stage plan)', () => {
     ['text before the JSON', 'Hier ist das Ergebnis:\n\n' + INTENT_OUTPUT],
   ])('parses %s', async (_label, text) => {
     mockSpawn.mockImplementation(() => makeFakeProcess(resultLine(text), 0))
-    const { runAgent } = await import('./index')
+    const { runAgent } = await import('./claudeCliAgentRunner')
     const { output } = await runAgent(INPUT, callbacks(), OPTIONS)
     expect(output).toMatchObject({ type: 'intent', result: { title: 'Lesezeit anzeigen' } })
   })
@@ -84,7 +84,7 @@ describe('runAgent (stage plan)', () => {
       0,
     )
     mockSpawn.mockReturnValue(proc)
-    const { runAgent } = await import('./index')
+    const { runAgent } = await import('./claudeCliAgentRunner')
     const { meta } = await runAgent(INPUT, callbacks(), OPTIONS)
     expect(proc.stdin.write.mock.calls[0][0]).toContain('# Intent Agent Skill')
     expect(meta).toMatchObject({ model: 'claude-sonnet-4-6', inputTokens: 100, outputTokens: 20, cacheReadTokens: 5, costUsd: 0.04 })
@@ -92,7 +92,7 @@ describe('runAgent (stage plan)', () => {
 
   it('prefers total_cost_usd over cost_usd', async () => {
     mockSpawn.mockReturnValue(makeFakeProcess(resultLine(INTENT_OUTPUT, { total_cost_usd: 0.07, cost_usd: 0.01 }), 0))
-    const { runAgent } = await import('./index')
+    const { runAgent } = await import('./claudeCliAgentRunner')
     const { meta } = await runAgent(INPUT, callbacks(), OPTIONS)
     expect(meta.costUsd).toBe(0.07)
   })
@@ -100,7 +100,7 @@ describe('runAgent (stage plan)', () => {
   it('retries once on invalid output, then throws SchemaValidationError', async () => {
     const refinement = JSON.stringify({ type: 'refinement', result: {} })
     mockSpawn.mockImplementation(() => makeFakeProcess(resultLine(refinement), 0))
-    const { runAgent } = await import('./index')
+    const { runAgent } = await import('./claudeCliAgentRunner')
     const { SchemaValidationError } = await import('./errors')
     await expect(runAgent(INPUT, callbacks(), OPTIONS)).rejects.toBeInstanceOf(SchemaValidationError)
     expect(mockSpawn).toHaveBeenCalledTimes(2)
@@ -110,7 +110,7 @@ describe('runAgent (stage plan)', () => {
     mockSpawn
       .mockImplementationOnce(() => makeFakeProcess(resultLine('Ich habe das Ticket gelesen.'), 0))
       .mockImplementationOnce(() => makeFakeProcess(resultLine(INTENT_OUTPUT), 0))
-    const { runAgent } = await import('./index')
+    const { runAgent } = await import('./claudeCliAgentRunner')
     await runAgent(INPUT, callbacks(), OPTIONS)
     const retry = mockSpawn.mock.results[1]?.value as { stdin: { write: { mock: { calls: string[][] } } } }
     expect(retry.stdin.write.mock.calls[0]?.[0]).toContain('kein gültiges JSON')
@@ -118,7 +118,7 @@ describe('runAgent (stage plan)', () => {
 
   it('throws CliError on a non-zero exit code', async () => {
     mockSpawn.mockReturnValue(makeFakeProcess('', 1))
-    const { runAgent } = await import('./index')
+    const { runAgent } = await import('./claudeCliAgentRunner')
     const { CliError } = await import('./errors')
     await expect(runAgent(INPUT, callbacks(), OPTIONS)).rejects.toBeInstanceOf(CliError)
   })
@@ -130,7 +130,7 @@ describe('runAgent (stage plan)', () => {
     proc.stderr = new EventEmitter()
     proc.kill = vi.fn()
     mockSpawn.mockReturnValue(proc)
-    const { runAgent } = await import('./index')
+    const { runAgent } = await import('./claudeCliAgentRunner')
     const { AgentRunTimeoutError } = await import('../../ports')
     await expect(runAgent(INPUT, callbacks(), { ...OPTIONS, timeoutMs: 50 })).rejects.toBeInstanceOf(AgentRunTimeoutError)
   })
@@ -151,7 +151,7 @@ describe('runAgent (stage design)', () => {
   })
 
   it('maps design to the spec skill and its schema', async () => {
-    const { STAGE_AGENTS } = await import('./index')
+    const { STAGE_AGENTS } = await import('./claudeCliAgentRunner')
     const { SpecAgentOutputSchema } = await import('@refinement/shared')
     expect(STAGE_AGENTS.design).toEqual({ skillFile: 'spec-agent.md', schema: SpecAgentOutputSchema })
     expect(fs.existsSync(path.join(OPTIONS.skillsDir, 'spec-agent.md'))).toBe(true)
@@ -160,7 +160,7 @@ describe('runAgent (stage design)', () => {
   it('sends the spec skill, the intent and the remaining questions and returns the spec', async () => {
     const proc = makeFakeProcess(resultLine(SPEC_OUTPUT), 0)
     mockSpawn.mockReturnValue(proc)
-    const { runAgent } = await import('./index')
+    const { runAgent } = await import('./claudeCliAgentRunner')
     const { output } = await runAgent(DESIGN_INPUT, callbacks(), OPTIONS)
     const prompt = proc.stdin.write.mock.calls[0][0] as string
     expect(prompt).toContain('# Spec Agent Skill')
@@ -175,7 +175,7 @@ describe('runAgent (stage design)', () => {
       options: [{ id: 'A', title: 'a', description: 'd', pros: [], cons: [] }, { id: 'B', title: 'b', description: 'd', pros: [], cons: [] }],
     })
     mockSpawn.mockImplementationOnce(() => makeFakeProcess(resultLine(choice), 0))
-    const { runAgent } = await import('./index')
+    const { runAgent } = await import('./claudeCliAgentRunner')
     expect((await runAgent(DESIGN_INPUT, callbacks(), OPTIONS)).output.type).toBe('choice')
 
     mockSpawn.mockImplementation(() => makeFakeProcess(resultLine(INTENT_OUTPUT), 0))
@@ -195,7 +195,7 @@ describe('runAgent — guard and audit hooks (spec §13)', () => {
   it('runs claude in the sandbox: user settings only, guard and audit hooks, read tools, clean env', async () => {
     vi.stubEnv('GITHUB_TOKEN', 'ghp_secret')
     mockSpawn.mockImplementation(() => makeFakeProcess(resultLine(INTENT_OUTPUT), 0))
-    const { runAgent } = await import('./index')
+    const { runAgent } = await import('./claudeCliAgentRunner')
     await runAgent(INPUT, callbacks(), OPTIONS)
 
     const { args, options, logFile } = spawnCall()
@@ -219,7 +219,7 @@ describe('runAgent — guard and audit hooks (spec §13)', () => {
     proc.kill = vi.fn()
     mockSpawn.mockReturnValue(proc)
     const cb = callbacks()
-    const { runAgent } = await import('./index')
+    const { runAgent } = await import('./claudeCliAgentRunner')
     const run = runAgent(INPUT, cb, OPTIONS)
 
     await vi.waitFor(() => expect(mockSpawn).toHaveBeenCalled())
@@ -243,7 +243,7 @@ describe('runAgent — guard and audit hooks (spec §13)', () => {
   it('uses the hooks on the retry call as well, each with its own log file', async () => {
     const refinement = JSON.stringify({ type: 'refinement', result: {} })
     mockSpawn.mockImplementation(() => makeFakeProcess(resultLine(refinement), 0))
-    const { runAgent } = await import('./index')
+    const { runAgent } = await import('./claudeCliAgentRunner')
     await expect(runAgent(INPUT, callbacks(), OPTIONS)).rejects.toThrow()
 
     expect(mockSpawn).toHaveBeenCalledTimes(2)
@@ -255,13 +255,13 @@ describe('runAgent — guard and audit hooks (spec §13)', () => {
 describe('createClaudeCliAgentRunner', () => {
   it('runs through the AgentRunner port', async () => {
     mockSpawn.mockReturnValue(makeFakeProcess(resultLine(INTENT_OUTPUT), 0))
-    const { createClaudeCliAgentRunner } = await import('./index')
+    const { createClaudeCliAgentRunner } = await import('./claudeCliAgentRunner')
     const { output } = await createClaudeCliAgentRunner(OPTIONS).run(INPUT, callbacks())
     expect(output.type).toBe('intent')
   })
 
   it('returns false when stopping a ticket without a running process', async () => {
-    const { createClaudeCliAgentRunner } = await import('./index')
+    const { createClaudeCliAgentRunner } = await import('./claudeCliAgentRunner')
     expect(createClaudeCliAgentRunner(OPTIONS).stop('CB-404')).toBe(false)
   })
 })
