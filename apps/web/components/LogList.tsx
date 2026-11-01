@@ -1,6 +1,6 @@
 import type { AuditLogEntryDto } from '@refinement/shared'
 import { formatDateTime } from '@/lib/format'
-import { describeLogEvent, groupLogEntries } from '@/lib/logFormat'
+import { GUARD_BLOCKED, describeLogEvent, groupLogEntries } from '@/lib/logFormat'
 
 const ACTOR_LABEL: Record<AuditLogEntryDto['actor'], string> = { human: 'Mensch', agent: 'Agent', system: 'System' }
 
@@ -44,7 +44,7 @@ function ToolCallsRow({ events }: { events: AuditLogEntryDto[] }) {
 
 /** One log entry; a call blocked by the guard is highlighted. */
 function EventRow({ event }: { event: AuditLogEntryDto }) {
-  const blocked = event.type === 'guard_blocked'
+  const blocked = event.type === GUARD_BLOCKED
   return (
     <li className="flex gap-3 text-xs" data-blocked={blocked ? 'true' : undefined}>
       <Time at={event.createdAt} />

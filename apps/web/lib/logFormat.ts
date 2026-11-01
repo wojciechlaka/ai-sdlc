@@ -6,6 +6,12 @@ import { runCostUsd } from './pricing'
 
 const stageLabel = (stage: Stage) => STAGE_LABEL[stage] ?? stage
 
+// `AuditLogEntryDto.type` is a plain string (old rows may predate the contract), so comparisons go through typed
+// constants: renaming an AuditEventType then fails to compile here.
+const TOOL_USED: AuditEventType = 'tool_used'
+/** Log entry of a tool call the guard denied; highlighted in the log. */
+export const GUARD_BLOCKED: AuditEventType = 'guard_blocked'
+
 /** Tool call with its target; Bash commands in backticks. */
 function toolCall({ tool, target }: { tool: string; target: string }): string {
   if (!target) {
@@ -115,7 +121,7 @@ export function groupLogEntries(log: AuditLogEntryDto[]): LogRow[] {
   const rows: LogRow[] = []
   for (const event of log) {
     const last = rows.at(-1)
-    if (event.type !== 'tool_used') {
+    if (event.type !== TOOL_USED) {
       rows.push({ kind: 'event', event })
     } else if (last?.kind === 'tools') {
       last.events.push(event)

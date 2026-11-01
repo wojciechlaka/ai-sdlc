@@ -1,5 +1,16 @@
 import type { ArtifactStage, Stage, TicketDto, TicketState } from '@refinement/shared'
 
+/**
+ * How often the server checks the PRs of tickets in review (`instrumentation.ts`); a local app receives no GitHub
+ * webhooks.
+ */
+const MS_PER_MINUTE = 60_000
+export const REVIEW_SYNC_INTERVAL_MINUTES = 1
+export const REVIEW_SYNC_INTERVAL_MS = REVIEW_SYNC_INTERVAL_MINUTES * MS_PER_MINUTE
+/** The interval as UI text: „jede Minute“, „alle 5 Minuten“. */
+export const REVIEW_SYNC_INTERVAL_TEXT =
+  REVIEW_SYNC_INTERVAL_MINUTES === 1 ? 'jede Minute' : `alle ${REVIEW_SYNC_INTERVAL_MINUTES} Minuten`
+
 /** Board column and badge label per stage. */
 export const STAGE_LABEL: Record<Stage, string> = {
   plan:   '1 Plan',

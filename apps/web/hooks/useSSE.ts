@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import type { TicketEvent } from '@refinement/shared'
+import { TicketEventSchema, type TicketEvent } from '@refinement/shared'
+import { eventsUrl } from '@/lib/eventStream'
 
 /** Callbacks of `useSSE`. */
 export interface SSEHandlers {
@@ -33,8 +34,7 @@ export function useSSE(ticketKey: string | null, handlers: SSEHandlers) {
   useEffect(() => {
     let intentionallyClosed = false
     let openedBefore = false
-    const url = ticketKey ? `/api/events?ticketKey=${encodeURIComponent(ticketKey)}` : '/api/events'
-    const es = new EventSource(url)
+    const es = new EventSource(eventsUrl(ticketKey))
 
     const markConnected = () => {
       setConnected(true)
@@ -52,7 +52,10 @@ export function useSSE(ticketKey: string | null, handlers: SSEHandlers) {
     es.onmessage = (e) => {
       // Some proxies suppress onopen — make sure the flags are set before any message.
       markConnected()
-      handlersRef.current.onMessage(JSON.parse(e.data) as TicketEvent)
+      const event = parseTicketEvent(e.data)
+      if (event) {
+        handlersRef.current.onMessage(event)
+      }
     }
 
     es.onerror = () => {
@@ -71,4 +74,21 @@ export function useSSE(ticketKey: string | null, handlers: SSEHandlers) {
   }, [ticketKey])
 
   return { connected, everConnected }
+}
+
+/** A stream message as TicketEvent; null (with a warning) for anything that does not match the contract. */
+function parseTicketEvent(data: string): TicketEvent | null {
+  let raw: unknown
+  try {
+    raw = JSON.parse(data)
+  } catch {
+    console.warn('SSE message is not JSON', data)
+    return null
+  }
+  const result = TicketEventSchema.safeParse(raw)
+  if (!result.success) {
+    console.warn('SSE message does not match TicketEvent', raw)
+    return null
+  }
+  return result.data
 }

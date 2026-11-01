@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import type { TicketDetailDto } from '@refinement/shared'
 import { startStageAction, stopRunAction } from '@/app/actions'
 import { DEFAULT_MODEL } from '@/lib/models'
+import { REVIEW_SYNC_INTERVAL_TEXT } from '@/lib/constants'
 import { questionCounter } from '@/lib/format'
 import { useSSE } from '@/hooks/useSSE'
 import { useElapsedSeconds } from '@/hooks/useElapsedSeconds'
@@ -134,7 +135,7 @@ function ReviewLink({ pr }: { pr: NonNullable<TicketDetailDto['openPr']> }) {
         PR #{pr.number} öffnen
       </a>
       <p className="text-xs text-slate-500">
-        Merge auf GitHub = Freigabe dieser Stufe. Die App prüft den PR jede Minute und beim Öffnen dieser Seite.
+        Merge auf GitHub = Freigabe dieser Stufe. Die App prüft den PR {REVIEW_SYNC_INTERVAL_TEXT} und beim Öffnen dieser Seite.
       </p>
     </div>
   )
