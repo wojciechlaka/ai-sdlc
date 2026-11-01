@@ -13,8 +13,11 @@ export type RunTrigger = 'initial' | 'answer'
 /** Life cycle of a run; `running` until it succeeds, fails or times out. */
 export type RunStatus = 'running' | 'succeeded' | 'failed' | 'timeout'
 
-/** One ticket as the ticket source (simulated Jira) delivers it. */
-export interface SourceTicket {
+/**
+ * A ticket as the external tracker delivers it (Jira; simulated by `examples/tickets/*.md`). It is the input of
+ * every stage: intent and spec are derived from it, never the other way round.
+ */
+export interface ExternalTicket {
   key: string
   title: string
   description: string
@@ -23,8 +26,8 @@ export interface SourceTicket {
   sourcePath: string
 }
 
-/** A ticket in the app: the source fields plus where it stands in the playbook. */
-export interface Ticket extends SourceTicket {
+/** A ticket in the app: the external fields plus where it stands in the playbook. */
+export interface Ticket extends ExternalTicket {
   stage: Stage
   state: TicketState
   createdAt: Date

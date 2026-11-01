@@ -10,6 +10,8 @@ import { defineConfig } from 'eslint/config'
 // Fast editor feedback only — the wider dependency rules (layers, adapters among each other, src/testing,
 // cycles, web → core entry point) are covered by the ArchUnitTS architecture tests (src/architecture.test.ts).
 export default defineConfig([
+  // Fixture repos of the evals are data (a sample target repo), not code of this package.
+  { ignores: ['evals/fixtures/**'] },
   {
     files: ['src/domain/**/*.ts', 'src/ports/**/*.ts', 'src/application/**/*.ts'],
     ignores: ['**/*.test.ts'],

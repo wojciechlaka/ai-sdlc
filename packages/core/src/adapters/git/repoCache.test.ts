@@ -5,7 +5,9 @@ import os from 'os'
 import path from 'path'
 
 const CACHE_DIR = path.join(os.tmpdir(), 'repo-cache')
-const OPTIONS = { cacheDir: CACHE_DIR, sandbox: createAgentSandbox({ hooksDir: path.resolve(__dirname, '../../../hooks') }) }
+const OPTIONS = {
+  cacheDir: CACHE_DIR, sandbox: createAgentSandbox({ hooksDir: path.resolve(__dirname, '../../../hooks') }), baseBranch: 'showcase',
+}
 
 describe('getRepoDir', () => {
   it('generates consistent cache dir from repo url', () => {

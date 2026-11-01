@@ -1,7 +1,7 @@
 import fs from 'fs/promises'
 import os from 'os'
 import path from 'path'
-import type { ClaudeProcessSandbox, HookLogFile } from '../../ports'
+import { SANDBOX_TOOLS, type ClaudeProcessSandbox, type HookLogFile } from '../../ports'
 
 // Sandbox of every `claude` process the app starts (agent and codebase summary, spec §13): which settings are
 // loaded, which hooks guard the tools, which tools are allowed and which environment the process sees.
@@ -10,7 +10,7 @@ import type { ClaudeProcessSandbox, HookLogFile } from '../../ports'
 /** Environment variable the hook scripts write their JSON lines to (see `hooks/hookIo.mjs`). */
 export const HOOK_LOG_ENV = 'REFINEMENT_HOOK_LOG'
 /** Read-only tools; the guard additionally confines them to the clone and restricts Bash to reading git commands. */
-export const ALLOWED_TOOLS = 'Read,Glob,Grep,Bash'
+export const ALLOWED_TOOLS = SANDBOX_TOOLS.join(',')
 /** Temp directory prefix and file name of a hook log. */
 const HOOK_LOG_DIR_PREFIX = 'refinement-hooks-'
 const HOOK_LOG_FILE_NAME = 'tools.jsonl'
@@ -84,11 +84,17 @@ export async function createHookLogFile(): Promise<HookLogFile> {
 /** Flags of a headless `claude` call whose stream-json output the adapters parse line by line. */
 const HEADLESS_ARGS = ['--print', '--output-format', 'stream-json', '--verbose']
 
+/** Where the guard and audit hook scripts are. */
+export interface AgentSandboxOptions {
+  /** `packages/core/hooks` */
+  hooksDir: string
+}
+
 /**
  * Sandbox for the `claude` processes of the app. `--setting-sources user` keeps project and local settings of the
  * untrusted clone (`.claude/settings*.json`, including their hooks) from being loaded.
  */
-export function createAgentSandbox(options: { hooksDir: string }): ClaudeProcessSandbox {
+export function createAgentSandbox(options: AgentSandboxOptions): ClaudeProcessSandbox {
   const args = Object.freeze([
     '--setting-sources', 'user',
     '--settings', hookSettings(options.hooksDir),

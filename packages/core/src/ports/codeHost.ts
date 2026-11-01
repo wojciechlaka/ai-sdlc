@@ -57,6 +57,9 @@ export interface CodeHost {
   deleteBranch(name: string): Promise<void>
 }
 
+/** `CodeHostError.status` for a PR, branch, file or tag that does not exist. */
+export const HTTP_NOT_FOUND = 404
+
 /** A request to the code host failed. `status` is the HTTP status, 0 without response. Message is user-facing. */
 export class CodeHostError extends Error {
   constructor(readonly status: number, message: string) {

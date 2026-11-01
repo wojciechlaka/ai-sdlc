@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from 'child_process'
-import { AgentRunTerminatedError, AgentRunTimeoutError, type ClaudeProcessSandbox } from '../../ports'
+import { AgentRunTerminatedError, AgentRunTimeoutError, CLAUDE_BIN, type ClaudeProcessSandbox } from '../../ports'
 import { CliError } from './errors'
 import { extractResult, handleLine } from './streamJson'
 import type { ExtractedResult } from './types'
@@ -76,7 +76,7 @@ export function spawnClaude(options: SpawnClaudeOptions): Promise<ExtractedResul
       }
     }
 
-    const proc = spawn('claude', sandbox.claudeArgs(model), {
+    const proc = spawn(CLAUDE_BIN, sandbox.claudeArgs(model), {
       cwd,
       env: sandbox.env(logFile),
       stdio: ['pipe', 'pipe', 'pipe'],

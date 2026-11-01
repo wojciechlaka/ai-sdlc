@@ -47,6 +47,9 @@ export function errorCode(err: unknown): DomainErrorCode | null {
   return DOMAIN_CODES.includes(code as DomainErrorCode) ? (code as DomainErrorCode) : null
 }
 
+/** How much of a failed process's stderr goes into an error message. */
+export const STDERR_PREVIEW_CHARS = 200
+
 /**
  * User-facing text of any thrown value; prefers a process's stderr (git) where present.
  * Credentials in URLs are redacted, so the text is safe for logs, warnings and the ticket page.

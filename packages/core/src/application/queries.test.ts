@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { CodeHostError } from '../ports'
-import { createTestContext, seedTicket, type TestContext } from '../testing/fakes'
+import { SAMPLE_CHOICE_OUTPUT, createTestContext, seedTicket, type TestContext } from '../testing'
 import { getSettings, getTicket, listTickets } from './queries'
 
 afterEach(() => {
@@ -144,7 +144,30 @@ describe('getTicket', () => {
   it('has no open question outside awaiting_answer', async () => {
     const ctx = createTestContext()
     seedTicket(ctx, 'CB-1')
-    expect((await getTicket(ctx.deps, 'CB-1')).pendingQuestion).toBeNull()
+    expect(await getTicket(ctx.deps, 'CB-1')).toMatchObject({ pendingQuestion: null, pendingChoice: null, questionsAsked: 0, questionLimit: null })
+  })
+
+  it('returns an open choice of stage 2 and counts the questions of the attempt', async () => {
+    const ctx = createTestContext()
+    seedTicket(ctx, 'CB-1', { stage: 'design', state: 'awaiting_answer' })
+    const usage = { costUsd: 0, inputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, outputTokens: 0 }
+    const first = ctx.deps.runs.create({ ticketKey: 'CB-1', stage: 'design', trigger: 'initial', model: 'm', input: { model: 'm', answeredQuestions: [] } })
+    ctx.deps.runs.complete(first.id, { output: { type: 'question', question: 'Wer?' }, ...usage })
+    const second = ctx.deps.runs.create({
+      ticketKey: 'CB-1', stage: 'design', trigger: 'answer', model: 'm', input: { model: 'm', answeredQuestions: [{ question: 'Wer?', answer: 'Alle' }] },
+    })
+    ctx.deps.runs.complete(second.id, { output: SAMPLE_CHOICE_OUTPUT, ...usage })
+
+    const detail = await getTicket(ctx.deps, 'CB-1')
+
+    const { type: _type, ...pendingChoice } = SAMPLE_CHOICE_OUTPUT
+    expect(detail).toMatchObject({ pendingQuestion: null, pendingChoice, questionsAsked: 2, questionLimit: 3 })
+  })
+
+  it('has no counter once the ticket is done', async () => {
+    const ctx = createTestContext()
+    seedTicket(ctx, 'CB-1', { stage: 'done' })
+    expect(await getTicket(ctx.deps, 'CB-1')).toMatchObject({ pendingChoice: null, questionsAsked: 0, questionLimit: null })
   })
 
   it('accepts lower-case keys and reports unknown ones', async () => {

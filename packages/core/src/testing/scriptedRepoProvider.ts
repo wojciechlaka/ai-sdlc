@@ -1,7 +1,7 @@
 import type { RepoProvider } from '../ports'
 
 /** Repo provider without git: returns `repoDir` and `summary`; `ensureRepoError` makes `ensureRepo` fail. */
-export class FakeRepoProvider implements RepoProvider {
+export class ScriptedRepoProvider implements RepoProvider {
   /** Path `ensureRepo` returns. */
   repoDir = '/repo'
   /** What `ensureSummary` returns. */

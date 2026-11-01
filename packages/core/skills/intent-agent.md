@@ -46,7 +46,7 @@ Your entire answer is exactly one JSON object — no text before or after it, no
   }
 }
 
-`affected` and `openPoints` may be empty arrays. `title` must not exceed 60 characters.
+`affected` and `openPoints` may be empty arrays. `title` must not exceed 60 characters and must NOT contain the ticket key (the app adds it), e.g. "Lesezeit anzeigen", not "CB-2: Lesezeit anzeigen".
 
 `successCriteria` holds 2–5 criteria. Each one is observable from the user's or business perspective and can
 be checked once the change is delivered. Do not describe the implementation: no endpoints, fields, files or
@@ -55,6 +55,7 @@ technologies. These are not acceptance criteria — those follow in stage 2 (Des
 ## Rules
 
 - Never modify files in the repository — read only.
+- Only Read, Glob, Grep and read-only git commands are available to you. Do not use Agent/Task, Write, Edit or any other tool — they are blocked.
 - Write in the language of the ticket.
 - Do not invent requirements that neither the ticket nor the answered questions support.
 - Stay at the level of problem and outcome; mention code only where it explains today's behaviour.

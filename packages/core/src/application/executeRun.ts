@@ -1,7 +1,8 @@
 import type { AuditPayloads, StageOutput } from '@refinement/shared'
 import type { Ticket } from '../domain/types'
-import { renderIntent } from '../domain/render'
+import { renderIntent, renderSpec } from '../domain/render'
 import { describeError } from '../domain/errors'
+import { questionsRemaining } from '../domain/rules'
 import {
   AgentRunTerminatedError, AgentRunTimeoutError, type AgentRunMeta, type AgentRunnerInput, type RunCompletion,
   type ToolEvent,
@@ -12,13 +13,16 @@ import { createReporter, type Reporter } from './reporter'
 import { failStage } from './failStage'
 import { publishArtifact } from './publishArtifact'
 import { record } from './auditTrail'
+import { QUESTION_LIMIT_REACHED } from './messages'
 
-/** RunRequest plus what `runStage` prepared: the run id, the checkout and the codebase summary. */
+/** RunRequest plus what `runStage` prepared: the run id, the checkout, the codebase summary and the intent. */
 export interface ExecuteRunRequest extends RunRequest {
   /** The attempt's run, created by `beginRun`. */
   runId: string
   repoDir: string
   codebaseSummary: string | null
+  /** Merged `intent.md` from the base branch; only for the design stage. */
+  intent?: string
 }
 
 /** What one step of an attempt needs: deps, the ticket and its reporter, the request and the staleness check. */
@@ -29,25 +33,32 @@ interface Attempt {
   request: ExecuteRunRequest
   /** True while this attempt is the ticket's current run (see `isCurrentRun`). */
   isCurrent: () => boolean
+  /** Questions and choices the agent may still ask; null for a stage without limit. */
+  questionsRemaining: number | null
 }
 
 /**
- * Executes the agent for the attempt's run and applies its outcome: question → `awaiting_answer`,
- * intent → branch + PR → `in_review`. Never throws.
+ * Executes the agent for the attempt's run and applies its outcome: question or choice → `awaiting_answer`,
+ * intent or spec → branch + PR → `in_review`. Never throws.
  * A stop, restart or reset makes the attempt stale while the agent may still answer; late results are discarded.
  */
 export async function executeRun(deps: UseCaseDeps, ticket: Ticket, request: ExecuteRunRequest): Promise<void> {
   const reporter = createReporter(deps, ticket.key)
   const isCurrent = () => isCurrentRun(deps, ticket.key, request.runId)
-  const attempt: Attempt = { deps, ticket, reporter, request, isCurrent }
+  const remaining = questionsRemaining(request.stage, deps.runs.listForTicket(ticket.key, request.stage))
+  const attempt: Attempt = { deps, ticket, reporter, request, isCurrent, questionsRemaining: remaining }
 
   try {
-    const { output, meta } = await deps.agent.run(agentInput(ticket, request), {
+    const { output, meta } = await deps.agent.run(agentInput(ticket, request, remaining), {
       onProgress: reporter.logAndProgress,
       onToolEvent: toolEventRecorder(attempt),
     })
     if (!isCurrent()) {
       discardStaleResult(attempt, meta)
+      return
+    }
+    if (exceedsQuestionLimit(attempt, output)) {
+      failOverLimit(attempt, meta)
       return
     }
     recordSucceededRun(attempt, output, meta)
@@ -57,8 +68,8 @@ export async function executeRun(deps: UseCaseDeps, ticket: Ticket, request: Exe
   }
 }
 
-/** What the agent gets: ticket text, checkout, model, summary and the Q&A history. */
-function agentInput(ticket: Ticket, request: ExecuteRunRequest): AgentRunnerInput {
+/** What the agent gets: ticket text, checkout, model, summary, intent (design), Q&A history and question budget. */
+function agentInput(ticket: Ticket, request: ExecuteRunRequest, remaining: number | null): AgentRunnerInput {
   return {
     ticketKey: ticket.key,
     stage: request.stage,
@@ -67,7 +78,9 @@ function agentInput(ticket: Ticket, request: ExecuteRunRequest): AgentRunnerInpu
     repoDir: request.repoDir,
     model: request.model,
     codebaseSummary: request.codebaseSummary ?? undefined,
+    intent: request.intent,
     answeredQuestions: request.answeredQuestions,
+    questionsRemaining: remaining ?? undefined,
   }
 }
 
@@ -123,26 +136,78 @@ function discardStaleResult({ deps, ticket, reporter, request }: Attempt, meta: 
   })
 }
 
-/** Stores the validated output and usage on the run and logs the successful run. */
-function recordSucceededRun({ deps, ticket, reporter, request }: Attempt, output: StageOutput, meta: AgentRunMeta): void {
-  reporter.log(`Claude finished in ${meta.durationSeconds}s ($${meta.costUsd.toFixed(4)})`)
-  deps.runs.complete(request.runId, { output, ...runUsage(meta) })
-  record(deps, ticket.key, 'agent', 'run_finished', { runId: request.runId, status: 'succeeded', ...runMetaPayload(meta) })
+/** True if the agent asks a question or offers a choice although its budget for this start is used up. */
+function exceedsQuestionLimit({ questionsRemaining: remaining }: Attempt, output: StageOutput): boolean {
+  return (output.type === 'question' || output.type === 'choice') && remaining === 0
 }
 
-/** Question → `awaiting_answer`; intent → rendered Markdown published as branch + PR (`in_review`). */
+/** The run delivered nothing usable: it is stored as failed (usage kept in the log) and the stage fails. */
+function failOverLimit({ deps, ticket, reporter, request }: Attempt, meta: AgentRunMeta): void {
+  reporter.log(`Claude finished in ${meta.durationSeconds}s ($${meta.costUsd.toFixed(4)}), question limit reached`)
+  deps.runs.fail(request.runId, 'failed')
+  record(deps, ticket.key, 'system', 'run_finished', {
+    runId: request.runId, status: 'failed', reason: 'grenze', ...runMetaPayload(meta),
+  })
+  failStage(deps, reporter, ticket.key, QUESTION_LIMIT_REACHED)
+}
+
+/** Stores the validated output and usage on the run and logs the successful run. */
+function recordSucceededRun(
+  { deps, ticket, reporter, request }: Attempt,
+  output: StageOutput,
+  meta: AgentRunMeta,
+): void {
+  reporter.log(`Claude finished in ${meta.durationSeconds}s ($${meta.costUsd.toFixed(4)})`)
+  deps.runs.complete(request.runId, { output, ...runUsage(meta) })
+  record(deps, ticket.key, 'agent', 'run_finished', {
+    runId: request.runId, status: 'succeeded', ...runMetaPayload(meta),
+  })
+}
+
+/**
+ * Question or choice → `awaiting_answer`; intent or spec → rendered Markdown published as branch + PR
+ * (`in_review`).
+ */
 async function applyOutput({ deps, ticket, reporter, request }: Attempt, output: StageOutput): Promise<void> {
-  if (output.type === 'question') {
-    record(deps, ticket.key, 'agent', 'question_asked', { question: output.question })
-    reporter.setState('awaiting_answer')
-    reporter.question(output.question)
-    return
+  switch (output.type) {
+    case 'question':
+      record(deps, ticket.key, 'agent', 'question_asked', { question: output.question })
+      awaitAnswer(reporter, output.question)
+      return
+    case 'choice':
+      record(deps, ticket.key, 'agent', 'choice_offered', {
+        question: output.question,
+        options: output.options.map(({ id, title }) => ({ id, title })),
+        recommended: output.recommended,
+      })
+      awaitAnswer(reporter, output.question)
+      return
+    case 'intent':
+      reporter.progress('Intent wird als Pull Request angelegt…')
+      await publishArtifact(deps, ticket, request.stage, {
+        markdown: renderIntent(ticket, output.result, request.answeredQuestions),
+        summary: output.result.problem,
+      }, request.runId)
+      return
+    case 'spec':
+      reporter.progress('Spec wird als Pull Request angelegt…')
+      await publishArtifact(deps, ticket, request.stage, {
+        markdown: renderSpec(ticket, output.result, request.answeredQuestions),
+        summary: output.result.goal,
+      }, request.runId)
+      return
+    default: {
+      // Compile-time guard: a new StageOutput type must be handled above.
+      const unhandled: never = output
+      throw new Error(`Unhandled stage output: ${JSON.stringify(unhandled)}`)
+    }
   }
-  reporter.progress('Intent wird als Pull Request angelegt…')
-  await publishArtifact(deps, ticket, request.stage, {
-    markdown: renderIntent(ticket, output.result, request.answeredQuestions),
-    summary: output.result.problem,
-  }, request.runId)
+}
+
+/** The ticket waits for the human; the question event makes open pages reload. */
+function awaitAnswer(reporter: Reporter, question: string): void {
+  reporter.setState('awaiting_answer')
+  reporter.question(question)
 }
 
 /**

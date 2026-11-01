@@ -1,4 +1,4 @@
-import type { SourceTicket, Stage, Ticket, TicketState } from '../domain/types'
+import type { ExternalTicket, Stage, Ticket, TicketState } from '../domain/types'
 
 /** Persistent tickets with their stage and state. */
 export interface TicketRepository {
@@ -11,7 +11,7 @@ export interface TicketRepository {
    * of known ones and keeps their stage and state.
    * @returns The keys that were inserted.
    */
-  upsertFromSource(items: readonly SourceTicket[]): string[]
+  upsertFromSource(items: readonly ExternalTicket[]): string[]
   /** @throws if the ticket does not exist. */
   update(key: string, patch: { stage?: Stage; state?: TicketState }): Ticket
   /** Deletes all tickets with their runs, artifacts and log entries. */

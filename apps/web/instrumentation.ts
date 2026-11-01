@@ -1,5 +1,4 @@
-/** A local app receives no GitHub webhooks, so it polls the PRs of tickets in review. */
-const SYNC_INTERVAL_MS = 60_000
+import { REVIEW_SYNC_INTERVAL_MS } from './lib/constants'
 
 const globalForTimer = globalThis as typeof globalThis & { __reviewSyncTimer?: ReturnType<typeof setInterval> }
 
@@ -28,7 +27,7 @@ export async function register(): Promise<void> {
   }
   const timer = setInterval(() => {
     engine.syncReviews().catch((err) => console.warn('[sync] PR sync failed', err))
-  }, SYNC_INTERVAL_MS)
+  }, REVIEW_SYNC_INTERVAL_MS)
   timer.unref()
   globalForTimer.__reviewSyncTimer = timer
 }

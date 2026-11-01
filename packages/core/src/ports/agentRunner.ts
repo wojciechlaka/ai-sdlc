@@ -1,7 +1,7 @@
 import type { StageOutput } from '@refinement/shared'
 import type { ArtifactStage, QAPair } from '../domain/types'
 
-/** Everything one agent run needs: ticket, stage, local checkout, model and the Q&A history. */
+/** Everything one agent run needs: ticket, stage, local checkout, model, intent (design) and the Q&A history. */
 export interface AgentRunnerInput {
   /** Ticket key; also the handle for `stop`. */
   ticketKey: string
@@ -17,8 +17,12 @@ export interface AgentRunnerInput {
   model: string
   /** Summary of the checkout from `RepoProvider.ensureSummary`; absent when it failed. */
   codebaseSummary?: string
+  /** Merged `intent.md` of the ticket, read from the base branch; only for the design stage. */
+  intent?: string
   /** Answered questions of earlier runs of this stage. */
   answeredQuestions: QAPair[]
+  /** Questions and choices the agent may still ask in this attempt; absent for a stage without limit (plan). */
+  questionsRemaining?: number
 }
 
 /** Usage of a run (summed over a schema retry), stored on the AgentRun and shown in the log. */

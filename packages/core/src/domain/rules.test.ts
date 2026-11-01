@@ -1,13 +1,20 @@
 import { describe, it, expect } from 'vitest'
 import type { AgentRun, Ticket } from './types'
+import { errorCodeOf } from '../testing'
 import {
   canAnswer,
   canStartStage,
   canStop,
+  choiceAnswerText,
+  choiceQuestionText,
+  countQuestionsAsked,
   currentArtifactStage,
   isStageCompleted,
   nextStage,
   planAnswerRun,
+  QUESTION_LIMIT,
+  questionLimit,
+  questionsRemaining,
   reconcile,
   stageFromRepo,
 } from './rules'
@@ -30,6 +37,14 @@ function run(patch: Partial<AgentRun>): AgentRun {
   }
 }
 
+const CHOICE_OUTPUT = {
+  type: 'choice' as const, question: 'Wo?', recommended: 'A' as const,
+  options: [
+    { id: 'A' as const, title: 'Speichern', description: 'd', pros: [], cons: [] },
+    { id: 'B' as const, title: 'Lesen', description: 'd', pros: [], cons: [] },
+  ],
+}
+
 describe('canStartStage', () => {
   it('allows plan from ready and failed', () => {
     expect(canStartStage(ticket({ state: 'ready' }))).toBe(true)
@@ -42,8 +57,10 @@ describe('canStartStage', () => {
     }
   })
 
-  it('rejects design until part B and done always', () => {
-    expect(canStartStage(ticket({ stage: 'design' }))).toBe(false)
+  it('allows design from ready and failed, never done', () => {
+    expect(canStartStage(ticket({ stage: 'design', state: 'ready' }))).toBe(true)
+    expect(canStartStage(ticket({ stage: 'design', state: 'failed' }))).toBe(true)
+    expect(canStartStage(ticket({ stage: 'design', state: 'in_review' }))).toBe(false)
     expect(canStartStage(ticket({ stage: 'done' }))).toBe(false)
   })
 })
@@ -109,7 +126,7 @@ describe('reconcile', () => {
 
 describe('planAnswerRun', () => {
   it('returns null without a question', () => {
-    expect(planAnswerRun([run({ output: null })], 'a')).toBeNull()
+    expect(planAnswerRun([run({ output: null })], { answer: 'a' })).toBeNull()
   })
 
   it('appends the answer to the history of the question run', () => {
@@ -118,14 +135,90 @@ describe('planAnswerRun', () => {
       id: 'r2', seq: 2, trigger: 'answer', output: { type: 'question', question: 'Q2' },
       input: { model: 'm', answeredQuestions: [{ question: 'Q1', answer: 'A1' }] },
     })
-    const plan = planAnswerRun([first, second], 'A2')
+    const plan = planAnswerRun([first, second], { answer: 'A2' })
     expect(plan?.questionRun.id).toBe('r2')
     expect(plan?.answeredQuestions).toEqual([{ question: 'Q1', answer: 'A1' }, { question: 'Q2', answer: 'A2' }])
+    expect(plan?.answer).toBe('A2')
+    expect(plan?.choice).toBeUndefined()
   })
 
   it('ignores a question that was followed by a later run', () => {
     const asked = run({ id: 'r1', seq: 1, output: { type: 'question', question: 'Q1' } })
     const failed = run({ id: 'r2', seq: 2, output: null, status: 'failed' })
-    expect(planAnswerRun([asked, failed], 'a')).toBeNull()
+    expect(planAnswerRun([asked, failed], { answer: 'a' })).toBeNull()
+  })
+
+  it('turns a picked option into the answer text of the history', () => {
+    const offered = run({ id: 'r1', seq: 1, stage: 'design', output: CHOICE_OUTPUT })
+    const plan = planAnswerRun([offered], { choice: 'B', note: 'ohne Cache' })
+    expect(plan?.answeredQuestions).toEqual([{ question: 'Wo? (Angeboten: A: Speichern; B: Lesen)', answer: 'Ansatz B: Lesen — Anmerkung: ohne Cache' }])
+    expect(plan?.choice).toBe('B')
+  })
+
+  it('rejects input that does not fit the open question', () => {
+    const asked = run({ id: 'r1', seq: 1, output: { type: 'question', question: 'Q1' } })
+    const offered = run({ id: 'r1', seq: 1, stage: 'design', output: CHOICE_OUTPUT })
+    expect(() => planAnswerRun([asked], { choice: 'A' })).toThrow('erwartet eine Antwort, keine Auswahl')
+    expect(() => planAnswerRun([offered], { answer: 'Lesen' })).toThrow('Bitte einen der angebotenen Ansätze wählen')
+    expect(() => planAnswerRun([offered], { choice: 'C' })).toThrow('Ansatz C wurde nicht angeboten')
+    expect(errorCodeOf(() => planAnswerRun([offered], { choice: 'C' }))).toBe('VALIDATION')
+  })
+})
+
+describe('question limit', () => {
+  it('limits only the design stage', () => {
+    expect(QUESTION_LIMIT).toBe(3)
+    expect(questionLimit('design')).toBe(3)
+    expect(questionLimit('plan')).toBeNull()
+  })
+
+  it('counts questions and choices since the latest start', () => {
+    const runs = [
+      run({ id: 'r1', seq: 1, stage: 'design', output: { type: 'question', question: 'Q0' } }),
+      run({ id: 'r2', seq: 2, stage: 'design', output: null, status: 'failed' }),
+      run({ id: 'r3', seq: 3, stage: 'design', output: { type: 'question', question: 'Q1' } }),
+      run({ id: 'r4', seq: 4, stage: 'design', trigger: 'answer', output: CHOICE_OUTPUT }),
+      run({ id: 'r5', seq: 5, stage: 'design', trigger: 'answer', output: null, status: 'running' }),
+    ]
+    expect(countQuestionsAsked(runs)).toBe(2)
+    expect(countQuestionsAsked(runs.slice(0, 1))).toBe(1)
+    expect(countQuestionsAsked([])).toBe(0)
+  })
+
+  it('counts from 0 after a new start', () => {
+    const runs = [
+      run({ id: 'r1', seq: 1, stage: 'design', output: { type: 'question', question: 'Q1' } }),
+      run({ id: 'r2', seq: 2, stage: 'design', trigger: 'answer', output: CHOICE_OUTPUT }),
+      run({ id: 'r3', seq: 3, stage: 'design', output: null, status: 'running' }),
+    ]
+    expect(countQuestionsAsked(runs)).toBe(0)
+  })
+
+  it('reports the remaining questions, never below 0', () => {
+    const asked = (n: number) => Array.from({ length: n }, (_, i) =>
+      run({ id: `r${i}`, seq: i + 1, stage: 'design', trigger: i === 0 ? 'initial' : 'answer', output: { type: 'question', question: `Q${i}` } }))
+    expect(questionsRemaining('design', [])).toBe(3)
+    expect(questionsRemaining('design', asked(2))).toBe(1)
+    expect(questionsRemaining('design', asked(4))).toBe(0)
+    expect(questionsRemaining('plan', asked(4))).toBeNull()
+  })
+})
+
+describe('choiceAnswerText', () => {
+  it('names the option and adds the note only when given', () => {
+    expect(choiceAnswerText({ id: 'B', title: 'Beim Lesen berechnen' })).toBe('Ansatz B: Beim Lesen berechnen')
+    expect(choiceAnswerText({ id: 'B', title: 'Beim Lesen berechnen' }, ' ohne Cache ')).toBe('Ansatz B: Beim Lesen berechnen — Anmerkung: ohne Cache')
+    expect(choiceAnswerText({ id: 'A', title: 'Speichern' }, '   ')).toBe('Ansatz A: Speichern')
+  })
+})
+
+describe('choiceQuestionText', () => {
+  it('appends the offered option titles to the question', () => {
+    expect(choiceQuestionText(CHOICE_OUTPUT)).toBe('Wo? (Angeboten: A: Speichern; B: Lesen)')
+  })
+
+  it('collapses whitespace and line breaks into plain one-line text', () => {
+    const choice = { question: ' Wo\nwird es? ', options: [{ ...CHOICE_OUTPUT.options[0]!, title: 'Beim\n  Speichern ' }, CHOICE_OUTPUT.options[1]!] }
+    expect(choiceQuestionText(choice)).toBe('Wo wird es? (Angeboten: A: Beim Speichern; B: Lesen)')
   })
 })

@@ -37,8 +37,10 @@ export function startStage(deps: UseCaseDeps, key: string, raw: unknown): void {
 }
 
 /**
- * Continues the stage with the answer in a new run (same model, full Q&A history). Returns immediately.
- * The ticket is `running` right away, so a second answer is rejected.
+ * Continues the stage with the answer (`{ answer }`) or the picked option of a choice (`{ choice, note? }`) in a new
+ * run (same model, full Q&A history). Returns immediately. The ticket is `running` right away, so a second answer
+ * is rejected.
+ * @throws {ValidationError} when the input is invalid or does not fit the open question (see `planAnswerRun`).
  */
 export function answerQuestion(deps: UseCaseDeps, key: string, raw: unknown): void {
   rejectDuringReset(deps)
@@ -50,13 +52,13 @@ export function answerQuestion(deps: UseCaseDeps, key: string, raw: unknown): vo
   if (!deps.codeHost) {
     throw new ConflictError(TOKEN_MISSING)
   }
-  const { answer } = parseInput(AnswerInputSchema, raw)
-  const plan = planAnswerRun(deps.runs.listForTicket(ticket.key, stage), answer)
+  const input = parseInput(AnswerInputSchema, raw)
+  const plan = planAnswerRun(deps.runs.listForTicket(ticket.key, stage), input)
   if (!plan) {
     throw new ConflictError('Keine offene Rückfrage gefunden')
   }
 
-  record(deps, ticket.key, 'human', 'answer_given', { answer })
+  record(deps, ticket.key, 'human', 'answer_given', plan.choice ? { answer: plan.answer, choice: plan.choice } : { answer: plan.answer })
   createReporter(deps, ticket.key).setState('running')
   const request: RunRequest = { stage, trigger: 'answer', model: plan.questionRun.input.model, answeredQuestions: plan.answeredQuestions }
   deps.runInBackground(runStage(deps, ticket, { ...request, runId: beginRun(deps, ticket, request) }))

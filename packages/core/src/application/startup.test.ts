@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { CodeHostError } from '../ports'
-import { createTestContext, errorCodeOf, seedTicket, sourceTicket, type TestContext } from '../testing/fakes'
+import { createTestContext, errorCodeOf, seedTicket, externalTicket, type TestContext } from '../testing'
 import { answerQuestion, startStage } from './stageCommands'
 import { resetSystem, startup } from './startup'
 
@@ -16,7 +16,7 @@ afterEach(() => {
 })
 
 function withSource(ctx: TestContext, ...keys: string[]): TestContext {
-  ctx.source.tickets = keys.map((key) => sourceTicket(key))
+  ctx.source.tickets = keys.map((key) => externalTicket(key))
   return ctx
 }
 
@@ -34,7 +34,7 @@ describe('startup — tickets', () => {
   it('updates the text of known tickets but keeps stage and state (no token)', async () => {
     const ctx = createTestContext({ token: false })
     seedTicket(ctx, 'CB-1', { stage: 'design', state: 'failed' })
-    ctx.source.tickets = [sourceTicket('CB-1', { title: 'Neuer Titel' })]
+    ctx.source.tickets = [externalTicket('CB-1', { title: 'Neuer Titel' })]
     await startup(ctx.deps)
     expect(ctx.deps.tickets.findByKey('CB-1')).toMatchObject({ title: 'Neuer Titel', stage: 'design', state: 'failed' })
     expect(ctx.store.audit).toEqual([])
@@ -328,7 +328,7 @@ describe('resetSystem', () => {
   it('picks up a new ticket file', async () => {
     const ctx = withSource(createTestContext(), 'CB-1')
     await startup(ctx.deps)
-    ctx.source.tickets.push(sourceTicket('CB-4'))
+    ctx.source.tickets.push(externalTicket('CB-4'))
     await resetSystem(ctx.deps)
     expect(ctx.deps.tickets.list().map((t) => t.key)).toEqual(['CB-1', 'CB-4'])
   })

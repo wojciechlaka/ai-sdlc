@@ -2,12 +2,14 @@
 
 import { revalidatePath } from 'next/cache'
 import type { StartupReport } from '@refinement/core'
+import type { AnswerInput } from '@refinement/shared'
 import { getEngine } from '@/lib/container'
 import { runAction, type ActionResult } from '@/lib/actionResult'
+import { APP_ROOT } from '@/lib/routes'
 
 /** Board and ticket pages both show ticket state — refresh the whole tree. */
 function refreshAll(): void {
-  revalidatePath('/', 'layout')
+  revalidatePath(APP_ROOT, 'layout')
 }
 
 /** Starts the ticket's current stage with the chosen model; the agent runs in the background. */
@@ -17,8 +19,8 @@ export async function startStageAction(ticketKey: string, input: { model: string
   return result
 }
 
-/** Answers the agent's open question; the stage continues in a new run. */
-export async function answerQuestionAction(ticketKey: string, input: { answer: string }): Promise<ActionResult> {
+/** Answers the agent's open question (`{ answer }`) or choice (`{ choice, note? }`); the stage continues in a new run. */
+export async function answerQuestionAction(ticketKey: string, input: AnswerInput): Promise<ActionResult> {
   const result = await runAction(() => getEngine().answerQuestion(ticketKey, input))
   refreshAll()
   return result

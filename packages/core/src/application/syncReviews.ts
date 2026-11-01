@@ -1,13 +1,11 @@
 import type { Artifact, ArtifactStage, Ticket } from '../domain/types'
 import { currentArtifactStage, nextStage } from '../domain/rules'
-import { CodeHostError, type CodeHost, type PullRequest } from '../ports'
+import { CodeHostError, HTTP_NOT_FOUND, type CodeHost, type PullRequest } from '../ports'
 import type { UseCaseDeps } from './deps'
 import { createReporter } from './reporter'
 import { describeError } from '../domain/errors'
 import { requireTicket } from './requireTicket'
 import { record } from './auditTrail'
-
-const NOT_FOUND = 404
 
 /**
  * Applies what happened to the PRs of tickets in review (all, or the one given):
@@ -51,7 +49,7 @@ async function syncOne(deps: UseCaseDeps, host: CodeHost, ticket: Ticket, stage:
 
   if ('error' in fetched) {
     const failure = fetched.error
-    if (failure instanceof CodeHostError && failure.status === NOT_FOUND) {
+    if (failure instanceof CodeHostError && failure.status === HTTP_NOT_FOUND) {
       deps.artifacts.markClosed(artifact.id)
       record(deps, ticket.key, 'system', 'error', { message: `PR #${artifact.prNumber} gibt es nicht mehr` })
       reporter.setState('ready')

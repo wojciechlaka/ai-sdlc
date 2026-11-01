@@ -52,6 +52,22 @@ describe('useSSE', () => {
     expect(result.current).toEqual({ connected: true, everConnected: true })
   })
 
+  it('drops messages that are not JSON or do not match TicketEvent', () => {
+    const onMessage = vi.fn()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    renderHook(() => useSSE('CB-1', { onMessage }))
+
+    act(() => {
+      latest().onmessage?.({ data: 'kein json' })
+      latest().onmessage?.({ data: JSON.stringify({ type: 'unknown', ticketKey: 'CB-1' }) })
+      latest().onmessage?.({ data: JSON.stringify({ type: 'state', ticketKey: 'CB-1', stage: 'plan', state: 'kaputt' }) })
+    })
+
+    expect(onMessage).not.toHaveBeenCalled()
+    expect(warn).toHaveBeenCalledTimes(3)
+    warn.mockRestore()
+  })
+
   it('calls onReconnect only when the connection opens again', () => {
     const onReconnect = vi.fn()
     renderHook(() => useSSE('CB-1', { onMessage: vi.fn(), onReconnect }))

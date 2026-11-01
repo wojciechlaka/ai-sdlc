@@ -1,6 +1,6 @@
 # UI/UX-Konzept
 
-Stand: die gebaute Oberfläche für Stufe 1 (Plan). Komponenten in `apps/web/components/`, Texte auf Deutsch.
+Stand: die gebaute Oberfläche für Stufe 1 und 2 (Plan, Design). Komponenten in `apps/web/components/`, Texte auf Deutsch.
 Architektur: [architecture.md](architecture.md) · Zustände: [datenmodell.md](datenmodell.md)
 
 ## 1. Prinzipien
@@ -98,7 +98,7 @@ die Ticketseite. Leere Spalten zeigen „Keine Tickets“.
   aufklappbaren Inhalt „Inhalt anzeigen“. Darunter der Block **Kosten**: je Stufe Kosten, Anzahl Läufe und Tokens
   (`1 Plan · Intent: $0.09 · 3 Läufe · 12.3K↑ 1.2K↓`; `—` ohne Lauf) und fett die Summe
   (`Gesamt: $0.11 (4 Läufe)`). Gezählt werden die von der CLI gemeldeten Kosten aller beendeten Läufe der Stufe,
-  auch verworfener; Läufe ohne Ergebnis zählen mit $0. Der gemeinsame Codebase-Summary-Lauf gehört keinem Ticket
+  auch verworfener und über der Rückfragen-Grenze; Läufe ohne Ergebnis zählen mit $0. Der gemeinsame Codebase-Summary-Lauf gehört keinem Ticket
   und fehlt hier.
 - **Log:** Zeit, Akteur (`Mensch`, `Agent`, `System`) und eine Zeile pro Eintrag; Agent-Läufe mit Dauer,
   Tokens und Kosten. Vom Guard blockierte Werkzeugaufrufe stehen rot hervorgehoben als eigene Zeile
@@ -114,14 +114,27 @@ ready / failed, Stufe 1  [Sonnet 4.6 v] [Plan starten]
                          ohne Token: Knopf aus, Hinweis "GITHUB_TOKEN fehlt ..."
 running                  Karte "Agent laeuft  0m 42s" mit Fortschrittszeilen
                          [Stoppen]
-awaiting_answer          Karte "Frage vom Agent": Frage, Textfeld, [Antworten]
+awaiting_answer          Karte "Frage vom Agent": (Stufe 2: "Rueckfrage N von 3"), Frage, Textfeld, [Antworten]
                          [Abbrechen]
+awaiting_answer,         Karte "Auswahl vom Agent": "Rueckfrage N von 3", Frage als Legende,
+Auswahl (Stufe 2)        (o) Ansatz A: Titel  [empfohlen]   Beschreibung, + Vorteile, - Nachteile
+                         ( ) Ansatz B: Titel  ...           (Empfehlung vorausgewaehlt, Radio-Gruppe)
+                         Anmerkung (optional)
+                         [Auswahl senden] [Abbrechen]
 in_review                [PR #7 oeffnen]
                          "Merge auf GitHub = Freigabe dieser Stufe. ..."
-ready, Stufe 2           [Design starten] (deaktiviert)
-                         "Der Design-Agent (Stufe 2) folgt im naechsten Schritt."
+ready / failed, Stufe 2  [Sonnet 4.6 v] [Design starten]
+                         "Der Design-Agent liest den gemergten Intent und die Codebase; er stellt hoechstens
+                          3 Rueckfragen oder Auswahlen."
 Fertig                   "Alle Stufen abgeschlossen."
 ```
+
+**`ChoicePanel`:** `fieldset` mit der Frage als `legend`, je Ansatz ein natives Radio (Tab in die Gruppe, Pfeiltasten
+wechseln); Beschreibung, Vor- und Nachteile hängen per `aria-describedby` am Radio. „Auswahl senden“ ist aktiv,
+sobald eine Option gewählt ist (die Empfehlung ist es von Anfang an). Im Log erscheinen „Auswahl: <Frage> — Ansatz A
+empfohlen“ und „Antwort: Ansatz B: <Titel> — Anmerkung: …“.
+Backtick-Paare in Fragen, Titeln, Beschreibungen, Vor- und Nachteilen sowie in der Rückfrage (`QuestionPanel`) rendert
+`apps/web/lib/inlineCode.tsx` als `<code>`; anderes Markdown gibt es dort nicht, einzelne Backticks bleiben Text.
 
 Während die App den Zustand abgleicht (z. B. `in_review` ohne offenen PR), steht dort „Zustand wird
 abgeglichen …“. Fehler einer Aktion erscheinen als rote Meldung darunter.

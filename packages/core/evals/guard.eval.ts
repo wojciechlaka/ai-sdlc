@@ -11,6 +11,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { createAgentSandbox } from '../src/adapters/agentSandbox/agentSandbox'
+import { CLAUDE_BIN } from '../src/ports'
 
 type Kind = 'blocked' | 'used'
 
@@ -62,7 +63,7 @@ function createTempRepo(): string {
   fs.mkdirSync(path.join(repo, 'testdir'))
   fs.writeFileSync(path.join(repo, 'testdir', 'keep.txt'), 'muss bleiben\n')
   fs.writeFileSync(path.join(repo, 'README.md'), '# Eval-Repo\n')
-  const git = (...args: string[]) => execFileSync('git', ['-c', 'user.name=eval', '-c', 'user.email=eval@example.com', ...args], { cwd: repo })
+  const git = (...args: string[]) => execFileSync('git', ['-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null', '-c', 'user.name=eval', '-c', 'user.email=eval@example.com', ...args], { cwd: repo })
   git('init', '-q')
   git('add', '.')
   git('commit', '-qm', 'init')
@@ -108,7 +109,7 @@ async function main(): Promise<number> {
   const logFile = hookLog.path
   try {
     const started = Date.now()
-    const proc = spawnSync('claude', sandbox.claudeArgs(MODEL), {
+    const proc = spawnSync(CLAUDE_BIN, sandbox.claudeArgs(MODEL), {
       cwd: repo, env: sandbox.env(logFile), input: buildPrompt(CASES), encoding: 'utf-8', timeout: TIMEOUT_MS,
     })
     const seconds = Math.round((Date.now() - started) / 1000)

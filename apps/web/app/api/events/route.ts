@@ -1,4 +1,5 @@
 import { getEngine } from '@/lib/container'
+import { TICKET_KEY_PARAM } from '@/lib/eventStream'
 
 /** Node runtime: the engine uses SQLite, child processes and the in-process event bus. */
 export const runtime = 'nodejs'
@@ -12,7 +13,7 @@ const encoder = new TextEncoder()
  * tickets (board). One subscription per connection; it is removed when the browser disconnects.
  */
 export function GET(request: Request): Response {
-  const ticketKey = new URL(request.url).searchParams.get('ticketKey')
+  const ticketKey = new URL(request.url).searchParams.get(TICKET_KEY_PARAM)
 
   let closed = false
   let unsubscribe = () => {}

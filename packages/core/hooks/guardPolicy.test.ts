@@ -2,7 +2,8 @@ import { describe, it, expect, afterAll } from 'vitest'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { decide, toolTarget } from './guardPolicy.mjs'
+import { SANDBOX_TOOLS } from '../src/ports'
+import { ALLOWED_TOOLS, decide, toolTarget } from './guardPolicy.mjs'
 
 // Repository fixture (created at load time, the tables below use its paths): the confinement checks resolve
 // real paths, symlinks included.
@@ -164,5 +165,11 @@ describe('toolTarget', () => {
     expect(toolTarget(call)).toHaveLength(200)
     expect(toolTarget(call).endsWith('…')).toBe(true)
     expect(toolTarget(call, 1000)).toHaveLength(1000)
+  })
+})
+
+describe('ALLOWED_TOOLS', () => {
+  it('matches SANDBOX_TOOLS of the sandbox (the hook scripts cannot import src)', () => {
+    expect(ALLOWED_TOOLS).toEqual([...SANDBOX_TOOLS])
   })
 })

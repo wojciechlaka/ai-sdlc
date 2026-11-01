@@ -67,11 +67,17 @@ neuen Lauf.
 | `input_tokens`, `cache_creation_tokens`, `cache_read_tokens`, `output_tokens` | integer, nullable | Token-Verbrauch laut CLI |
 | `started_at`, `finished_at` | timestamp | `finished_at` nullable |
 
-`output` ist eine Union über `type` (`packages/shared/src/intentSchema.ts`); Stufe 1 liefert:
+`output` ist eine Union über `type` (`StageOutputSchema` in `packages/shared/src/stageOutput.ts`); Stufe 1 liefert
+`question` oder `intent`, Stufe 2 `question`, `choice` oder `spec`:
 
 ```text
 { type: "question", question: string }
+{ type: "choice",   question: string, options: Option[], recommended: "A" | "B" | "C" }   // nur Stufe 2
 { type: "intent",   result:   Intent }
+{ type: "spec",     result:   Spec }
+
+Option = { id: "A" | "B" | "C", title: string, description: string, pros: string[], cons: string[] }
+                                        // 2–3 Optionen, ids eindeutig, recommended ist eine davon
 
 Intent = {
   title:           string               // max. 60 Zeichen
@@ -81,10 +87,26 @@ Intent = {
   affected:        string[]
   openPoints:      { question: string }[]
 }
+
+Spec = {
+  title:              string            // max. 60 Zeichen
+  goal:               string            // zugleich Kurzfassung im PR
+  approach:           { chosen: string, rationale: string, alternatives: { name: string, reason: string }[] }
+  components:         { name: string, purpose: string, interface: string, dependsOn: string[] }[]
+  dataFlow:           string
+  errorHandling:      string
+  acceptanceCriteria: string[]          // mind. 1; deckt jedes Erfolgskriterium des Intents ab
+  tests:              string
+  affectedFiles:      { path: string, change: string, isNew: boolean }[]
+  risks:              { description: string, severity: "low" | "medium" | "high", mitigation: string }[]
+  openPoints:         { question: string }[]
+}
 ```
 
-Die offene Rückfrage eines Tickets ist die `question` des letzten Laufs der aktuellen Stufe. Das Ergebnis wird
-nicht als Inhalt gelesen: die App rendert daraus `intent.md` und legt die Datei per PR ab.
+Die offene Rückfrage oder Auswahl eines Tickets ist die `question` bzw. `choice` des letzten Laufs der aktuellen Stufe
+(`TicketDetailDto.pendingQuestion` / `pendingChoice`). In Stufe 2 zählt die App Rückfragen und Auswahlen ab dem
+letzten Lauf mit `trigger: initial` (`questionsAsked`, Grenze `questionLimit` = 3). Das Ergebnis wird
+nicht als Inhalt gelesen: die App rendert daraus `intent.md` bzw. `spec.md` und legt die Datei per PR ab.
 
 `successCriteria` sind beobachtbare, prüfbare Aussagen aus Nutzer- oder Fachsicht ohne Lösungsdetails (keine
 Endpunkte, Felder, Dateien). Akzeptanzkriterien bleiben in der Spec (Stufe 2) und werden daraus abgeleitet.
@@ -120,7 +142,7 @@ Das Log pro Ticket, append-only (Tabelle `audit_events`); die Ticketseite zeigt 
 | `id` | string | zufällige Hex-ID |
 | `ticket_key` | FK → Ticket | |
 | `actor` | enum | `human \| agent \| system` |
-| `type` | string | siehe Tabelle unten (`AuditEventType` in `ports/auditLog.ts`) |
+| `type` | string | siehe Tabelle unten (`AuditEventType` in `packages/shared/src/auditEvents.ts`) |
 | `payload` | JSON, nullable | je nach Typ |
 | `created_at` | timestamp | |
 
@@ -128,9 +150,10 @@ Das Log pro Ticket, append-only (Tabelle `audit_events`); die Ticketseite zeigt 
 |---|---|---|
 | `ticket_imported` | system | `{ sourcePath }` |
 | `run_started` | system | `{ runId, stage, trigger, model }` |
-| `run_finished` | agent (Erfolg), system (sonst) | `{ runId, status, reason? }`, bei Erfolg oder verworfenem Ergebnis zusätzlich `{ model, durationSeconds, costUsd, inputTokens, cacheCreationTokens, cacheReadTokens, outputTokens }` |
+| `run_finished` | agent (Erfolg), system (sonst) | `{ runId, status, reason? }` (`reason` z. B. `Neustart`, `verworfen`, `grenze`), bei Erfolg oder verworfenem Ergebnis zusätzlich `{ model, durationSeconds, costUsd, inputTokens, cacheCreationTokens, cacheReadTokens, outputTokens }` |
 | `question_asked` | agent | `{ question }` |
-| `answer_given` | human | `{ answer }` |
+| `choice_offered` | agent | `{ question, options: { id, title }[], recommended }` — Auswahl des Design-Agents |
+| `answer_given` | human | `{ answer, choice? }` — bei einer Auswahl ist `answer` „Ansatz B: <Titel> — Anmerkung: …“ und `choice` die id |
 | `pr_opened` | system | `{ prNumber, prUrl, branch }` |
 | `pr_merged` | human | `{ prNumber }` |
 | `pr_closed` | human | `{ prNumber }` |
@@ -155,7 +178,7 @@ StageCost   = { usd, runs, inputTokens, outputTokens }
   aus dem `AgentRun`; ein Lauf ohne bekannte Stufe zählt nur in der Gesamtsumme.
 - **Kosten:** `costUsd`, wie die CLI sie meldet (`total_cost_usd`) — nicht die Schätzung aus der Preistabelle, die das
   Web für einzelne Log-Zeilen ohne gemeldete Kosten nutzt (`apps/web/lib/pricing.ts`).
-- **Mitgezählt:** erfolgreiche Läufe und verworfene Ergebnisse (`reason: 'verworfen'`, mit Verbrauch); Läufe ohne
+- **Mitgezählt:** erfolgreiche Läufe und verworfene Ergebnisse (`reason: 'verworfen'`, mit Verbrauch) und Läufe über der Rückfragen-Grenze (`reason: 'grenze'`, mit Verbrauch); Läufe ohne
   Claude-Ergebnis (Stopp, Neustart, Fehler, Zeitlimit) zählen als Lauf mit Kosten 0.
 - **Input-Tokens:** ungecachter Input plus Cache-Schreibvorgänge (`runInputTokens` in `auditEvents.ts`, dieselbe
   Regel wie die Log-Zeile); Cache-Lesevorgänge bleiben außen vor.
@@ -185,9 +208,10 @@ Funktionen in `packages/core/src/domain/rules.ts`.
 ```
 
 - **Start** (`startStage`) ist nur aus `ready` oder `failed` erlaubt und nur in einer startbaren Stufe
-  (`STARTABLE_STAGES`, heute nur `plan`). Ohne Token lehnt die App ab.
-- **Rückfrage:** Der Agent fragt → `awaiting_answer`. Die Antwort (`answerQuestion`) startet einen neuen Lauf
-  mit dem ganzen Q&A-Verlauf.
+  (`STARTABLE_STAGES`: `plan` und `design`; `design` braucht den gemergten Intent auf `showcase`). Ohne Token lehnt die App ab.
+- **Rückfrage/Auswahl:** Der Agent fragt oder bietet (Stufe 2) Ansätze zur Wahl → `awaiting_answer`. Die Antwort
+  bzw. Wahl (`answerQuestion`) startet einen neuen Lauf mit dem ganzen Q&A-Verlauf. In Stufe 2 höchstens 3 pro Start;
+  eine weitere Rückfrage → `failed` („Rückfragen-Grenze erreicht …“).
 - **Ergebnis:** Datei rendern, Branch anlegen, committen, PR gegen `showcase` öffnen → `in_review`.
 - **Merge** (erkannt von `syncReviews`): Artefakt `merged`, Stufe `plan → design` bzw. `design → done`,
   Zustand `ready`.

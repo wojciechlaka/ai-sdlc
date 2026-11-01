@@ -104,7 +104,7 @@ describe('architecture (packages/core)', { timeout: ARCHITECTURE_TIMEOUT_MS }, (
 
   // evals/ starts real `claude` processes (npm run eval:guard) and may use src; src and hooks never use evals.
   it('the evals are where the rule looks for them', () => {
-    expect(readdirSync(path.resolve(__dirname, '../evals'))).toContain('guard.eval.ts')
+    expect(readdirSync(path.resolve(__dirname, '../evals'))).toEqual(expect.arrayContaining(['guard.eval.ts', 'spec.eval.ts']))
   })
 
   it('neither src nor the hook scripts import the evals', async () => {

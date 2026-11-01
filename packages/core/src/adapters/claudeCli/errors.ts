@@ -1,4 +1,5 @@
 import type { ZodIssue } from 'zod'
+import { STDERR_PREVIEW_CHARS } from '../../domain/errors'
 
 /** Why the agent output was rejected: no parseable JSON at all, or JSON that violates the stage schema. */
 export type SchemaFailureReason = 'invalid_json' | 'schema_mismatch'
@@ -20,9 +21,6 @@ export class SchemaValidationError extends Error {
     this.name = 'SchemaValidationError'
   }
 }
-
-/** Also defined in adapters/git/repoCache.ts — adapters cannot share code (architecture test). */
-const STDERR_PREVIEW_CHARS = 200
 
 /**
  * Thrown when the Claude CLI process exits with a non-zero, non-SIGTERM exit code.

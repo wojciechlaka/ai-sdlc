@@ -50,10 +50,26 @@ describe('TicketDetailSchema', () => {
       }],
       log: [{ actor: 'agent', type: 'question_asked', payload: { question: 'Wer?' }, createdAt: NOW }],
       pendingQuestion: 'Wer?',
+      pendingChoice: null,
+      questionsAsked: 1,
+      questionLimit: null,
       costs: COSTS,
     })
     expect(detail.pendingQuestion).toBe('Wer?')
     expect(detail.stages[0]?.stage).toBe('plan')
+  })
+
+  it('accepts a pending choice with the question counter of stage 2', () => {
+    const pendingChoice = {
+      question: 'Wo?', recommended: 'B',
+      options: [{ id: 'A', title: 'a', description: 'd', pros: [], cons: [] }, { id: 'B', title: 'b', description: 'd', pros: ['+'], cons: [] }],
+    }
+    const detail = TicketDetailSchema.parse({
+      ...TICKET, stage: 'design', state: 'awaiting_answer', stages: [], log: [], costs: COSTS,
+      pendingQuestion: null, pendingChoice, questionsAsked: 2, questionLimit: 3,
+    })
+    expect(detail.pendingChoice?.recommended).toBe('B')
+    expect(TicketDetailSchema.safeParse({ ...detail, pendingChoice: { ...pendingChoice, recommended: 'C' } }).success).toBe(false)
   })
 })
 
@@ -64,7 +80,18 @@ describe('inputs', () => {
   })
 
   it('AnswerInputSchema rejects blank answers', () => {
-    expect(AnswerInputSchema.safeParse({ answer: '  ' }).success).toBe(false)
+    expect(AnswerInputSchema.safeParse({ answer: '  ' }).error?.issues.map((issue) => issue.message)).toEqual(['Antwort ist erforderlich'])
+  })
+
+  it('AnswerInputSchema accepts a picked option with or without a note', () => {
+    expect(AnswerInputSchema.parse({ choice: 'B' })).toEqual({ choice: 'B' })
+    expect(AnswerInputSchema.parse({ choice: 'A', note: 'ohne Cache' })).toEqual({ choice: 'A', note: 'ohne Cache' })
+  })
+
+  it('AnswerInputSchema rejects unknown ids, both shapes at once and empty input with a German message', () => {
+    for (const input of [{ choice: 'D' }, { answer: 'x', choice: 'A' }, {}]) {
+      expect(AnswerInputSchema.safeParse(input).error?.issues.map((issue) => issue.message)).toEqual(['Antwort oder Auswahl ist erforderlich'])
+    }
   })
 })
 
@@ -81,6 +108,8 @@ describe('CostSummarySchema', () => {
   it('is required on the ticket page and the board ticket', () => {
     const { totalCostUsd: _omit, ...withoutTotal } = TICKET
     expect(TicketSchema.safeParse(withoutTotal).success).toBe(false)
-    expect(TicketDetailSchema.safeParse({ ...TICKET, stages: [], log: [], pendingQuestion: null }).success).toBe(false)
+    expect(TicketDetailSchema.safeParse({
+      ...TICKET, stages: [], log: [], pendingQuestion: null, pendingChoice: null, questionsAsked: 0, questionLimit: null,
+    }).success).toBe(false)
   })
 })

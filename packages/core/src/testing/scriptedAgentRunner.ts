@@ -13,7 +13,7 @@ import { SAMPLE_INTENT_OUTPUT, SAMPLE_META } from './samples'
  * Emits `progress` and `toolEvents` at the start of every run (before a `hold()` gate).
  * Like the CLI, `stop` terminates a run that is still in progress.
  */
-export class FakeAgentRunner implements AgentRunner {
+export class ScriptedAgentRunner implements AgentRunner {
   /** Input of every call, in order. */
   readonly calls: AgentRunnerInput[] = []
   /** Callbacks of every call, so a test can report events later (e.g. after the attempt became stale). */

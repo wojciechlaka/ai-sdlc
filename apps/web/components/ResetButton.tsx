@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { resetSystemAction } from '@/app/actions'
 import { useServerAction } from '@/hooks/useServerAction'
+import { BOARD_PATH } from '@/lib/routes'
 import { useAppState } from './AppStateProvider'
 
 /** What the reset does; shown as tooltip and, as a question, in the confirmation dialog. */
@@ -33,7 +34,7 @@ export function ResetButton({ baseBranch, baselineTag }: { baseBranch: string; b
     run(resetSystemAction, (data) => {
       setWarnings(data.warnings)
       clearProgress()
-      router.push('/')
+      router.push(BOARD_PATH)
     })
   }
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { AgentRunTerminatedError, AgentRunTimeoutError, CodeHostError } from '../ports'
-import { SAMPLE_INTENT_OUTPUT, SAMPLE_META, createTestContext, errorCodeOf, seedTicket, type TestContext } from '../testing/fakes'
+import { SAMPLE_INTENT_OUTPUT, SAMPLE_META, createTestContext, errorCodeOf, seedTicket, type TestContext } from '../testing'
 import { answerQuestion, startStage, stopRun } from './stageCommands'
 
 const MODEL = { model: 'claude-sonnet-4-6' }
@@ -140,7 +140,7 @@ describe('startStage — rejected', () => {
     seedTicket(ctx, 'CB-1', { state: 'running' })
     seedTicket(ctx, 'CB-2', { state: 'in_review' })
     seedTicket(ctx, 'CB-3', { state: 'awaiting_answer' })
-    seedTicket(ctx, 'CB-4', { stage: 'design' })
+    seedTicket(ctx, 'CB-4', { stage: 'design', state: 'in_review' })
     seedTicket(ctx, 'CB-5', { stage: 'done' })
     seedTicket(ctx, 'CB-6')
 

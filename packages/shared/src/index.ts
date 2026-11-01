@@ -1,9 +1,15 @@
-export { RefinementOutputSchema, AgentOutputSchema, QuestionOutputSchema } from './refinementSchema'
-export type { RefinementOutput, AgentOutput } from './refinementSchema'
+export {
+  QuestionOutputSchema, ChoiceIdSchema, ChoiceOptionSchema, PendingChoiceSchema, ChoiceOutputSchema,
+} from './agentOutput'
+export type { QuestionOutput, ChoiceId, ChoiceOption, PendingChoice, ChoiceOutput } from './agentOutput'
+export { SpecSchema, SpecOutputSchema, SpecAgentOutputSchema } from './specSchema'
+export type { Spec, SpecAgentOutput } from './specSchema'
 export { StageSchema, ArtifactStageSchema, TicketStateSchema, PrStateSchema } from './stages'
 export type { Stage, ArtifactStage, TicketState, PrState } from './stages'
-export { IntentSchema, IntentAgentOutputSchema, StageOutputSchema } from './intentSchema'
-export type { Intent, IntentAgentOutput, StageOutput } from './intentSchema'
+export { IntentSchema, IntentOutputSchema, IntentAgentOutputSchema } from './intentSchema'
+export type { Intent, IntentAgentOutput } from './intentSchema'
+export { StageOutputSchema } from './stageOutput'
+export type { StageOutput } from './stageOutput'
 export {
   PullRequestRefSchema,
   StageCostSchema,

@@ -41,4 +41,9 @@ describe('QuestionPanel', () => {
     expect(onAnswered).not.toHaveBeenCalled()
     expect(screen.getByPlaceholderText('Antwort eingeben…')).toHaveValue('Postgres')
   })
+
+  it('shows the counter of a limited stage', () => {
+    render(<QuestionPanel ticketKey="CB-1" question="Welche DB?" counter="Rückfrage 2 von 3" onAnswered={vi.fn()} />)
+    expect(screen.getByText('Rückfrage 2 von 3')).toBeInTheDocument()
+  })
 })

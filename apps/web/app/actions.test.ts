@@ -23,9 +23,11 @@ describe('server actions', () => {
   it('passes key and input through and refreshes the whole layout', async () => {
     expect(await startStageAction('CB-2', { model: 'm' })).toEqual({ ok: true, data: undefined })
     await answerQuestionAction('CB-2', { answer: 'Alle Leser' })
+    await answerQuestionAction('CB-2', { choice: 'B', note: 'ohne Cache' })
     await stopRunAction('CB-2')
     expect(engine.startStage).toHaveBeenCalledWith('CB-2', { model: 'm' })
     expect(engine.answerQuestion).toHaveBeenCalledWith('CB-2', { answer: 'Alle Leser' })
+    expect(engine.answerQuestion).toHaveBeenCalledWith('CB-2', { choice: 'B', note: 'ohne Cache' })
     expect(engine.stopRun).toHaveBeenCalledWith('CB-2')
     expect(revalidatePath).toHaveBeenCalledWith('/', 'layout')
   })

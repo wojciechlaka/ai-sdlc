@@ -3,7 +3,7 @@ import type { Artifact, ArtifactStage, Ticket } from '../domain/types'
 import { summarizeCosts } from '../domain/costs'
 import type { AuditLogEntry } from '../ports'
 import { ARTIFACT_STAGES, artifactPath, fileUrl } from '../domain/artifacts'
-import { currentArtifactStage, isStageCompleted } from '../domain/rules'
+import { countQuestionsAsked, currentArtifactStage, isStageCompleted, questionLimit } from '../domain/rules'
 import type { UseCaseDeps } from './deps'
 import { toAuditLogEntryDto, toPullRequestRef, toTicketDto } from './dto'
 import { describeError } from '../domain/errors'
@@ -58,18 +58,30 @@ async function stageView(deps: UseCaseDeps, ticket: Ticket, artifacts: Artifact[
   }
 }
 
-/** The agent's question while the ticket waits for an answer. */
-function pendingQuestion(deps: UseCaseDeps, ticket: Ticket): string | null {
+/** Open question or choice and the question counter of the current stage, as the ticket page shows them. */
+type QuestionState = Pick<TicketDetailDto, 'pendingQuestion' | 'pendingChoice' | 'questionsAsked' | 'questionLimit'>
+
+/** The agent's open question or choice while the ticket waits for an answer, and how many it asked so far. */
+function questionState(deps: UseCaseDeps, ticket: Ticket): QuestionState {
   const stage = currentArtifactStage(ticket)
-  if (ticket.state !== 'awaiting_answer' || !stage) {
-    return null
+  if (!stage) {
+    return { pendingQuestion: null, pendingChoice: null, questionsAsked: 0, questionLimit: null }
   }
-  const output = deps.runs.listForTicket(ticket.key, stage).at(-1)?.output
-  return output?.type === 'question' ? output.question : null
+  const runs = deps.runs.listForTicket(ticket.key, stage)
+  const output = ticket.state === 'awaiting_answer' ? runs.at(-1)?.output : undefined
+  return {
+    pendingQuestion: output?.type === 'question' ? output.question : null,
+    pendingChoice: output?.type === 'choice'
+      ? { question: output.question, options: output.options, recommended: output.recommended }
+      : null,
+    questionsAsked: countQuestionsAsked(runs),
+    questionLimit: questionLimit(stage),
+  }
 }
 
 /**
- * Ticket page data: stages (merged content read live), log, open question and agent cost per stage.
+ * Ticket page data: stages (merged content read live), log, open question or choice with the question counter,
+ * and agent cost per stage.
  * @throws {NotFoundError}
  */
 export async function getTicket(deps: UseCaseDeps, key: string): Promise<TicketDetailDto> {
@@ -81,7 +93,7 @@ export async function getTicket(deps: UseCaseDeps, key: string): Promise<TicketD
     ...toTicketDto(ticket, openArtifact(deps, ticket), costs.totalUsd),
     stages: await Promise.all(ARTIFACT_STAGES.map((stage) => stageView(deps, ticket, artifacts, stage))),
     log: log.map(toAuditLogEntryDto),
-    pendingQuestion: pendingQuestion(deps, ticket),
+    ...questionState(deps, ticket),
     costs,
   }
 }

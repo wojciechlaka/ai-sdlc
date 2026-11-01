@@ -22,7 +22,7 @@ function addRun(target: StageCostDto, run: AuditPayloads['run_finished']): void 
 
 /**
  * Agent cost of a ticket from its log: one `run_finished` entry per run. Succeeded runs and discarded results
- * (`verworfen`) carry usage; runs that ended without a Claude result (stop, restart, error, timeout) count as runs
+ * (`verworfen`) and over-limit runs (`grenze`) carry usage; runs that ended without a Claude result (stop, restart, error, timeout) count as runs
  * with cost 0. The cost is the one the Claude CLI reported (`total_cost_usd`), not the web's price-list estimate.
  * The stage comes from the run's `run_started` entry, else from `stageOfRun`; a run whose stage is unknown counts
  * only in the totals. Entries that do not match the current contract (old rows) are skipped.

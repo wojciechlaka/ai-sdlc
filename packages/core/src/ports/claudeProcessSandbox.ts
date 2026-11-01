@@ -1,3 +1,51 @@
+import type { ToolEvent } from './agentRunner'
+
+/** Executable of the Claude Code CLI; every agent, summary and eval run starts it. */
+export const CLAUDE_BIN = 'claude'
+
+/**
+ * Tools a sandboxed `claude` process may use: read-only; the guard confines them to the clone and restricts Bash to
+ * reading git commands. `hooks/guardPolicy.mjs` keeps its own copy (the hook scripts cannot import src);
+ * `hooks/guardPolicy.test.ts` checks that both lists match.
+ */
+export const SANDBOX_TOOLS = ['Read', 'Glob', 'Grep', 'Bash'] as const
+
+/**
+ * Parses one line of a hook log file (written by `hooks/guard.mjs` and `hooks/audit.mjs`); null for anything that
+ * is not a tool event, e.g. an empty or partial line.
+ */
+export function parseToolEvent(line: string): ToolEvent | null {
+  const trimmed = line.trim()
+  if (!trimmed) {
+    return null
+  }
+  let raw: unknown
+  try {
+    raw = JSON.parse(trimmed)
+  } catch {
+    return null
+  }
+  if (!raw || typeof raw !== 'object') {
+    return null
+  }
+  const { kind, tool, target, reason } = raw as Record<string, unknown>
+  if (!isToolEventKind(kind) || typeof tool !== 'string') {
+    return null
+  }
+  return {
+    kind,
+    tool,
+    target: typeof target === 'string' ? target : '',
+    ...(typeof reason === 'string' ? { reason } : {}),
+  }
+}
+
+const TOOL_EVENT_KINDS: readonly ToolEvent['kind'][] = ['blocked', 'used']
+
+function isToolEventKind(value: unknown): value is ToolEvent['kind'] {
+  return TOOL_EVENT_KINDS.includes(value as ToolEvent['kind'])
+}
+
 /** Temp file the guard and audit hooks of one `claude` process append their JSON lines to. */
 export interface HookLogFile {
   /** Absolute path; pass it to `ClaudeProcessSandbox.env`. */

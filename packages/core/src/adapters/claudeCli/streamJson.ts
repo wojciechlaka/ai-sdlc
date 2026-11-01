@@ -1,10 +1,11 @@
+import { SANDBOX_TOOLS } from '../../ports'
 import { CliError } from './errors'
 import type { ClaudeStreamMessage, ClaudeTokenUsage, ExtractedResult } from './types'
 
 // Reading the `--output-format stream-json` output of `claude`: progress while it streams, the result at the end.
 
 /** Tools whose use means the agent is exploring the codebase; each switch to one of them shows ANALYSIS_PROGRESS. */
-const CODEBASE_TOOLS = new Set(['Read', 'Glob', 'Grep', 'Bash'])
+const CODEBASE_TOOLS = new Set<string>(SANDBOX_TOOLS)
 const ANALYSIS_PROGRESS = 'Codebase wird analysiert…'
 
 /**

@@ -1,5 +1,5 @@
 import { WORK_DIR } from '../domain/artifacts'
-import { CodeHostError, type BaseBranchPreparation, type CodeHost, type PullRequest } from '../ports'
+import { CodeHostError, HTTP_NOT_FOUND, type BaseBranchPreparation, type CodeHost, type PullRequest } from '../ports'
 import { TEST_REPO_URL } from './samples'
 
 type CodeHostMethod = keyof CodeHost
@@ -8,8 +8,8 @@ function toPullRequest(pr: PullRequest): PullRequest {
   return { number: pr.number, url: pr.url, state: pr.state, headBranch: pr.headBranch, mergedAt: pr.mergedAt }
 }
 
-/** A PR of the fake code host, with the title and body the app sent. */
-export interface FakePullRequest extends PullRequest {
+/** A PR of the in-memory code host, with the title and body the app sent. */
+export interface RecordedPullRequest extends PullRequest {
   title: string
   body: string
 }
@@ -18,7 +18,7 @@ export interface FakePullRequest extends PullRequest {
  * In-memory GitHub: the default branch, the baseline tag, the base branch the app works on,
  * app branches with their files, PRs.
  */
-export class FakeCodeHost implements CodeHost {
+export class InMemoryCodeHost implements CodeHost {
   /** Name `baseBranch()` returns. */
   baseBranchName = 'showcase'
   /** Tag name used in error messages. */
@@ -34,7 +34,7 @@ export class FakeCodeHost implements CodeHost {
   /** Branch name → files committed on that branch. */
   readonly branches = new Map<string, Map<string, string>>()
   /** Every PR ever opened, with title and body for assertions. */
-  readonly pulls: FakePullRequest[] = []
+  readonly pulls: RecordedPullRequest[] = []
   /** Every called method in order. */
   readonly calls: CodeHostMethod[] = []
   /** A method listed here throws the error on every call. */
@@ -47,15 +47,15 @@ export class FakeCodeHost implements CodeHost {
     if (failure) throw failure
   }
 
-  private requirePull(number: number): FakePullRequest {
+  private requirePull(number: number): RecordedPullRequest {
     const pr = this.pulls.find((p) => p.number === number)
-    if (!pr) throw new CodeHostError(404, `PR #${number} nicht gefunden`)
+    if (!pr) throw new CodeHostError(HTTP_NOT_FOUND, `PR #${number} nicht gefunden`)
     return pr
   }
 
-  private addPull(branch: string, title: string, body: string): FakePullRequest {
+  private addPull(branch: string, title: string, body: string): RecordedPullRequest {
     const number = this.nextPr++
-    const pr: FakePullRequest = { number, url: `${TEST_REPO_URL}/pull/${number}`, state: 'open', headBranch: branch, mergedAt: null, title, body }
+    const pr: RecordedPullRequest = { number, url: `${TEST_REPO_URL}/pull/${number}`, state: 'open', headBranch: branch, mergedAt: null, title, body }
     this.pulls.push(pr)
     return pr
   }
@@ -103,7 +103,7 @@ export class FakeCodeHost implements CodeHost {
   async commitFile(input: { branch: string; path: string; content: string; message: string }): Promise<void> {
     this.enter('commitFile')
     const files = this.branches.get(input.branch)
-    if (!files) throw new CodeHostError(404, `Branch ${input.branch} nicht gefunden`)
+    if (!files) throw new CodeHostError(HTTP_NOT_FOUND, `Branch ${input.branch} nicht gefunden`)
     files.set(input.path, input.content)
   }
 
@@ -141,7 +141,7 @@ export class FakeCodeHost implements CodeHost {
   }
 
   /** Test helper: an open PR from `branch` (created if missing), e.g. left over from an earlier start. */
-  seedPullRequest(branch: string): FakePullRequest {
+  seedPullRequest(branch: string): RecordedPullRequest {
     if (!this.branches.has(branch)) this.branches.set(branch, new Map())
     return this.addPull(branch, branch, '')
   }

@@ -84,6 +84,58 @@ describe('TicketActions', () => {
     expect(screen.getByRole('button', { name: 'Antworten' })).toBeInTheDocument()
   })
 
+  it('shows the counter at a question of the design stage only', () => {
+    const { unmount } = renderActions({ stage: 'design', state: 'awaiting_answer', pendingQuestion: 'Wer?', questionsAsked: 2, questionLimit: 3 })
+    expect(screen.getByText('Rückfrage 2 von 3')).toBeInTheDocument()
+    unmount()
+    renderActions({ state: 'awaiting_answer', pendingQuestion: 'Wer?', questionsAsked: 2, questionLimit: null })
+    expect(screen.queryByText(/Rückfrage \d von/)).toBeNull()
+  })
+
+  it('shows a choice instead of the question panel and cancels from it', async () => {
+    vi.mocked(stopRunAction).mockResolvedValue({ ok: true, data: undefined })
+    renderActions({
+      stage: 'design', state: 'awaiting_answer', questionsAsked: 1, questionLimit: 3,
+      pendingChoice: {
+        question: 'Wo wird die Lesezeit berechnet?', recommended: 'A',
+        options: [
+          { id: 'A', title: 'Beim Speichern', description: 'd', pros: [], cons: [] },
+          { id: 'B', title: 'Beim Lesen', description: 'd', pros: [], cons: [] },
+        ],
+      },
+    })
+    expect(screen.getByRole('group', { name: 'Wo wird die Lesezeit berechnet?' })).toBeInTheDocument()
+    expect(screen.getByText('Rückfrage 1 von 3')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Antworten' })).toBeNull()
+    expect(screen.getAllByRole('button', { name: 'Abbrechen' })).toHaveLength(1)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Abbrechen' }))
+    await waitFor(() => expect(stopRunAction).toHaveBeenCalledWith('CB-2'))
+  })
+
+  it('resets selection and note when a new choice arrives', () => {
+    const choice = (question: string) => ({
+      question, recommended: 'A' as const,
+      options: [
+        { id: 'A' as const, title: 'Beim Speichern', description: 'd', pros: [], cons: [] },
+        { id: 'B' as const, title: 'Beim Lesen', description: 'd', pros: [], cons: [] },
+      ],
+    })
+    const ui = (patch: Partial<TicketDetailDto>) => (
+      <AppStateProvider>
+        <TicketActions ticket={aTicketDetail({ stage: 'design', state: 'awaiting_answer', questionLimit: 3, ...patch })} tokenConfigured />
+      </AppStateProvider>
+    )
+    const { rerender } = render(ui({ questionsAsked: 1, pendingChoice: choice('Erste Wahl?') }))
+    fireEvent.click(screen.getByRole('radio', { name: /Ansatz B/ }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Anmerkung (optional)' }), { target: { value: 'alt' } })
+
+    rerender(ui({ questionsAsked: 2, pendingChoice: choice('Zweite Wahl?') }))
+
+    expect(screen.getByRole('radio', { name: /Ansatz A/ })).toBeChecked()
+    expect(screen.getByRole('textbox', { name: 'Anmerkung (optional)' })).toHaveValue('')
+  })
+
   it('lets the user cancel while waiting for an answer', async () => {
     vi.mocked(stopRunAction).mockResolvedValue({ ok: true, data: undefined })
     renderActions({ state: 'awaiting_answer', pendingQuestion: 'Frage?' })
@@ -97,12 +149,29 @@ describe('TicketActions', () => {
     expect(screen.getByText(/Merge auf GitHub = Freigabe/)).toBeInTheDocument()
   })
 
-  it('keeps the design stage disabled until stage 2 exists', () => {
+  it('starts the design stage with the chosen model and explains what the agent does', async () => {
+    vi.mocked(startStageAction).mockResolvedValue({ ok: true, data: undefined })
     renderActions({ stage: 'design' })
     const start = screen.getByRole('button', { name: 'Design starten' })
-    expect(start).toBeDisabled()
-    expect(start).toHaveAccessibleDescription(/Stufe 1 ist abgeschlossen.*Stufe 2 \(Design\) ist noch nicht gebaut/)
-    expect(screen.queryByRole('combobox', { name: 'Modell' })).toBeNull()
+    expect(start).toHaveAccessibleDescription(
+      'Der Design-Agent liest den gemergten Intent und die Codebase; er stellt höchstens 3 Rückfragen oder Auswahlen.',
+    )
+    expect(screen.queryByText(/noch nicht gebaut/)).toBeNull()
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Modell' }), { target: { value: 'claude-opus-4-7' } })
+    fireEvent.click(start)
+    await waitFor(() => expect(startStageAction).toHaveBeenCalledWith('CB-2', { model: 'claude-opus-4-7' }))
+  })
+
+  it('offers a restart of a failed design stage and disables it without token', () => {
+    const { unmount } = renderActions({ stage: 'design', state: 'failed' })
+    expect(screen.getByText(/fehlgeschlagen — Details im Log/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Design starten' })).toBeEnabled()
+    unmount()
+
+    renderActions({ stage: 'design' }, false)
+    expect(screen.getByRole('button', { name: 'Design starten' })).toBeDisabled()
+    expect(screen.getByText(/GITHUB_TOKEN fehlt/)).toBeInTheDocument()
   })
 
   it('reports a finished ticket', () => {

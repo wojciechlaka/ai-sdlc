@@ -1,0 +1,14 @@
+{
+  "name": "articles-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Kleine Blog-API mit Artikeln (Fixture für den Spec-Eval)",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "express": "^4.21.0"
+  }
+}

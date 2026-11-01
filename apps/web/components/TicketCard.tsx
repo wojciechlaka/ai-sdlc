@@ -2,13 +2,14 @@ import Link from 'next/link'
 import type { TicketDto } from '@refinement/shared'
 import { STATE_VARIANT, stateText } from '@/lib/constants'
 import { formatCost } from '@/lib/format'
+import { ticketPath } from '@/lib/routes'
 import { Badge } from './ui/badge'
 
 /** Board card: key, priority, title, — until the ticket is done — its state, and its agent cost once it has one. */
 export function TicketCard({ ticket }: { ticket: TicketDto }) {
   return (
     <Link
-      href={`/tickets/${ticket.key}`}
+      href={ticketPath(ticket.key)}
       className="block rounded-lg border border-slate-200 bg-white p-3 transition-colors hover:border-slate-400"
     >
       <div className="flex items-center justify-between gap-2 text-xs text-slate-500">

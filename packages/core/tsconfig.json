@@ -12,5 +12,6 @@
     "allowJs": true,
     "checkJs": true
   },
-  "include": ["src", "hooks", "evals"]
+  "include": ["src", "hooks", "evals"],
+  "exclude": ["evals/fixtures"]
 }

@@ -1,14 +1,17 @@
 import path from 'path'
 import { execFileSync, spawn } from 'child_process'
 import fsPromises from 'fs/promises'
-import type { ClaudeProcessSandbox } from '../../ports'
-import { describeError } from '../../domain/errors'
+import { CLAUDE_BIN, parseToolEvent, type ClaudeProcessSandbox } from '../../ports'
+import { STDERR_PREVIEW_CHARS, describeError } from '../../domain/errors'
+import { WORK_DIR } from '../../domain/artifacts'
 
-// Codebase summary: one sandboxed `claude` run per commit and model, cached as a Markdown file in the clone and
+// Codebase summary: one sandboxed `claude` run per code state (last commit outside docs/work) and model, cached as
+// a Markdown file in the clone and
 // pasted into the agent prompt. Failures only cost the summary — the agent then starts without it.
 
-// Same value as in adapters/claudeCli/errors.ts; adapters must not import each other (architecture test).
-const STDERR_PREVIEW_CHARS = 200
+/** Summary files live in the clone root: `codebase-summary-<commit>-<model>.md`. */
+const SUMMARY_FILE_PREFIX = 'codebase-summary-'
+const SUMMARY_FILE_EXTENSION = '.md'
 
 /** Configuration of the summary run. */
 export interface CodebaseSummaryOptions {
@@ -37,16 +40,48 @@ Naming conventions, architectural patterns, code style decisions.
 ## Wo man was findet
 Where to add a new API endpoint, component, model, etc.
 
+Ignore the directory ${WORK_DIR}/: it holds work artifacts that change with every merge or reset; the summary is
+about the code.
+
 Be concise. Focus on what a developer needs to quickly understand the codebase.`
 
 /**
- * Returns the current HEAD commit hash of the cached repository.
+ * Returns the cache key of the summary: the last commit that changed anything outside `docs/work` (showcase merges
+ * only add work artifacts and must not invalidate the summary). Falls back to HEAD if no such commit exists.
  * @param repoDir - Absolute path to the cloned repository directory.
  */
 export function getCommitHash(repoDir: string): string {
-  return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repoDir, stdio: 'pipe' })
+  const last = execFileSync('git', ['log', '-1', '--format=%H', '--', '.', `:(exclude)${WORK_DIR}`], {
+    cwd: repoDir,
+    stdio: 'pipe',
+  })
     .toString()
     .trim()
+  if (last) {
+    return last
+  }
+  return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repoDir, stdio: 'pipe' }).toString().trim()
+}
+
+/** File name of the summary of one code state and model. */
+function summaryFileName(commitHash: string, model: string): string {
+  return `${SUMMARY_FILE_PREFIX}${commitHash}-${model}${SUMMARY_FILE_EXTENSION}`
+}
+
+/** True for a summary file of `model`, whatever its commit hash. */
+function isSummaryFileOf(name: string, model: string): boolean {
+  return name.startsWith(SUMMARY_FILE_PREFIX) && name.endsWith(`-${model}${SUMMARY_FILE_EXTENSION}`)
+}
+
+/** Removes summaries of the same model for other keys; failures are irrelevant. */
+async function removeOutdatedSummaries(repoDir: string, keepPath: string, model: string): Promise<void> {
+  const names = await fsPromises.readdir(repoDir).catch(() => [] as string[])
+  for (const name of names) {
+    const full = path.join(repoDir, name)
+    if (isSummaryFileOf(name, model) && full !== keepPath) {
+      await fsPromises.rm(full, { force: true }).catch(() => {})
+    }
+  }
 }
 
 // Deduplicates concurrent calls for the same summary path — both callers await the same job.
@@ -56,12 +91,10 @@ const inFlight = new Map<string, Promise<string | null>>()
 async function warnBlockedCalls(logFile: string): Promise<void> {
   const content = await fsPromises.readFile(logFile, 'utf-8').catch(() => '')
   for (const line of content.split('\n')) {
-    try {
-      const entry = JSON.parse(line) as Record<string, unknown>
-      if (entry.kind === 'blocked') {
-        console.warn(`[codebaseSummary] Blocked: ${entry.tool} ${entry.target} — ${entry.reason}`)
-      }
-    } catch { /* empty or partial line */ }
+    const event = parseToolEvent(line)
+    if (event?.kind === 'blocked') {
+      console.warn(`[codebaseSummary] Blocked: ${event.tool} ${event.target} — ${event.reason}`)
+    }
   }
 }
 
@@ -84,6 +117,7 @@ async function generateAndCache(
     onProgress(`Codebase wird analysiert (einmalig für das Modell: ${model})…`)
     const summary = await runSummaryJob(repoDir, model, options)
     await fsPromises.writeFile(summaryPath, summary)
+    await removeOutdatedSummaries(repoDir, summaryPath, model)
     onProgress('Codebase-Analyse abgeschlossen.')
     return summary
   } catch (err) {
@@ -95,7 +129,8 @@ async function generateAndCache(
 }
 
 /**
- * Ensures a Claude-generated codebase summary exists for the current git commit and model.
+ * Ensures a Claude-generated codebase summary exists for the current code state (last commit outside
+ * `docs/work`) and model.
  * Returns the cached file immediately on a local cache hit.
  * Deduplicates concurrent generation requests for the same summary via an in-flight map.
  * Returns null without throwing if generation fails for any reason.
@@ -112,7 +147,7 @@ export async function ensureRepoSummary(
 ): Promise<string | null> {
   try {
     const hash = getCommitHash(repoDir)
-    const summaryPath = path.join(repoDir, `codebase-summary-${hash}-${model}.md`)
+    const summaryPath = path.join(repoDir, summaryFileName(hash, model))
 
     const cached = await fsPromises.readFile(summaryPath, 'utf-8').catch(() => null)
     if (cached) {
@@ -180,7 +215,7 @@ async function runSummaryJob(cwd: string, model: string, options: CodebaseSummar
 /** One `claude` call with the summary prompt; resolves with the result text, rejects on a non-zero exit. */
 function spawnSummary(cwd: string, model: string, sandbox: ClaudeProcessSandbox, logFile: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const proc = spawn('claude', sandbox.claudeArgs(model), {
+    const proc = spawn(CLAUDE_BIN, sandbox.claudeArgs(model), {
       cwd,
       env: sandbox.env(logFile),
       stdio: ['pipe', 'pipe', 'pipe'],

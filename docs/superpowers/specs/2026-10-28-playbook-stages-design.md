@@ -1,6 +1,6 @@
 # Design: App-Umbau auf Playbook-Stufen 1 + 2 (Intent → Spec in Git)
 
-Datum: 2026-10-28 · Status: Teil A umgesetzt (inkl. §12), Teil B offen · Branch: `feature/playbook-stages`
+Datum: 2026-10-28 · Status: Teil A umgesetzt (inkl. §12), Teil B umgesetzt nach [Stufe-2-Spec](2026-10-29-playbook-stage-2-design.md) · Branch: `feature/playbook-stages`
 Grundlage: [E1–E5](../../decisions.md), [Roadmap](../../feature-roadmap.md), [Architektur §5](../../architecture.md)
 
 ## 1. Ziel
@@ -118,6 +118,9 @@ Treibende Adapter (Next.js): `instrumentation.ts` ruft `startup` und startet ein
   dieser Stufe“.
 - Agent liest wie heute den lokalen Klon (Read, LS, Bash) mit gecachter Codebase-Summary; der Klon wird vor
   jedem Lauf aktualisiert.
+- Nachtrag: Teil B ist im eigenen Spec [2026-10-29-playbook-stage-2-design.md](2026-10-29-playbook-stage-2-design.md)
+  beschrieben und abweichend von hier umgesetzt (Spec-Gliederung, Auswahl zwischen Ansätzen, Grenze von 3
+  Rückfragen, `RefinementOutputSchema`/`refinement-agent.md` entfallen).
 
 ## 7. UI
 
@@ -154,6 +157,9 @@ Treibende Adapter (Next.js): `instrumentation.ts` ruft `startup` und startet ein
   entfernen (altes Refine, `output` als Ergebnisquelle, `review_decisions`, `seeds.ts`-Reste); Doku:
   `ui-ux-concept.md` neu, `datenmodell.md`,
   `architecture.md` (§5 wird Ist-Stand), `CLAUDE.md`.
+- Nachtrag: Teil B ist im eigenen Spec [2026-10-29-playbook-stage-2-design.md](2026-10-29-playbook-stage-2-design.md)
+  beschrieben und abweichend von hier umgesetzt (Spec-Gliederung, Auswahl zwischen Ansätzen, Grenze von 3
+  Rückfragen, `RefinementOutputSchema`/`refinement-agent.md` entfallen).
 
 ## 11. Abnahme
 
