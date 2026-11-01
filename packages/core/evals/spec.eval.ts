@@ -19,6 +19,7 @@ import { extractJsonString } from '../src/adapters/claudeCli/agentOutput'
 import { renderIntent, renderSpec } from '../src/domain/render'
 import { artifactPath } from '../src/domain/artifacts'
 import { describeError } from '../src/domain/errors'
+import { CLAUDE_BIN } from '../src/ports'
 import { FIXTURE_NAME, SPEC_CASES, type SpecEvalCase } from './specCases'
 import {
   DEFAULT_MIN_SCORE, JudgeVerdictSchema, buildJudgePrompt, failedScores, fixedChecks,
@@ -145,7 +146,7 @@ async function judge(prompt: string): Promise<JudgeOutcome & { toolCalls: number
       '--setting-sources', 'user', '--settings', hookSettings(HOOKS_DIR),
       '--disallowedTools', JUDGE_DISALLOWED_TOOLS, '--tools', '', '--strict-mcp-config',
     ]
-    const proc = spawnSync('claude', args, {
+    const proc = spawnSync(CLAUDE_BIN, args, {
       cwd, env: sandboxEnv(process.env, hookLog.path), input: prompt, encoding: 'utf-8', timeout: JUDGE_TIMEOUT_MS,
     })
     const toolCalls = fs.readFileSync(hookLog.path, 'utf-8').split('\n').filter(Boolean).length

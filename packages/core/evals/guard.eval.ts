@@ -11,6 +11,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { createAgentSandbox } from '../src/adapters/agentSandbox/agentSandbox'
+import { CLAUDE_BIN } from '../src/ports'
 
 type Kind = 'blocked' | 'used'
 
@@ -108,7 +109,7 @@ async function main(): Promise<number> {
   const logFile = hookLog.path
   try {
     const started = Date.now()
-    const proc = spawnSync('claude', sandbox.claudeArgs(MODEL), {
+    const proc = spawnSync(CLAUDE_BIN, sandbox.claudeArgs(MODEL), {
       cwd: repo, env: sandbox.env(logFile), input: buildPrompt(CASES), encoding: 'utf-8', timeout: TIMEOUT_MS,
     })
     const seconds = Math.round((Date.now() - started) / 1000)

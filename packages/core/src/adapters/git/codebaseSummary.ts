@@ -1,16 +1,14 @@
 import path from 'path'
 import { execFileSync, spawn } from 'child_process'
 import fsPromises from 'fs/promises'
-import { parseToolEvent, type ClaudeProcessSandbox } from '../../ports'
-import { describeError } from '../../domain/errors'
+import { CLAUDE_BIN, parseToolEvent, type ClaudeProcessSandbox } from '../../ports'
+import { STDERR_PREVIEW_CHARS, describeError } from '../../domain/errors'
 import { WORK_DIR } from '../../domain/artifacts'
 
 // Codebase summary: one sandboxed `claude` run per code state (last commit outside docs/work) and model, cached as
 // a Markdown file in the clone and
 // pasted into the agent prompt. Failures only cost the summary — the agent then starts without it.
 
-// Same value as in adapters/claudeCli/errors.ts; adapters must not import each other (architecture test).
-const STDERR_PREVIEW_CHARS = 200
 /** Summary files live in the clone root: `codebase-summary-<commit>-<model>.md`. */
 const SUMMARY_FILE_PREFIX = 'codebase-summary-'
 const SUMMARY_FILE_EXTENSION = '.md'
@@ -217,7 +215,7 @@ async function runSummaryJob(cwd: string, model: string, options: CodebaseSummar
 /** One `claude` call with the summary prompt; resolves with the result text, rejects on a non-zero exit. */
 function spawnSummary(cwd: string, model: string, sandbox: ClaudeProcessSandbox, logFile: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const proc = spawn('claude', sandbox.claudeArgs(model), {
+    const proc = spawn(CLAUDE_BIN, sandbox.claudeArgs(model), {
       cwd,
       env: sandbox.env(logFile),
       stdio: ['pipe', 'pipe', 'pipe'],

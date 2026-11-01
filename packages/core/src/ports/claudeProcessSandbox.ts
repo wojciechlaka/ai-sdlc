@@ -1,5 +1,8 @@
 import type { ToolEvent } from './agentRunner'
 
+/** Executable of the Claude Code CLI; every agent, summary and eval run starts it. */
+export const CLAUDE_BIN = 'claude'
+
 /**
  * Tools a sandboxed `claude` process may use: read-only; the guard confines them to the clone and restricts Bash to
  * reading git commands. `hooks/guardPolicy.mjs` keeps its own copy (the hook scripts cannot import src);
