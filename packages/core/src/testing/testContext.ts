@@ -13,7 +13,7 @@ import {
 } from './inMemoryRepositories'
 import { ScriptedAgentRunner } from './scriptedAgentRunner'
 import { InMemoryCodeHost } from './inMemoryCodeHost'
-import { InMemoryRepoProvider } from './inMemoryRepoProvider'
+import { ScriptedRepoProvider } from './scriptedRepoProvider'
 import { InMemoryTicketSource } from './inMemoryTicketSource'
 import { TEST_REPO_URL, externalTicket } from './samples'
 
@@ -49,7 +49,7 @@ export interface TestContext {
   deps: UseCaseDeps
   store: InMemoryStore
   agent: ScriptedAgentRunner
-  repos: InMemoryRepoProvider
+  repos: ScriptedRepoProvider
   /** Always present; `deps.codeHost` is null when created with `{ token: false }`. */
   codeHost: InMemoryCodeHost
   source: InMemoryTicketSource
@@ -65,7 +65,7 @@ export interface TestContext {
 export function createTestContext(options: { token?: boolean } = {}): TestContext {
   const store: InMemoryStore = { tickets: [], runs: [], artifacts: [], audit: [] }
   const agent = new ScriptedAgentRunner()
-  const repos = new InMemoryRepoProvider()
+  const repos = new ScriptedRepoProvider()
   const codeHost = new InMemoryCodeHost()
   const source = new InMemoryTicketSource()
   const events = createRecordingEventPublisher()

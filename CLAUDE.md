@@ -218,8 +218,11 @@ makes `startStage`/`answerQuestion` throw a `ConflictError`.
 - `packages/core/src/testing/` — test doubles, all re-exported by `index.ts` (tests import from there):
   `inMemoryRepositories.ts`, `inMemoryCodeHost.ts` (GitHub-like semantics), `inMemoryTicketSource.ts`,
   `scriptedAgentRunner.ts` (`hold()`/`stop()`, scripted `progress`/`toolEvents`, recorded `callbacks`),
-  `inMemoryRepoProvider.ts`, `samples.ts` (`externalTicket()`, sample outputs),
+  `scriptedRepoProvider.ts`, `samples.ts` (`externalTicket()`, sample outputs),
   `testContext.ts` (`createTestContext({ token })`, `seedTicket`, `errorCodeOf`)
+  Naming: `InMemory…` = replica of a port with its own state (no database); `Scripted…` = returns what the test
+  set beforehand. `testDb.ts` (`createTestDatabase`, real SQLite `:memory:`) is not re-exported; only SQLite adapter
+  tests use it.
 - `packages/core/hooks/{guardPolicy,guard,audit,hookIo}.mjs` — guard/audit hook scripts for the agent (spec §13)
 - `packages/core/src/adapters/agentSandbox/agentSandbox.ts` — flags, hook settings and env allowlist of every `claude`
   process
